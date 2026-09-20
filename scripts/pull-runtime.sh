@@ -22,6 +22,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IMAGE="${IMAGE:-openvino-2020.3-rpi5:latest}"
 RT="${ROOT}/work/host-runtime"
+mkdir -p "${RT}"
 cd "${RT}"
 
 rm -rf sysroot openvino openvino-demo sysroot.tgz
