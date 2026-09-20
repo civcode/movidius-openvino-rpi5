@@ -1,0 +1,1747 @@
+
+[1m== local dependency mirror ==[0m
+   firmware package version: 1656
+   supported firmwares     : usb-ma2450 usb-ma2x8x pcie-ma248x
+wrote firmware_usb-ma2450_1656.zip (mvnc/usb-ma2450.mvcmd, 1795780 B)
+wrote firmware_usb-ma2x8x_1656.zip (mvnc/usb-ma2x8x.mvcmd, 2040216 B)
+wrote firmware_pcie-ma248x_1656.zip (mvnc/pcie-ma248x.mvcmd, 1800408 B)
+
+local dependency mirror (/home/chris/workspace/flash-movidius-openvino/openvino-2020.3-rpi5/vendor/deps):
+total 2740
+-rw-rw-r-- 1 chris chris  883723 Sep 20 01:39 firmware_pcie-ma248x_1656.zip
+-rw-rw-r-- 1 chris chris  909254 Sep 20 01:39 firmware_usb-ma2450_1656.zip
+-rw-rw-r-- 1 chris chris 1010192 Sep 20 01:39 firmware_usb-ma2x8x_1656.zip
+
+[1m== reset vendor/openvino-2020.3.2 to pristine and apply patches/ ==[0m
+   patches/0001-cross-compile-skip-host-protoc.patch applies cleanly (applied inside the build)
+   patches/0002-ade-gcc10-no-error-warnings.patch applies cleanly (applied inside the build)
+SYNC_STAMP=0b3773b7405d955d48642667ac5113289b9baab2+88dea63fa029473b396433ac0b61ff2547611a74a9e3eeeb5721552bbce6a2e1
+
+[1m== docker build -> openvino-2020.3-rpi5:latest ==[0m
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 11.50kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.4
+#2 DONE 0.5s
+
+#3 docker-image://docker.io/docker/dockerfile:1.4@sha256:9ba7531bd80fb0a858632727cf7a112fbfd19b17e94c4e84ced81e24ef1a0dbc
+#3 resolve docker.io/docker/dockerfile:1.4@sha256:9ba7531bd80fb0a858632727cf7a112fbfd19b17e94c4e84ced81e24ef1a0dbc 0.0s done
+#3 CACHED
+
+#4 [internal] load .dockerignore
+#4 transferring context: 471B done
+#4 DONE 0.0s
+
+#5 [internal] load metadata for docker.io/arm32v7/debian:bullseye
+#5 DONE 0.1s
+
+#6 [build-deps 1/5] FROM docker.io/arm32v7/debian:bullseye@sha256:fd8cf33bb1a98570e0f482f39a796b16b699ed6fd0d23b179f3586e0fd0a65f2
+#6 resolve docker.io/arm32v7/debian:bullseye@sha256:fd8cf33bb1a98570e0f482f39a796b16b699ed6fd0d23b179f3586e0fd0a65f2 0.1s done
+#6 DONE 0.1s
+
+#7 [internal] load build context
+#7 transferring context: 3.89MB 0.3s done
+#7 DONE 0.3s
+
+#8 [build-deps 5/5] RUN pip install --no-cache-dir -r /tmp/requirements-build.txt;     rm -rf /root/.cache/pip;     python -c 'import sys; print("venv python:", sys.executable, sys.version)'
+#8 CACHED
+
+#9 [configure 1/3] RUN mkdir -p /work/src /work/build /work/stage
+#9 CACHED
+
+#10 [configure 2/3] RUN --mount=type=bind,source=vendor/openvino-2020.3.2,target=/work/src-ro     --mount=type=bind,source=patches,target=/work/patches-ro     --mount=type=bind,source=toolchain,target=/work/toolchain-ro     --mount=type=cache,target=/work/src     set -eux;     if [ -f /work/src/.sync_stamp ] && [ "$(cat /work/src/.sync_stamp)" = "0b3773b7405d955d48642667ac5113289b9baab2+88dea63fa029473b396433ac0b61ff2547611a74a9e3eeeb5721552bbce6a2e1" ]; then         echo "reusing patched source tree (stamp: 0b3773b7405d955d48642667ac5113289b9baab2+88dea63fa029473b396433ac0b61ff2547611a74a9e3eeeb5721552bbce6a2e1)";     else         echo "re-syncing source tree (stamp: 0b3773b7405d955d48642667ac5113289b9baab2+88dea63fa029473b396433ac0b61ff2547611a74a9e3eeeb5721552bbce6a2e1)";         find /work/src -mindepth 1 -delete;         cp -a /work/src-ro/. /work/src/;         for p in $(ls /work/patches-ro/*.patch 2>/dev/null | sort); do             echo "applying ${p}";             patch -p1 -d /work/src --quiet < "${p}";         done;         printf '%s' "0b3773b7405d955d48642667ac5113289b9baab2+88dea63fa029473b396433ac0b61ff2547611a74a9e3eeeb5721552bbce6a2e1" > /work/src/.sync_stamp;     fi;     cmake --version; gcc --version | head -1
+#10 CACHED
+
+#11 [configure 3/3] RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro     --mount=type=bind,source=vendor/deps,target=/work/deps     --mount=type=cache,target=/work/src     --mount=type=cache,target=/work/build     set -eux;     test -f /work/src/CMakeLists.txt;     cmake -S /work/src -B /work/build         -DCMAKE_BUILD_TYPE=Release         -DCMAKE_TOOLCHAIN_FILE=/work/toolchain-ro/armv7-native.toolchain.cmake         -DCMAKE_INSTALL_PREFIX=/work/stage         -DTHREADS_PTHREAD_ARG=-pthread         -DCMAKE_EXE_LINKER_FLAGS=-pthread         -DCMAKE_SHARED_LINKER_FLAGS=-pthread         -DENABLE_VPU=ON         -DENABLE_MYRIAD=ON         -DENABLE_MYRIAD_NO_BOOT=OFF         -DENABLE_INTEL_MYRIAD_COMMON_ENABLE=ON         -DENABLE_IR_READER=ON         -DENABLE_GNA=OFF         -DENABLE_MKL_DNN=OFF         -DENABLE_CLDNN=OFF         -DENABLE_OPENCV=OFF         -DENABLE_SAMPLES=OFF         -DENABLE_TESTS=OFF         -DENABLE_FUNCTIONAL_TESTS=OFF         -DENABLE_BEH_TESTS=OFF         -DENABLE_PYTHON=OFF         -DENABLE_PROFILING_ITT=OFF         -DENABLE_DEBUG_SYMBOLS=OFF         -DENABLE_LTO=OFF         -DTHREADING=SEQ         -DNGRAPH_UNIT_TEST_ENABLE=FALSE         -DNGRAPH_ONNX_IMPORT_ENABLE=FALSE         -DNGRAPH_INTERPRETER_ENABLE=TRUE;     grep -E 'TARGET_ARCH|CMAKE_SYSTEM_PROCESSOR|CMAKE_CROSSCOMPILING|Enabling VPU|VPU firmware|Myriad|THREADING|ARCH'         /work/build/CMakeCache.txt /work/build/CMakeFiles/CMakeOutput.log 2>/dev/null || true;     ls -l /work/build
+#11 CACHED
+
+#12 [build-deps 2/5] RUN set -eux;     printf 'deb http://snapshot.debian.org/archive/debian/%s bullseye main\ndeb http://snapshot.debian.org/archive/debian-security/%s bullseye-security main\ndeb http://snapshot.debian.org/archive/debian/%s bullseye-updates main\n'         "20260824T000000Z" "20260824T000000Z" "20260824T000000Z" > /etc/apt/sources.list;     apt -o Acquire::Retries=5 -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false update;     apt-get -o Acquire::Retries=5 install -y --no-install-recommends         build-essential         cmake         pkg-config         patch         git         ca-certificates         libusb-1.0-0-dev         zlib1g-dev         python3         python3-venv;     rm -rf /var/lib/apt/lists/*
+#12 CACHED
+
+#13 [build-deps 3/5] RUN python3 -m venv /opt/venv
+#13 CACHED
+
+#14 [build-deps 4/5] COPY requirements-build.txt /tmp/requirements-build.txt
+#14 CACHED
+
+#15 [builder 1/1] RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro     --mount=type=bind,source=vendor/deps,target=/work/deps     --mount=type=cache,target=/work/src     --mount=type=cache,target=/work/build     set -eux;     make -C /work/build -j"2";     make -C /work/build install;     mkdir -p /work/stage/deployment_tools/ngraph/lib              /work/stage/deployment_tools/ngraph/include              /work/stage/deployment_tools/ngraph/cmake;     mv /work/stage/lib/libngraph.so /work/stage/lib/libinterpreter_backend.so        /work/stage/deployment_tools/ngraph/lib/;     cp -a /work/stage/include/ngraph /work/stage/deployment_tools/ngraph/include/;     mv /work/stage/cmake/ngraph*.cmake /work/stage/deployment_tools/ngraph/cmake/;     find /work/stage -maxdepth 4 -name '*.so' -o -maxdepth 4 -name 'plugins.xml' | sort;     du -sh /work/stage;     LD_LIBRARY_PATH=/work/stage/deployment_tools/inference_engine/lib/armv7l:/work/stage/deployment_tools/ngraph/lib         /work/stage/deployment_tools/inference_engine/lib/*/myriad_compile --help 2>&1 | head -6 || true
+#15 CACHED
+
+#16 [smoke 1/2] COPY smoke-test /work/smoke
+#16 DONE 0.8s
+
+#17 [smoke 2/2] RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro     set -eux;     python3 /work/smoke/model/make_tiny_ir.py --outdir /work/smoke/model;     cmake -S /work/smoke -B /work/smoke-build         -DCMAKE_BUILD_TYPE=Release         -DCMAKE_TOOLCHAIN_FILE=/work/toolchain-ro/armv7-native.toolchain.cmake         -DOV_ROOT=/work/stage/deployment_tools/inference_engine         -DOV_RUNTIME_PREFIX=/opt/openvino/inference_engine;     cmake --build /work/smoke-build -- -j"2";     readelf -h /work/smoke-build/hello_myriad | head -12;     LD_LIBRARY_PATH=/work/stage/deployment_tools/inference_engine/lib/armv7l:/work/stage/deployment_tools/ngraph/lib         ldd /work/smoke-build/hello_myriad
+#17 0.540 + python3 /work/smoke/model/make_tiny_ir.py --outdir /work/smoke/model
+#17 0.566 wrote /work/smoke/model/model.xml
+#17 0.566 wrote /work/smoke/model/model.bin (432 bytes, input 1x3x32x32, weights 8x3x3x3)
+#17 0.566 sha256 xml : 26c6ec70ae3015229848bf3817304a91989e44af3090c4591a1daf503b78a991
+#17 0.566 sha256 bin : 7377ba9efa0a2186da87fe7c5c49888d05fe0b64c65ee5064e0846b7ca4da5ba
+#17 0.570 + cmake -S /work/smoke -B /work/smoke-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=/work/toolchain-ro/armv7-native.toolchain.cmake -DOV_ROOT=/work/stage/deployment_tools/inference_engine -DOV_RUNTIME_PREFIX=/opt/openvino/inference_engine
+#17 0.650 -- The CXX compiler identification is GNU 10.2.1
+#17 0.660 -- Detecting CXX compiler ABI info
+#17 0.754 -- Detecting CXX compiler ABI info - done
+#17 0.771 -- Check for working CXX compiler: /usr/bin/g++ - skipped
+#17 0.771 -- Detecting CXX compile features
+#17 0.772 -- Detecting CXX compile features - done
+#17 0.774 -- hello_myriad: linking /work/stage/deployment_tools/inference_engine/lib/armv7l/libinference_engine.so;/work/stage/deployment_tools/inference_engine/lib/armv7l/libinference_engine_legacy.so;/work/stage/deployment_tools/inference_engine/lib/armv7l/libinference_engine_transformations.so;/work/stage/deployment_tools/inference_engine/lib/armv7l/libinference_engine_lp_transformations.so;/work/stage/deployment_tools/ngraph/lib/libngraph.so
+#17 0.774 -- hello_myriad: rpath /opt/openvino/inference_engine/lib/armv7l;/opt/openvino/inference_engine/../ngraph/lib
+#17 0.774 -- Configuring done
+#17 0.777 -- Generating done
+#17 0.778 -- Build files have been written to: /work/smoke-build
+#17 0.779 + cmake --build /work/smoke-build -- -j2
+#17 0.826 Scanning dependencies of target hello_myriad
+#17 0.837 [ 50%] Building CXX object CMakeFiles/hello_myriad.dir/main.cpp.o
+#17 1.347 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.347                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.347                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.347                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.347                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.347                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.347                  from /work/smoke/main.cpp:16:
+#17 1.347 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:414:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.347   414 |     using CNNLayer::CNNLayer;
+#17 1.347       |                   ^~
+#17 1.347 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.347                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.347                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.347                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.347                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.347                  from /work/smoke/main.cpp:16:
+#17 1.347 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.347    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.347       |                                                ^~~~~~~~
+#17 1.347 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.347    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.347       |                                                                                ^~~~~~~~~~~
+#17 1.347 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.347    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.347       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.352 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.352                  from /work/smoke/main.cpp:16:
+#17 1.352 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:513:27: warning: 'ConvolutionLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.352   513 |     using ConvolutionLayer::ConvolutionLayer;
+#17 1.352       |                           ^~
+#17 1.352 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.352                  from /work/smoke/main.cpp:16:
+#17 1.352 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:431:48: note: declared here
+#17 1.352   431 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(ConvolutionLayer): public WeightableLayer {
+#17 1.352       |                                                ^~~~~~~~~~~~~~~~
+#17 1.352 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.352    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.352       |                                                                                ^~~~~~~~~~~
+#17 1.352 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:431:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.352   431 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(ConvolutionLayer): public WeightableLayer {
+#17 1.352       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.352 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.352                  from /work/smoke/main.cpp:16:
+#17 1.352 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:514:27: warning: 'ConvolutionLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.352   514 |     using ConvolutionLayer::operator=;
+#17 1.352       |                           ^~
+#17 1.352 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.352                  from /work/smoke/main.cpp:16:
+#17 1.352 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:431:48: note: declared here
+#17 1.352   431 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(ConvolutionLayer): public WeightableLayer {
+#17 1.352       |                                                ^~~~~~~~~~~~~~~~
+#17 1.352 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.352    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.352       |                                                                                ^~~~~~~~~~~
+#17 1.352 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:431:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.352   431 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(ConvolutionLayer): public WeightableLayer {
+#17 1.352       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.352 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.352                  from /work/smoke/main.cpp:16:
+#17 1.352 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:525:27: warning: 'ConvolutionLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.352   525 |     using ConvolutionLayer::ConvolutionLayer;
+#17 1.352       |                           ^~
+#17 1.352 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.352                  from /work/smoke/main.cpp:16:
+#17 1.352 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:431:48: note: declared here
+#17 1.352   431 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(ConvolutionLayer): public WeightableLayer {
+#17 1.352       |                                                ^~~~~~~~~~~~~~~~
+#17 1.352 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.352    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.352       |                                                                                ^~~~~~~~~~~
+#17 1.352 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:431:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.352   431 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(ConvolutionLayer): public WeightableLayer {
+#17 1.352       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.352 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.352                  from /work/smoke/main.cpp:16:
+#17 1.352 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:526:27: warning: 'ConvolutionLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.352   526 |     using ConvolutionLayer::operator=;
+#17 1.352       |                           ^~
+#17 1.352 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.352                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.352                  from /work/smoke/main.cpp:16:
+#17 1.352 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:431:48: note: declared here
+#17 1.352   431 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(ConvolutionLayer): public WeightableLayer {
+#17 1.352       |                                                ^~~~~~~~~~~~~~~~
+#17 1.352 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.352    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.352       |                                                                                ^~~~~~~~~~~
+#17 1.352 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:431:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.352   431 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(ConvolutionLayer): public WeightableLayer {
+#17 1.352       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.354 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.354                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.354                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.354                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.354                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.354                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.354                  from /work/smoke/main.cpp:16:
+#17 1.354 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:737:26: warning: 'WeightableLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.354   737 |     using WeightableLayer::WeightableLayer;
+#17 1.354       |                          ^~
+#17 1.354 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.354                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.354                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.354                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.354                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.354                  from /work/smoke/main.cpp:16:
+#17 1.354 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:388:48: note: declared here
+#17 1.354   388 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(WeightableLayer): public CNNLayer {
+#17 1.354       |                                                ^~~~~~~~~~~~~~~
+#17 1.354 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.354    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.354       |                                                                                ^~~~~~~~~~~
+#17 1.354 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:388:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.354   388 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(WeightableLayer): public CNNLayer {
+#17 1.354       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.355 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.355                  from /work/smoke/main.cpp:16:
+#17 1.355 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:761:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.355   761 |     using CNNLayer::CNNLayer;
+#17 1.355       |                   ^~
+#17 1.355 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.355                  from /work/smoke/main.cpp:16:
+#17 1.355 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.355    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.355       |                                                ^~~~~~~~
+#17 1.355 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.355    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.355       |                                                                                ^~~~~~~~~~~
+#17 1.355 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.355    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.355       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.355 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.355                  from /work/smoke/main.cpp:16:
+#17 1.355 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:780:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.355   780 |     using CNNLayer::CNNLayer;
+#17 1.355       |                   ^~
+#17 1.355 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.355                  from /work/smoke/main.cpp:16:
+#17 1.355 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.355    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.355       |                                                ^~~~~~~~
+#17 1.355 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.355    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.355       |                                                                                ^~~~~~~~~~~
+#17 1.355 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.355    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.355       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.355 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.355                  from /work/smoke/main.cpp:16:
+#17 1.355 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:815:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.355   815 |     using CNNLayer::CNNLayer;
+#17 1.355       |                   ^~
+#17 1.355 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.355                  from /work/smoke/main.cpp:16:
+#17 1.355 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.355    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.355       |                                                ^~~~~~~~
+#17 1.355 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.355    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.355       |                                                                                ^~~~~~~~~~~
+#17 1.355 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.355    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.355       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.355 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.355                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.355                  from /work/smoke/main.cpp:16:
+#17 1.355 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:833:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.355   833 |     using CNNLayer::CNNLayer;
+#17 1.355       |                   ^~
+#17 1.356 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.356                  from /work/smoke/main.cpp:16:
+#17 1.356 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.356    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.356       |                                                ^~~~~~~~
+#17 1.356 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.356    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.356       |                                                                                ^~~~~~~~~~~
+#17 1.356 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.356    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.356       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.356 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.356                  from /work/smoke/main.cpp:16:
+#17 1.356 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:848:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.356   848 |     using CNNLayer::CNNLayer;
+#17 1.356       |                   ^~
+#17 1.356 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.356                  from /work/smoke/main.cpp:16:
+#17 1.356 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.356    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.356       |                                                ^~~~~~~~
+#17 1.356 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.356    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.356       |                                                                                ^~~~~~~~~~~
+#17 1.356 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.356    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.356       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.356 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.356                  from /work/smoke/main.cpp:16:
+#17 1.356 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:868:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.356   868 |     using CNNLayer::CNNLayer;
+#17 1.356       |                   ^~
+#17 1.356 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.356                  from /work/smoke/main.cpp:16:
+#17 1.356 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.356    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.356       |                                                ^~~~~~~~
+#17 1.356 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.356    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.356       |                                                                                ^~~~~~~~~~~
+#17 1.356 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.356    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.356       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.356 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.356                  from /work/smoke/main.cpp:16:
+#17 1.356 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:897:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.356   897 |     using CNNLayer::CNNLayer;
+#17 1.356       |                   ^~
+#17 1.356 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.356                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.356                  from /work/smoke/main.cpp:16:
+#17 1.356 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.356    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.356       |                                                ^~~~~~~~
+#17 1.356 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.356    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.356       |                                                                                ^~~~~~~~~~~
+#17 1.356 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.356    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.356       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.357 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.357                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.357                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.357                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.357                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.357                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.357                  from /work/smoke/main.cpp:16:
+#17 1.357 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:922:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.357   922 |     using CNNLayer::CNNLayer;
+#17 1.357       |                   ^~
+#17 1.357 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.357                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.357                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.357                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.357                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.357                  from /work/smoke/main.cpp:16:
+#17 1.357 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.357    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.357       |                                                ^~~~~~~~
+#17 1.357 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.357    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.357       |                                                                                ^~~~~~~~~~~
+#17 1.357 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.357    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.357       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.357 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.357                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.357                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.357                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.357                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.357                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.357                  from /work/smoke/main.cpp:16:
+#17 1.357 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:994:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.357   994 |     using CNNLayer::CNNLayer;
+#17 1.357       |                   ^~
+#17 1.357 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.357                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.357                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.357                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.357                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.357                  from /work/smoke/main.cpp:16:
+#17 1.357 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.357    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.357       |                                                ^~~~~~~~
+#17 1.357 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.357    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.357       |                                                                                ^~~~~~~~~~~
+#17 1.357 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.357    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.357       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.360 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.360                  from /work/smoke/main.cpp:16:
+#17 1.360 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1021:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.360  1021 |     using CNNLayer::CNNLayer;
+#17 1.360       |                   ^~
+#17 1.360 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.360                  from /work/smoke/main.cpp:16:
+#17 1.360 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.360    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.360       |                                                ^~~~~~~~
+#17 1.360 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.360    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.360       |                                                                                ^~~~~~~~~~~
+#17 1.360 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.360    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.360       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.360 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.360                  from /work/smoke/main.cpp:16:
+#17 1.360 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1048:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.360  1048 |     using CNNLayer::CNNLayer;
+#17 1.360       |                   ^~
+#17 1.360 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.360                  from /work/smoke/main.cpp:16:
+#17 1.360 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.360    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.360       |                                                ^~~~~~~~
+#17 1.360 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.360    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.360       |                                                                                ^~~~~~~~~~~
+#17 1.360 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.360    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.360       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.360 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.360                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.360                  from /work/smoke/main.cpp:16:
+#17 1.360 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1071:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.360  1071 |     using CNNLayer::CNNLayer;
+#17 1.360       |                   ^~
+#17 1.361 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.361                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.361                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.361                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.361                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.361                  from /work/smoke/main.cpp:16:
+#17 1.361 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.361    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.361       |                                                ^~~~~~~~
+#17 1.361 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.361    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.361       |                                                                                ^~~~~~~~~~~
+#17 1.361 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.361    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.361       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.361 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.361                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.361                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.361                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.361                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.361                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.361                  from /work/smoke/main.cpp:16:
+#17 1.361 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1091:26: warning: 'WeightableLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.361  1091 |     using WeightableLayer::WeightableLayer;
+#17 1.361       |                          ^~
+#17 1.361 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.361                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.361                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.361                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.361                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.361                  from /work/smoke/main.cpp:16:
+#17 1.361 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:388:48: note: declared here
+#17 1.361   388 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(WeightableLayer): public CNNLayer {
+#17 1.361       |                                                ^~~~~~~~~~~~~~~
+#17 1.361 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.361    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.361       |                                                                                ^~~~~~~~~~~
+#17 1.361 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:388:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.361   388 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(WeightableLayer): public CNNLayer {
+#17 1.361       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.363 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.363                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.363                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.363                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.363                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.363                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.363                  from /work/smoke/main.cpp:16:
+#17 1.363 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1129:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.363  1129 |     using CNNLayer::CNNLayer;
+#17 1.363       |                   ^~
+#17 1.363 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.363                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.363                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.363                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.363                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.363                  from /work/smoke/main.cpp:16:
+#17 1.363 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.363    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.363       |                                                ^~~~~~~~
+#17 1.363 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.363    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.363       |                                                                                ^~~~~~~~~~~
+#17 1.363 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.363    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.363       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.364 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.364                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.364                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.364                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.364                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.364                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.364                  from /work/smoke/main.cpp:16:
+#17 1.364 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1140:26: warning: 'WeightableLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.364  1140 |     using WeightableLayer::WeightableLayer;
+#17 1.364       |                          ^~
+#17 1.364 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.364                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.364                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.364                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.364                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.364                  from /work/smoke/main.cpp:16:
+#17 1.364 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:388:48: note: declared here
+#17 1.364   388 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(WeightableLayer): public CNNLayer {
+#17 1.364       |                                                ^~~~~~~~~~~~~~~
+#17 1.364 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.364    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.364       |                                                                                ^~~~~~~~~~~
+#17 1.364 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:388:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.364   388 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(WeightableLayer): public CNNLayer {
+#17 1.364       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.366 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.366                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.366                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.366                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.366                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.366                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.366                  from /work/smoke/main.cpp:16:
+#17 1.366 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1233:22: warning: 'RNNCellBase' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.366  1233 |     using RNNCellBase::RNNCellBase;
+#17 1.366       |                      ^~
+#17 1.366 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.366                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.366                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.366                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.366                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.366                  from /work/smoke/main.cpp:16:
+#17 1.366 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1138:48: note: declared here
+#17 1.366  1138 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(RNNCellBase): public WeightableLayer {
+#17 1.366       |                                                ^~~~~~~~~~~
+#17 1.366 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.366    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.366       |                                                                                ^~~~~~~~~~~
+#17 1.366 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1138:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.366  1138 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(RNNCellBase): public WeightableLayer {
+#17 1.366       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.367 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.367                  from /work/smoke/main.cpp:16:
+#17 1.367 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1234:22: warning: 'RNNCellBase' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.367  1234 |     using RNNCellBase::operator=;
+#17 1.367       |                      ^~
+#17 1.367 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.367                  from /work/smoke/main.cpp:16:
+#17 1.367 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1138:48: note: declared here
+#17 1.367  1138 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(RNNCellBase): public WeightableLayer {
+#17 1.367       |                                                ^~~~~~~~~~~
+#17 1.367 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.367    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.367       |                                                                                ^~~~~~~~~~~
+#17 1.367 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1138:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.367  1138 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(RNNCellBase): public WeightableLayer {
+#17 1.367       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.367 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.367                  from /work/smoke/main.cpp:16:
+#17 1.367 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1275:22: warning: 'RNNCellBase' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.367  1275 |     using RNNCellBase::RNNCellBase;
+#17 1.367       |                      ^~
+#17 1.367 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.367                  from /work/smoke/main.cpp:16:
+#17 1.367 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1138:48: note: declared here
+#17 1.367  1138 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(RNNCellBase): public WeightableLayer {
+#17 1.367       |                                                ^~~~~~~~~~~
+#17 1.367 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.367    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.367       |                                                                                ^~~~~~~~~~~
+#17 1.367 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1138:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.367  1138 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(RNNCellBase): public WeightableLayer {
+#17 1.367       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.367 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.367                  from /work/smoke/main.cpp:16:
+#17 1.367 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1276:22: warning: 'RNNCellBase' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.367  1276 |     using RNNCellBase::operator=;
+#17 1.367       |                      ^~
+#17 1.367 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.367                  from /work/smoke/main.cpp:16:
+#17 1.367 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1138:48: note: declared here
+#17 1.367  1138 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(RNNCellBase): public WeightableLayer {
+#17 1.367       |                                                ^~~~~~~~~~~
+#17 1.367 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.367    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.367       |                                                                                ^~~~~~~~~~~
+#17 1.367 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1138:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.367  1138 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(RNNCellBase): public WeightableLayer {
+#17 1.367       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.367 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.367                  from /work/smoke/main.cpp:16:
+#17 1.367 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1312:22: warning: 'RNNCellBase' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.367  1312 |     using RNNCellBase::RNNCellBase;
+#17 1.367       |                      ^~
+#17 1.367 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.367                  from /work/smoke/main.cpp:16:
+#17 1.367 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1138:48: note: declared here
+#17 1.367  1138 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(RNNCellBase): public WeightableLayer {
+#17 1.367       |                                                ^~~~~~~~~~~
+#17 1.367 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.367    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.367       |                                                                                ^~~~~~~~~~~
+#17 1.367 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1138:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.367  1138 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(RNNCellBase): public WeightableLayer {
+#17 1.367       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.367 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.367                  from /work/smoke/main.cpp:16:
+#17 1.367 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1313:22: warning: 'RNNCellBase' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.367  1313 |     using RNNCellBase::operator=;
+#17 1.367       |                      ^~
+#17 1.367 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.367                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.367                  from /work/smoke/main.cpp:16:
+#17 1.367 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1138:48: note: declared here
+#17 1.367  1138 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(RNNCellBase): public WeightableLayer {
+#17 1.367       |                                                ^~~~~~~~~~~
+#17 1.367 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.367    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.367       |                                                                                ^~~~~~~~~~~
+#17 1.367 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1138:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.367  1138 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(RNNCellBase): public WeightableLayer {
+#17 1.367       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.368 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.368                  from /work/smoke/main.cpp:16:
+#17 1.368 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1349:22: warning: 'RNNCellBase' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.368  1349 |     using RNNCellBase::RNNCellBase;
+#17 1.368       |                      ^~
+#17 1.368 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.368                  from /work/smoke/main.cpp:16:
+#17 1.368 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1138:48: note: declared here
+#17 1.368  1138 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(RNNCellBase): public WeightableLayer {
+#17 1.368       |                                                ^~~~~~~~~~~
+#17 1.368 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.368    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.368       |                                                                                ^~~~~~~~~~~
+#17 1.368 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1138:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.368  1138 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(RNNCellBase): public WeightableLayer {
+#17 1.368       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.368 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.368                  from /work/smoke/main.cpp:16:
+#17 1.368 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1392:26: warning: 'WeightableLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.368  1392 |     using WeightableLayer::WeightableLayer;
+#17 1.368       |                          ^~
+#17 1.368 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.368                  from /work/smoke/main.cpp:16:
+#17 1.368 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:388:48: note: declared here
+#17 1.368   388 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(WeightableLayer): public CNNLayer {
+#17 1.368       |                                                ^~~~~~~~~~~~~~~
+#17 1.368 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.368    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.368       |                                                                                ^~~~~~~~~~~
+#17 1.368 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:388:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.368   388 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(WeightableLayer): public CNNLayer {
+#17 1.368       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.368 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.368                  from /work/smoke/main.cpp:16:
+#17 1.368 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1421:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.368  1421 |     using CNNLayer::CNNLayer;
+#17 1.368       |                   ^~
+#17 1.368 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.368                  from /work/smoke/main.cpp:16:
+#17 1.368 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.368    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.368       |                                                ^~~~~~~~
+#17 1.368 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.368    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.368       |                                                                                ^~~~~~~~~~~
+#17 1.368 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.368    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.368       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.368 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.368                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.368                  from /work/smoke/main.cpp:16:
+#17 1.368 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1440:26: warning: 'WeightableLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.368  1440 |     using WeightableLayer::WeightableLayer;
+#17 1.368       |                          ^~
+#17 1.369 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.369                  from /work/smoke/main.cpp:16:
+#17 1.369 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:388:48: note: declared here
+#17 1.369   388 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(WeightableLayer): public CNNLayer {
+#17 1.369       |                                                ^~~~~~~~~~~~~~~
+#17 1.369 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.369    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.369       |                                                                                ^~~~~~~~~~~
+#17 1.369 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:388:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.369   388 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(WeightableLayer): public CNNLayer {
+#17 1.369       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.369 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.369                  from /work/smoke/main.cpp:16:
+#17 1.369 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1472:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.369  1472 |     using CNNLayer::CNNLayer;
+#17 1.369       |                   ^~
+#17 1.369 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.369                  from /work/smoke/main.cpp:16:
+#17 1.369 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.369    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.369       |                                                ^~~~~~~~
+#17 1.369 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.369    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.369       |                                                                                ^~~~~~~~~~~
+#17 1.369 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.369    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.369       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.369 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.369                  from /work/smoke/main.cpp:16:
+#17 1.369 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1510:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.369  1510 |     using CNNLayer::CNNLayer;
+#17 1.369       |                   ^~
+#17 1.369 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.369                  from /work/smoke/main.cpp:16:
+#17 1.369 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.369    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.369       |                                                ^~~~~~~~
+#17 1.369 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.369    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.369       |                                                                                ^~~~~~~~~~~
+#17 1.369 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.369    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.369       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.369 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.369                  from /work/smoke/main.cpp:16:
+#17 1.369 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1530:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.369  1530 |     using CNNLayer::CNNLayer;
+#17 1.369       |                   ^~
+#17 1.369 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.369                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.369                  from /work/smoke/main.cpp:16:
+#17 1.369 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.369    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.369       |                                                ^~~~~~~~
+#17 1.369 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.369    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.369       |                                                                                ^~~~~~~~~~~
+#17 1.369 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.369    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.369       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.370 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.370                  from /work/smoke/main.cpp:16:
+#17 1.370 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1571:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.370  1571 |     using CNNLayer::CNNLayer;
+#17 1.370       |                   ^~
+#17 1.370 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.370                  from /work/smoke/main.cpp:16:
+#17 1.370 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.370    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.370       |                                                ^~~~~~~~
+#17 1.370 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.370    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.370       |                                                                                ^~~~~~~~~~~
+#17 1.370 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.370    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.370       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.370 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.370                  from /work/smoke/main.cpp:16:
+#17 1.370 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1596:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.370  1596 |     using CNNLayer::CNNLayer;
+#17 1.370       |                   ^~
+#17 1.370 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.370                  from /work/smoke/main.cpp:16:
+#17 1.370 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.370    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.370       |                                                ^~~~~~~~
+#17 1.370 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.370    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.370       |                                                                                ^~~~~~~~~~~
+#17 1.370 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.370    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.370       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.370 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.370                  from /work/smoke/main.cpp:16:
+#17 1.370 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1616:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.370  1616 |     using CNNLayer::CNNLayer;
+#17 1.370       |                   ^~
+#17 1.370 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.370                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.370                  from /work/smoke/main.cpp:16:
+#17 1.370 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.370    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.370       |                                                ^~~~~~~~
+#17 1.370 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.370    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.370       |                                                                                ^~~~~~~~~~~
+#17 1.370 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.370    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.370       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.371 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.371                  from /work/smoke/main.cpp:16:
+#17 1.371 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1636:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.371  1636 |     using CNNLayer::CNNLayer;
+#17 1.371       |                   ^~
+#17 1.371 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.371                  from /work/smoke/main.cpp:16:
+#17 1.371 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.371    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.371       |                                                ^~~~~~~~
+#17 1.371 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.371    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.371       |                                                                                ^~~~~~~~~~~
+#17 1.371 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.371    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.371       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.371 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.371                  from /work/smoke/main.cpp:16:
+#17 1.371 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1666:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.371  1666 |     using CNNLayer::CNNLayer;
+#17 1.371       |                   ^~
+#17 1.371 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.371                  from /work/smoke/main.cpp:16:
+#17 1.371 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.371    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.371       |                                                ^~~~~~~~
+#17 1.371 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.371    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.371       |                                                                                ^~~~~~~~~~~
+#17 1.371 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.371    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.371       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.371 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.371                  from /work/smoke/main.cpp:16:
+#17 1.371 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1699:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.371  1699 |     using CNNLayer::CNNLayer;
+#17 1.371       |                   ^~
+#17 1.371 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.371                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.371                  from /work/smoke/main.cpp:16:
+#17 1.371 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.371    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.371       |                                                ^~~~~~~~
+#17 1.371 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.371    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.371       |                                                                                ^~~~~~~~~~~
+#17 1.371 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.371    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.371       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.372 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.372                  from /work/smoke/main.cpp:16:
+#17 1.372 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1715:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.372  1715 |     using CNNLayer::CNNLayer;
+#17 1.372       |                   ^~
+#17 1.372 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.372                  from /work/smoke/main.cpp:16:
+#17 1.372 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.372    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.372       |                                                ^~~~~~~~
+#17 1.372 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.372    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.372       |                                                                                ^~~~~~~~~~~
+#17 1.372 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.372    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.372       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.372 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.372                  from /work/smoke/main.cpp:16:
+#17 1.372 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1730:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.372  1730 |     using CNNLayer::CNNLayer;
+#17 1.372       |                   ^~
+#17 1.372 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.372                  from /work/smoke/main.cpp:16:
+#17 1.372 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.372    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.372       |                                                ^~~~~~~~
+#17 1.372 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.372    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.372       |                                                                                ^~~~~~~~~~~
+#17 1.372 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.372    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.372       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.372 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.372                  from /work/smoke/main.cpp:16:
+#17 1.372 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1745:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.372  1745 |     using CNNLayer::CNNLayer;
+#17 1.372       |                   ^~
+#17 1.372 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.372                  from /work/smoke/main.cpp:16:
+#17 1.372 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.372    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.372       |                                                ^~~~~~~~
+#17 1.372 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.372    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.372       |                                                                                ^~~~~~~~~~~
+#17 1.372 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.372    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.372       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.372 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.372                  from /work/smoke/main.cpp:16:
+#17 1.372 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1760:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.372  1760 |     using CNNLayer::CNNLayer;
+#17 1.372       |                   ^~
+#17 1.372 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.372                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.372                  from /work/smoke/main.cpp:16:
+#17 1.372 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.372    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.372       |                                                ^~~~~~~~
+#17 1.372 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.372    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.372       |                                                                                ^~~~~~~~~~~
+#17 1.372 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.372    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.372       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.373 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.373                  from /work/smoke/main.cpp:16:
+#17 1.373 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1780:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.373  1780 |     using CNNLayer::CNNLayer;
+#17 1.373       |                   ^~
+#17 1.373 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.373                  from /work/smoke/main.cpp:16:
+#17 1.373 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.373    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.373       |                                                ^~~~~~~~
+#17 1.373 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.373    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.373       |                                                                                ^~~~~~~~~~~
+#17 1.373 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.373    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.373       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.373 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.373                  from /work/smoke/main.cpp:16:
+#17 1.373 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1806:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.373  1806 |     using CNNLayer::CNNLayer;
+#17 1.373       |                   ^~
+#17 1.373 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.373                  from /work/smoke/main.cpp:16:
+#17 1.373 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.373    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.373       |                                                ^~~~~~~~
+#17 1.373 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.373    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.373       |                                                                                ^~~~~~~~~~~
+#17 1.373 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.373    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.373       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.373 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.373                  from /work/smoke/main.cpp:16:
+#17 1.373 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1841:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.373  1841 |     using CNNLayer::CNNLayer;
+#17 1.373       |                   ^~
+#17 1.373 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.373                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.373                  from /work/smoke/main.cpp:16:
+#17 1.373 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.373    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.373       |                                                ^~~~~~~~
+#17 1.373 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.373    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.373       |                                                                                ^~~~~~~~~~~
+#17 1.373 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.373    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.373       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.374 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.374                  from /work/smoke/main.cpp:16:
+#17 1.374 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1857:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.374  1857 |     using CNNLayer::CNNLayer;
+#17 1.374       |                   ^~
+#17 1.374 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.374                  from /work/smoke/main.cpp:16:
+#17 1.374 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.374    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.374       |                                                ^~~~~~~~
+#17 1.374 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.374    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.374       |                                                                                ^~~~~~~~~~~
+#17 1.374 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.374    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.374       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.374 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.374                  from /work/smoke/main.cpp:16:
+#17 1.374 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1873:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.374  1873 |     using CNNLayer::CNNLayer;
+#17 1.374       |                   ^~
+#17 1.374 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.374                  from /work/smoke/main.cpp:16:
+#17 1.374 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.374    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.374       |                                                ^~~~~~~~
+#17 1.374 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.374    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.374       |                                                                                ^~~~~~~~~~~
+#17 1.374 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.374    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.374       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.374 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.374                  from /work/smoke/main.cpp:16:
+#17 1.374 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1891:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.374  1891 |     using CNNLayer::CNNLayer;
+#17 1.374       |                   ^~
+#17 1.374 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.374                  from /work/smoke/main.cpp:16:
+#17 1.374 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.374    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.374       |                                                ^~~~~~~~
+#17 1.374 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.374    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.374       |                                                                                ^~~~~~~~~~~
+#17 1.374 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.374    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.374       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.374 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.374                  from /work/smoke/main.cpp:16:
+#17 1.374 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1907:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.374  1907 |     using CNNLayer::CNNLayer;
+#17 1.374       |                   ^~
+#17 1.374 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.374                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.374                  from /work/smoke/main.cpp:16:
+#17 1.374 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.374    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.374       |                                                ^~~~~~~~
+#17 1.374 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.374    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.374       |                                                                                ^~~~~~~~~~~
+#17 1.374 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.374    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.374       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.376 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.376                  from /work/smoke/main.cpp:16:
+#17 1.376 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1928:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.376  1928 |     using CNNLayer::CNNLayer;
+#17 1.376       |                   ^~
+#17 1.376 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.376                  from /work/smoke/main.cpp:16:
+#17 1.376 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.376    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.376       |                                                ^~~~~~~~
+#17 1.376 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.376    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.376       |                                                                                ^~~~~~~~~~~
+#17 1.376 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.376    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.376       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.376 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.376                  from /work/smoke/main.cpp:16:
+#17 1.376 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1944:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.376  1944 |     using CNNLayer::CNNLayer;
+#17 1.376       |                   ^~
+#17 1.376 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.376                  from /work/smoke/main.cpp:16:
+#17 1.376 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.376    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.376       |                                                ^~~~~~~~
+#17 1.376 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.376    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.376       |                                                                                ^~~~~~~~~~~
+#17 1.376 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.376    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.376       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.376 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.376                  from /work/smoke/main.cpp:16:
+#17 1.376 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1965:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.376  1965 |     using CNNLayer::CNNLayer;
+#17 1.376       |                   ^~
+#17 1.376 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.376                  from /work/smoke/main.cpp:16:
+#17 1.376 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.376    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.376       |                                                ^~~~~~~~
+#17 1.376 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.376    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.376       |                                                                                ^~~~~~~~~~~
+#17 1.376 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.376    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.376       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.376 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.376                  from /work/smoke/main.cpp:16:
+#17 1.376 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:1994:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.376  1994 |     using CNNLayer::CNNLayer;
+#17 1.376       |                   ^~
+#17 1.376 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.376                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.376                  from /work/smoke/main.cpp:16:
+#17 1.376 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.376    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.376       |                                                ^~~~~~~~
+#17 1.376 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.376    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.376       |                                                                                ^~~~~~~~~~~
+#17 1.376 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.376    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.376       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.377 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.377                  from /work/smoke/main.cpp:16:
+#17 1.377 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:2023:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.377  2023 |     using CNNLayer::CNNLayer;
+#17 1.377       |                   ^~
+#17 1.377 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.377                  from /work/smoke/main.cpp:16:
+#17 1.377 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.377    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.377       |                                                ^~~~~~~~
+#17 1.377 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.377    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.377       |                                                                                ^~~~~~~~~~~
+#17 1.377 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.377    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.377       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.377 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.377                  from /work/smoke/main.cpp:16:
+#17 1.377 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:2046:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.377  2046 |     using CNNLayer::CNNLayer;
+#17 1.377       |                   ^~
+#17 1.377 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.377                  from /work/smoke/main.cpp:16:
+#17 1.377 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.377    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.377       |                                                ^~~~~~~~
+#17 1.377 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.377    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.377       |                                                                                ^~~~~~~~~~~
+#17 1.377 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.377    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.377       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.377 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.377                  from /work/smoke/main.cpp:16:
+#17 1.377 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:2064:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.377  2064 |     using CNNLayer::CNNLayer;
+#17 1.377       |                   ^~
+#17 1.377 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.377                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.377                  from /work/smoke/main.cpp:16:
+#17 1.377 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.377    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.377       |                                                ^~~~~~~~
+#17 1.377 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.377    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.377       |                                                                                ^~~~~~~~~~~
+#17 1.377 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.377    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.377       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.378 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.378                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.378                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.378                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.378                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.378                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.378                  from /work/smoke/main.cpp:16:
+#17 1.378 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:2098:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.378  2098 |     using CNNLayer::CNNLayer;
+#17 1.378       |                   ^~
+#17 1.378 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.378                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.378                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.378                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.378                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.378                  from /work/smoke/main.cpp:16:
+#17 1.378 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.378    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.378       |                                                ^~~~~~~~
+#17 1.378 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.378    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.378       |                                                                                ^~~~~~~~~~~
+#17 1.378 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.378    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.378       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.378 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:23,
+#17 1.378                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.378                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.378                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.378                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.378                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.378                  from /work/smoke/main.cpp:16:
+#17 1.378 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:2128:19: warning: 'CNNLayer' is deprecated: Migrate to IR v10 and work with ngraph::Function directly. The method will be removed in 2021.1 [-Wdeprecated-declarations]
+#17 1.378  2128 |     using CNNLayer::CNNLayer;
+#17 1.378       |                   ^~
+#17 1.378 In file included from /work/stage/deployment_tools/inference_engine/include/details/ie_exception.hpp:12,
+#17 1.378                  from /work/stage/deployment_tools/inference_engine/include/ie_common.h:14,
+#17 1.378                  from /work/stage/deployment_tools/inference_engine/include/details/ie_exception_conversion.hpp:11,
+#17 1.378                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:17,
+#17 1.378                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.378                  from /work/smoke/main.cpp:16:
+#17 1.378 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:48: note: declared here
+#17 1.378    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.378       |                                                ^~~~~~~~
+#17 1.378 /work/stage/deployment_tools/inference_engine/include/ie_api.h:36:80: note: in definition of macro 'INFERENCE_ENGINE_API_CLASS'
+#17 1.378    36 | #define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#17 1.378       |                                                                                ^~~~~~~~~~~
+#17 1.378 /work/stage/deployment_tools/inference_engine/include/ie_layers.h:89:7: note: in expansion of macro 'INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS'
+#17 1.378    89 | class INFERENCE_ENGINE_INTERNAL_CNNLAYER_CLASS(CNNLayer) {
+#17 1.378       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#17 1.382 In file included from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.382                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.382                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.382                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.382                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.382                  from /work/smoke/main.cpp:16:
+#17 1.382 /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:320:94: warning: 'IShapeInferImpl' is deprecated: Implement ngraph::op::Op::validate_and_infer_types method in a custom ngraph operation [-Wdeprecated-declarations]
+#17 1.382   320 |     StatusCode getShapeInferImpl(IShapeInferImpl::Ptr&, const char*, ResponseDesc*) noexcept override {
+#17 1.382       |                                                                                              ^~~~~~~~
+#17 1.382 In file included from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.382                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.382                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.382                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.382                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.382                  from /work/smoke/main.cpp:16:
+#17 1.382 /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:186:125: note: declared here
+#17 1.382   186 | class INFERENCE_ENGINE_DEPRECATED("Implement ngraph::op::Op::validate_and_infer_types method in a custom ngraph operation") IShapeInferImpl {
+#17 1.382       |                                                                                                                             ^~~~~~~~~~~~~~~
+#17 1.490 In file included from /work/stage/deployment_tools/inference_engine/include/ie_plugin_ptr.hpp:15,
+#17 1.490                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_infer_request.hpp:18,
+#17 1.490                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_executable_network.hpp:19,
+#17 1.490                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:19,
+#17 1.490                  from /work/smoke/main.cpp:16:
+#17 1.490 /work/stage/deployment_tools/inference_engine/include/ie_extension.h:261:109: warning: 'IShapeInferImpl' is deprecated: Implement ngraph::op::Op::validate_and_infer_types method in a custom ngraph operation [-Wdeprecated-declarations]
+#17 1.490   261 |     StatusCode getShapeInferImpl(IShapeInferImpl::Ptr& impl, const char* type, ResponseDesc* resp) noexcept override {
+#17 1.490       |                                                                                                             ^~~~~~~~
+#17 1.490 In file included from /work/stage/deployment_tools/inference_engine/include/ie_icnn_network.hpp:21,
+#17 1.490                  from /work/stage/deployment_tools/inference_engine/include/ie_icnn_net_reader.h:19,
+#17 1.490                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_network.h:12,
+#17 1.490                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_cnn_net_reader.h:20,
+#17 1.490                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:13,
+#17 1.490                  from /work/smoke/main.cpp:16:
+#17 1.490 /work/stage/deployment_tools/inference_engine/include/ie_iextension.h:186:125: note: declared here
+#17 1.490   186 | class INFERENCE_ENGINE_DEPRECATED("Implement ngraph::op::Op::validate_and_infer_types method in a custom ngraph operation") IShapeInferImpl {
+#17 1.490       |                                                                                                                             ^~~~~~~~~~~~~~~
+#17 1.523 In file included from /work/stage/deployment_tools/inference_engine/include/ie_plugin.hpp:24,
+#17 1.523                  from /work/stage/deployment_tools/inference_engine/include/ie_plugin_ptr.hpp:16,
+#17 1.523                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_infer_request.hpp:18,
+#17 1.523                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_executable_network.hpp:19,
+#17 1.523                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:19,
+#17 1.523                  from /work/smoke/main.cpp:16:
+#17 1.523 /work/stage/deployment_tools/inference_engine/include/ie_iexecutable_network.hpp:115:91: warning: 'PrimitiveInfo' is deprecated: Use ExecutableNetwork::GetExecGraphInfo to get information about an internal graph [-Wdeprecated-declarations]
+#17 1.523   115 |     virtual StatusCode GetMappedTopology(std::map<std::string, std::vector<PrimitiveInfo::Ptr>>& deployedTopology,
+#17 1.523       |                                                                                           ^~~
+#17 1.523 In file included from /work/stage/deployment_tools/inference_engine/include/ie_iexecutable_network.hpp:23,
+#17 1.523                  from /work/stage/deployment_tools/inference_engine/include/ie_plugin.hpp:24,
+#17 1.523                  from /work/stage/deployment_tools/inference_engine/include/ie_plugin_ptr.hpp:16,
+#17 1.523                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_infer_request.hpp:18,
+#17 1.523                  from /work/stage/deployment_tools/inference_engine/include/cpp/ie_executable_network.hpp:19,
+#17 1.523                  from /work/stage/deployment_tools/inference_engine/include/inference_engine.hpp:19,
+#17 1.523                  from /work/smoke/main.cpp:16:
+#17 1.523 /work/stage/deployment_tools/inference_engine/include/ie_primitive_info.hpp:27:122: note: declared here
+#17 1.523    27 | struct INFERENCE_ENGINE_DEPRECATED("Use ExecutableNetwork::GetExecGraphInfo to get information about an internal graph") PrimitiveInfo {
+#17 1.523       |                                                                                                                          ^~~~~~~~~~~~~
+#17 3.521 [100%] Linking CXX executable hello_myriad
+#17 3.669 [100%] Built target hello_myriad
+#17 3.680 + readelf -h /work/smoke-build/hello_myriad
+#17 3.680 + head -12
+#17 3.681 ELF Header:
+#17 3.681   Magic:   7f 45 4c 46 01 01 01 00 00 00 00 00 00 00 00 00 
+#17 3.681   Class:                             ELF32
+#17 3.681   Data:                              2's complement, little endian
+#17 3.681   Version:                           1 (current)
+#17 3.681   OS/ABI:                            UNIX - System V
+#17 3.681   ABI Version:                       0
+#17 3.681   Type:                              DYN (Shared object file)
+#17 3.681   Machine:                           ARM
+#17 3.681   Version:                           0x1
+#17 3.681   Entry point address:               0x44d1
+#17 3.681   Start of program headers:          52 (bytes into file)
+#17 3.681 + LD_LIBRARY_PATH=/work/stage/deployment_tools/inference_engine/lib/armv7l:/work/stage/deployment_tools/ngraph/lib ldd /work/smoke-build/hello_myriad
+#17 3.685 	linux-vdso.so.1 (0xf67bc000)
+#17 3.685 	libinference_engine.so => /work/stage/deployment_tools/inference_engine/lib/armv7l/libinference_engine.so (0xf6624000)
+#17 3.685 	libinference_engine_legacy.so => /work/stage/deployment_tools/inference_engine/lib/armv7l/libinference_engine_legacy.so (0xf6430000)
+#17 3.685 	libstdc++.so.6 => /usr/lib/arm-linux-gnueabihf/libstdc++.so.6 (0xf62f4000)
+#17 3.685 	libgcc_s.so.1 => /lib/arm-linux-gnueabihf/libgcc_s.so.1 (0xf62c8000)
+#17 3.685 	libc.so.6 => /lib/arm-linux-gnueabihf/libc.so.6 (0xf61c8000)
+#17 3.685 	libinference_engine_transformations.so => /work/stage/deployment_tools/inference_engine/lib/armv7l/libinference_engine_transformations.so (0xf60d8000)
+#17 3.685 	libdl.so.2 => /lib/arm-linux-gnueabihf/libdl.so.2 (0xf60c4000)
+#17 3.685 	libngraph.so => /work/stage/deployment_tools/ngraph/lib/libngraph.so (0xf5b0c000)
+#17 3.685 	libm.so.6 => /lib/arm-linux-gnueabihf/libm.so.6 (0xf5aa4000)
+#17 3.685 	libpthread.so.0 => /lib/arm-linux-gnueabihf/libpthread.so.0 (0xf5a7c000)
+#17 3.685 	/lib/ld-linux-armhf.so.3 (0xf67c0000)
+#17 DONE 4.2s
+
+#18 [runtime 2/8] RUN set -eux;     printf 'deb http://snapshot.debian.org/archive/debian/%s bullseye main\ndeb http://snapshot.debian.org/archive/debian-security/%s bullseye-security main\ndeb http://snapshot.debian.org/archive/debian/%s bullseye-updates main\n'         "20260824T000000Z" "20260824T000000Z" "20260824T000000Z" > /etc/apt/sources.list;     apt -o Acquire::Retries=5 -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false update;     apt-get -o Acquire::Retries=5 install -y --no-install-recommends         libusb-1.0-0         ca-certificates         python3;     rm -rf /var/lib/apt/lists/*
+#18 CACHED
+
+#19 [runtime 3/8] COPY --from=builder /work/stage/deployment_tools /opt/openvino/
+#19 CACHED
+
+#20 [runtime 4/8] COPY --from=smoke /work/smoke-build/hello_myriad /opt/openvino/bin/hello_myriad
+#20 DONE 0.2s
+
+#21 [runtime 5/8] COPY --from=smoke /work/smoke/model /opt/openvino-demo/model
+#21 DONE 0.2s
+
+#22 [runtime 6/8] COPY container-entry.sh /opt/openvino-demo/run.sh
+#22 DONE 0.2s
+
+#23 [runtime 7/8] RUN chmod +x /opt/openvino-demo/run.sh /opt/openvino/bin/hello_myriad     && ls -l /opt/openvino /opt/openvino/inference_engine/lib/*/     && LD_LIBRARY_PATH="$(ls -d /opt/openvino/inference_engine/lib/*/):/opt/openvino/ngraph/lib"        /opt/openvino/bin/hello_myriad --help
+#23 0.296 /opt/openvino:
+#23 0.296 total 20
+#23 0.296 drwxr-xr-x 1 root root 4096 Sep 19 23:39 bin
+#23 0.296 drwxrwxr-x 2 root root 4096 Sep 19 23:18 demo
+#23 0.296 drwxr-xr-x 7 root root 4096 Sep 19 23:18 inference_engine
+#23 0.296 drwxr-xr-x 5 root root 4096 Sep 19 23:18 ngraph
+#23 0.296 
+#23 0.296 /opt/openvino/inference_engine/lib/armv7l/:
+#23 0.296 total 16304
+#23 0.296 -rwxr-xr-x 1 root root  120336 Sep 19 23:03 compile_tool
+#23 0.296 -rw-r--r-- 1 root root  394672 Sep 19 23:05 libHeteroPlugin.so
+#23 0.296 -rw-r--r-- 1 root root  234956 Sep 19 23:05 libMultiDevicePlugin.so
+#23 0.296 -rw-r--r-- 1 root root 1418792 Sep 19 23:03 libinference_engine.so
+#23 0.296 -rw-r--r-- 1 root root  152984 Sep 19 23:03 libinference_engine_c_api.so
+#23 0.296 -rw-r--r-- 1 root root 1979868 Sep 19 22:59 libinference_engine_legacy.so
+#23 0.296 -rw-r--r-- 1 root root  513468 Sep 19 23:04 libinference_engine_lp_transformations.so
+#23 0.296 -rw-r--r-- 1 root root  824728 Sep 19 23:05 libinference_engine_nn_builder.so
+#23 0.296 -rw-r--r-- 1 root root  674060 Sep 19 23:03 libinference_engine_preproc.so
+#23 0.296 -rw-r--r-- 1 root root  906912 Sep 19 23:02 libinference_engine_transformations.so
+#23 0.296 -rw-r--r-- 1 root root 3593876 Sep 19 23:11 libmyriadPlugin.so
+#23 0.296 -rwxr-xr-x 1 root root  144912 Sep 19 23:11 myriad_compile
+#23 0.296 -rwxr-xr-x 1 root root   54780 Sep 19 23:11 myriad_perfcheck
+#23 0.296 -rw-r--r-- 1 root root 1800408 Sep 19 19:37 pcie-ma248x.mvcmd
+#23 0.296 -rw-r--r-- 1 root root     280 Sep 19 23:03 plugins.xml
+#23 0.296 -rw-r--r-- 1 root root 1795780 Sep 19 19:37 usb-ma2450.mvcmd
+#23 0.296 -rw-r--r-- 1 root root 2040216 Sep 19 19:37 usb-ma2x8x.mvcmd
+#23 0.303 usage: hello_myriad [--model <IR.xml>] [--weights <IR.bin>] [--device MYRIAD] [--iterations N] [--list-only]
+#23 DONE 0.4s
+
+#24 [runtime 8/8] WORKDIR /opt/openvino-demo
+#24 DONE 0.2s
+
+#25 exporting to image
+#25 exporting layers
+#25 exporting layers 1.0s done
+#25 exporting manifest sha256:0e40741c586b9641b153fd218602d571a9e12ecc1a6462cc0a6eadb33d75398c 0.0s done
+#25 exporting config sha256:2a4ef9be328db78118f7c2c035887908b82b78778ce8e56b16aa9913347d1aee 0.0s done
+#25 naming to docker.io/library/openvino-2020.3-rpi5:latest
+#25 naming to docker.io/library/openvino-2020.3-rpi5:latest 0.5s done
+#25 unpacking to docker.io/library/openvino-2020.3-rpi5:latest
+#25 unpacking to docker.io/library/openvino-2020.3-rpi5:latest 0.3s done
+#25 DONE 1.8s
+
+[1m== built openvino-2020.3-rpi5:latest ==[0m
+IMAGE                         ID             DISK USAGE   CONTENT SIZE   EXTRA
+openvino-2020.3-rpi5:latest   0e40741c586b        263MB         75.6MB        
+
+next: ./run.sh            (device enumeration + tiny-model inference)
+      ./run.sh --list-only
+      ./run.sh shell
