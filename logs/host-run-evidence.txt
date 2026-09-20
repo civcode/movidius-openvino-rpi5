@@ -1,0 +1,126 @@
+# host-native evidence (Pi 5 host shell, no Docker, no QEMU in the execution path)
+captured: 2026-09-20T09:53:55Z
+
+=== host kernel ===
+Linux edge 6.18.50+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.18.50-1+rpt1 (2026-09-11) aarch64 GNU/Linux
+aarch64
+CONFIG_COMPAT=y
+binfmt_misc entries matching ^qemu-arm$ (ELF32 LE arm): 0
+(0 -> no QEMU translator registered for the ELF32 LE ARM binaries we run;
+ the registered qemu-armeb is big-endian, qemu-aarch64* is 64-bit: neither matches)
+foreign dpkg archs: armhf 
+libc6:armhf installed on the host? not installed
+
+=== the binary that runs on the host ===
+  Class:                             ELF32
+  Type:                              DYN (Position-Independent Executable file)
+  Machine:                           ARM
+  Entry point address:               0x5ee5
+      [Requesting program interpreter: /lib/ld-linux-armhf.so.3]
+  LOAD           0x000000 0x00000000 0x00000000 0x0c6ac 0x0c6ac R E 0x10000
+  LOAD           0x00cd1c 0x0001cd1c 0x0001cd1c 0x00554 0x0055c RW  0x10000
+
+=== execution proof: the arm32 binary runs and parses its own CLI on the host ===
+--model is required
+(the message comes from main() -> every shared object resolved from the sysroot below)
+
+=== host files used as the sysroot (10 libraries) ===
+3.0M	work/host-runtime/sysroot
+work/host-runtime/sysroot/lib/arm-linux-gnueabihf/libc.so.6
+work/host-runtime/sysroot/lib/arm-linux-gnueabihf/libdl.so.2
+work/host-runtime/sysroot/lib/arm-linux-gnueabihf/libgcc_s.so.1
+work/host-runtime/sysroot/lib/arm-linux-gnueabihf/libm.so.6
+work/host-runtime/sysroot/lib/arm-linux-gnueabihf/libpthread.so.0
+work/host-runtime/sysroot/lib/arm-linux-gnueabihf/librt.so.1
+work/host-runtime/sysroot/lib/ld-linux-armhf.so.3
+work/host-runtime/sysroot/usr/lib/arm-linux-gnueabihf/libstdc++.so.6
+work/host-runtime/sysroot/usr/lib/arm-linux-gnueabihf/libudev.so.1
+work/host-runtime/sysroot/usr/lib/arm-linux-gnueabihf/libusb-1.0.so.0
+
+=== host-side model files (written by the MO container, read by the host process) ===
+6975776 mobilenet-v2-ov203.bin
+53064 mobilenet-v2-ov203.mapping
+137973 mobilenet-v2-ov203.xml
+
+=== device blob produced by the host-native compile_tool ===
+6999040 mobilenet-v2-ov203.blob
+0000000 7f 65 6c 66 00 00 00 00 00 00 00 00 00 00 00 00
+0000016
+
+=== MYRIAD runs executed host-natively in this session ===
+$ ./scripts/host-run.sh mobilenet --image vendor/models/images/banana.ppm --topk 3
+  1 banana 0.9563 / 2 custard apple 0.0145 / 3 bagel 0.0062
+  1 x: 44.54 ms ; 10 x: mean 44.54 min 44.44 max 44.69 ms (22.5 fps)
+$ ./scripts/host-run.sh mobilenet            (numerical self-test)
+  max|diff| 0.0525  mean|diff| 0.0122  top5: 556 818 811 827 918  ->  RESULT: PASS
+$ ./scripts/host-run.sh compile --model vendor/models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml \
+                          --blob vendor/models/blobs/mobilenet-v2-ov203.blob
+  blob 6999040 B ; "blob generated successful" ; LoadNetwork time elapsed: 1657 ms
+$ sudo ./scripts/host-run.sh mobilenet --image vendor/models/images/cat.ppm   -> 44.54 ms, same top-1
+
+=== host-only failure modes reproduced
+before the udev rule, unprivileged: ncDeviceOpen:1009 Failed to find booted device after boot -> RESULT: FAIL
+foreign-owned /tmp/mvnc.mutex, even as root: ncDeviceOpen:754 global mutex initialization failed
+C probe open("/tmp/mvnc.mutex", O_RDONLY|O_CREAT) under sudo on a chris-owned 0660 file: -1 EACCES
+  (same-user open: ok; arm32 cat as root without O_CREAT: ok) -> fs.protected_regular=2
+
+=== current stick state ===
+lsusb 03e7: none (wedged by the experiment in HOST-RUN.md section 5; needs a physical replug)
+
+=== RE-VERIFIED host-native, after the stick recovered (see HOST-RUN.md section 5) ===
+captured: 2026-09-20T10:12:18Z
+lsusb: Bus 003 Device 014: ID 03e7:2150 Intel Myriad VPU [Movidius Neural Compute Stick]
+$ ./scripts/host-run.sh list
+OpenVINO InferenceEngine smoke test
+available devices : MYRIAD
+  plugin MYRIAD   api 2.1 build custom__ (myriadPlugin)
+RESULT: PASS (no --model given: plugin enumeration only)
+
+$ ./scripts/host-run.sh demo
+loading on      : MYRIAD (first load compiles the graph on the VPU)
+load+compile    : 1494.49 ms
+  inference 1 : 1.83 ms
+mean inference  : 1.83 ms (547.61 fps)
+  output conv (1,8,32,32, desc precision FP32, 4 B/elem) min -1.05859 max 2.64844 mean 1.02026
+RESULT: PASS
+
+$ ./scripts/host-run.sh mobilenet
+load+compile    : 1648.36 ms on MYRIAD
+input source    : /home/chris/workspace/flash-movidius-openvino/openvino-2020.3-rpi5/vendor/models/test_data/input_0.f32 (150528 float32)
+inference       : 44.60 ms mean over 1 run(s) (22.4 fps)
+logits          : 1000 values, 4 B/elem, desc precision FP32
+against reference /home/chris/workspace/flash-movidius-openvino/openvino-2020.3-rpi5/vendor/models/test_data/output_0.f32:
+  max |diff|    : 0.0525  (reference logits up to 26.2702)
+  mean |diff|   : 0.0122
+  top-1         : device 556 vs reference 556
+  top-1        : device 556  reference 556  = match
+  top-2        : device 818  reference 818  = match
+  top-3        : device 811  reference 811  = match
+  top-4        : device 827  reference 827  = match
+  top-5        : device 918  reference 918  = match
+
+
+$ ./scripts/host-run.sh mobilenet --image vendor/models/images/banana.ppm --topk 3
+load+compile    : 1671.65 ms on MYRIAD
+input source    : vendor/models/images/banana.ppm 224x224, mean 0.49,0.46,0.41 std 0.23,0.22,0.22
+inference       : 44.51 ms mean over 1 run(s) (22.5 fps)
+logits          : 1000 values, 4 B/elem, desc precision FP32
+
+top 3:
+   1.    954   0.7170  n07753592  banana  logit 13.211
+   2.    923   0.0417  n07579787  plate  logit 10.367
+   3.    684   0.0317  n03840681  ocarina, sweet potato  logit 10.094
+
+$ ./scripts/host-run.sh mobilenet --image vendor/models/images/cat.ppm --iterations 20
+input source    : vendor/models/images/cat.ppm 224x224, mean 0.49,0.46,0.41 std 0.23,0.22,0.22
+inference       : 44.46 ms mean over 20 run(s) (22.5 fps)
+
+usb node after a run: $ ./scripts/host-run.sh shell  (wrappers on PATH)
+mobilenet_classify, compile_tool).  LD_LIBRARY_PATH is exported too.
+/home/chris/workspace/flash-movidius-openvino/openvino-2020.3-rpi5/work/host-runtime/bin/mobilenet_classify
+usage: mobilenet_classify --model <IR.xml> [--weights <IR.bin>] [--device MYRIAD]
+       (--tensor <raw f32 1x3x224x224> | --image <224x224 P6 PPM>)
+
+$ ./scripts/host-run.sh --help  -> prints the usage block of scripts/host-run.sh
+$ ls /proc/sys/fs/binfmt_misc/ | grep -c "^qemu-arm$" ->
+0
