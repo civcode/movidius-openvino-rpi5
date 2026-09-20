@@ -1,0 +1,28 @@
+Cloning into 'vendor/openvino-2020.3.2'...
+Note: switching to '0b3773b7405d955d48642667ac5113289b9baab2'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+Submodule 'inference-engine/thirdparty/ade' (https://github.com/opencv/ade.git) registered for path 'inference-engine/thirdparty/ade'
+Submodule 'ngraph' (https://github.com/NervanaSystems/ngraph.git) registered for path 'ngraph'
+Cloning into '/home/chris/workspace/flash-movidius-openvino/openvino-2020.3-rpi5/vendor/openvino-2020.3.2/inference-engine/thirdparty/ade'...
+Cloning into '/home/chris/workspace/flash-movidius-openvino/openvino-2020.3-rpi5/vendor/openvino-2020.3.2/ngraph'...
+From https://github.com/opencv/ade
+ * branch            cbe2db61a659c2cc304c3837406f95c39dfa938e -> FETCH_HEAD
+Submodule path 'inference-engine/thirdparty/ade': checked out 'cbe2db61a659c2cc304c3837406f95c39dfa938e'
+From https://github.com/NervanaSystems/ngraph
+ * branch            1797d7fb712d2ffa6048ce5f5b3b560b84ab5ae4 -> FETCH_HEAD
+Submodule path 'ngraph': checked out '1797d7fb712d2ffa6048ce5f5b3b560b84ab5ae4'
