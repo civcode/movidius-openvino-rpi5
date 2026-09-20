@@ -1,0 +1,217 @@
+# ./run.sh mobilenet full run - 2026-09-20T10:01:13+02:00 on edge
+
+## numerical verification (FP16 weights, 25 iterations)
+>> docker run --rm --platform linux/arm/v7 --name ov203-smoke-321830 --network=host -v /dev:/dev --device-cgroup-rule=c 189:* rwm -e OV_ROOT=/opt/openvino -v /home/chris/workspace/flash-movidius-openvino/openvino-2020.3-rpi5/vendor/models:/models:ro openvino-2020.3-rpi5:latest /opt/openvino/bin/mobilenet_classify --device MYRIAD --model /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml --weights /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin --labels /models/labels/synset.txt --tensor /models/test_data/input_0.f32 --reference /models/test_data/output_0.f32 --iterations 25
+model           : /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml + /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin
+network         : mobilenet-v2-ov203
+input           : data 1,3,224,224 FP16 NCHW
+output          : mobilenetv20_output_flatten0_reshape0 1,1000
+load+compile    : 1656.92 ms on MYRIAD
+input source    : /models/test_data/input_0.f32 (150528 float32)
+inference       : 44.40 ms mean over 25 run(s) (22.5 fps)
+logits          : 1000 values, 4 B/elem, desc precision FP32
+
+top 5:
+   1.    556   0.9999  n03347037  fire screen, fireguard  logit 26.219
+   2.    818   0.0000  n04286575  spotlight, spot  logit 15.211
+   3.    811   0.0000  n04265275  space heater  logit 14.969
+   4.    827   0.0000  n04330267  stove  logit 14.336
+   5.    918   0.0000  n06785654  crossword puzzle, crossword  logit 14.156
+
+against reference /models/test_data/output_0.f32:
+  max |diff|    : 0.0525  (reference logits up to 26.2702)
+  mean |diff|   : 0.0122
+  top-1         : device 556 vs reference 556
+  top-1        : device 556  reference 556  = match
+  top-2        : device 818  reference 818  = match
+  top-3        : device 811  reference 811  = match
+  top-4        : device 827  reference 827  = match
+  top-5        : device 918  reference 918  = match
+
+RESULT: PASS (top-1 matches, max |diff| 0.0525 vs tolerance 1.0000)
+
+## numerical verification (FP32 weights, 25 iterations)
+>> docker run --rm --platform linux/arm/v7 --name ov203-smoke-321929 --network=host -v /dev:/dev --device-cgroup-rule=c 189:* rwm -e OV_ROOT=/opt/openvino -v /home/chris/workspace/flash-movidius-openvino/openvino-2020.3-rpi5/vendor/models:/models:ro openvino-2020.3-rpi5:latest /opt/openvino/bin/mobilenet_classify --device MYRIAD --model /models/mobilenet-v2-ov203/fp32/mobilenet-v2-ov203.xml --weights /models/mobilenet-v2-ov203/fp32/mobilenet-v2-ov203.bin --labels /models/labels/synset.txt --tensor /models/test_data/input_0.f32 --reference /models/test_data/output_0.f32 --iterations 25
+model           : /models/mobilenet-v2-ov203/fp32/mobilenet-v2-ov203.xml + /models/mobilenet-v2-ov203/fp32/mobilenet-v2-ov203.bin
+network         : mobilenet-v2-ov203
+input           : data 1,3,224,224 FP16 NCHW
+output          : mobilenetv20_output_flatten0_reshape0 1,1000
+load+compile    : 1700.35 ms on MYRIAD
+input source    : /models/test_data/input_0.f32 (150528 float32)
+inference       : 44.47 ms mean over 25 run(s) (22.5 fps)
+logits          : 1000 values, 4 B/elem, desc precision FP32
+
+top 5:
+   1.    556   0.9999  n03347037  fire screen, fireguard  logit 26.203
+   2.    818   0.0000  n04286575  spotlight, spot  logit 15.219
+   3.    811   0.0000  n04265275  space heater  logit 14.969
+   4.    827   0.0000  n04330267  stove  logit 14.336
+   5.    918   0.0000  n06785654  crossword puzzle, crossword  logit 14.156
+
+against reference /models/test_data/output_0.f32:
+  max |diff|    : 0.0671  (reference logits up to 26.2702)
+  mean |diff|   : 0.0148
+  top-1         : device 556 vs reference 556
+  top-1        : device 556  reference 556  = match
+  top-2        : device 818  reference 818  = match
+  top-3        : device 811  reference 811  = match
+  top-4        : device 827  reference 827  = match
+  top-5        : device 918  reference 918  = match
+
+RESULT: PASS (top-1 matches, max |diff| 0.0671 vs tolerance 1.0000)
+
+## photos - ImageNet centre crop
+--- dog
+>> docker run --rm --platform linux/arm/v7 --name ov203-smoke-322024 --network=host -v /dev:/dev --device-cgroup-rule=c 189:* rwm -e OV_ROOT=/opt/openvino -v /home/chris/workspace/flash-movidius-openvino/openvino-2020.3-rpi5/vendor/models:/models:ro openvino-2020.3-rpi5:latest /opt/openvino/bin/mobilenet_classify --device MYRIAD --model /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml --weights /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin --labels /models/labels/synset.txt --image /models/images/dog.ppm --topk 3
+model           : /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml + /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin
+network         : mobilenet-v2-ov203
+input           : data 1,3,224,224 FP16 NCHW
+output          : mobilenetv20_output_flatten0_reshape0 1,1000
+load+compile    : 1661.35 ms on MYRIAD
+input source    : /models/images/dog.ppm 224x224, mean 0.49,0.46,0.41 std 0.23,0.22,0.22
+inference       : 44.61 ms mean over 1 run(s) (22.4 fps)
+logits          : 1000 values, 4 B/elem, desc precision FP32
+
+top 3:
+   1.    444   0.5825  n02835271  bicycle-built-for-two, tandem bicycle, tandem  logit 12.141
+   2.    249   0.1044  n02110063  malamute, malemute, Alaskan malamute  logit 10.422
+   3.    671   0.0846  n03792782  mountain bike, all-terrain bike, off-roader  logit 10.211
+--- cat
+>> docker run --rm --platform linux/arm/v7 --name ov203-smoke-322122 --network=host -v /dev:/dev --device-cgroup-rule=c 189:* rwm -e OV_ROOT=/opt/openvino -v /home/chris/workspace/flash-movidius-openvino/openvino-2020.3-rpi5/vendor/models:/models:ro openvino-2020.3-rpi5:latest /opt/openvino/bin/mobilenet_classify --device MYRIAD --model /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml --weights /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin --labels /models/labels/synset.txt --image /models/images/cat.ppm --topk 3
+model           : /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml + /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin
+network         : mobilenet-v2-ov203
+input           : data 1,3,224,224 FP16 NCHW
+output          : mobilenetv20_output_flatten0_reshape0 1,1000
+load+compile    : 1662.67 ms on MYRIAD
+input source    : /models/images/cat.ppm 224x224, mean 0.49,0.46,0.41 std 0.23,0.22,0.22
+inference       : 44.60 ms mean over 1 run(s) (22.4 fps)
+logits          : 1000 values, 4 B/elem, desc precision FP32
+
+top 3:
+   1.    281   0.2463  n02123045  tabby, tabby cat  logit 9.852
+   2.    282   0.1830  n02123159  tiger cat  logit 9.555
+   3.    277   0.1182  n02119022  red fox, Vulpes vulpes  logit 9.117
+--- eagle
+>> docker run --rm --platform linux/arm/v7 --name ov203-smoke-322220 --network=host -v /dev:/dev --device-cgroup-rule=c 189:* rwm -e OV_ROOT=/opt/openvino -v /home/chris/workspace/flash-movidius-openvino/openvino-2020.3-rpi5/vendor/models:/models:ro openvino-2020.3-rpi5:latest /opt/openvino/bin/mobilenet_classify --device MYRIAD --model /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml --weights /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin --labels /models/labels/synset.txt --image /models/images/eagle.ppm --topk 3
+model           : /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml + /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin
+network         : mobilenet-v2-ov203
+input           : data 1,3,224,224 FP16 NCHW
+output          : mobilenetv20_output_flatten0_reshape0 1,1000
+load+compile    : 1650.55 ms on MYRIAD
+input source    : /models/images/eagle.ppm 224x224, mean 0.49,0.46,0.41 std 0.23,0.22,0.22
+inference       : 44.60 ms mean over 1 run(s) (22.4 fps)
+logits          : 1000 values, 4 B/elem, desc precision FP32
+
+top 3:
+   1.     21   0.8785  n01608432  kite  logit 16.359
+   2.     22   0.0926  n01614925  bald eagle, American eagle, Haliaeetus leucocephalus  logit 14.109
+   3.     23   0.0157  n01616318  vulture  logit 12.336
+--- banana
+>> docker run --rm --platform linux/arm/v7 --name ov203-smoke-322319 --network=host -v /dev:/dev --device-cgroup-rule=c 189:* rwm -e OV_ROOT=/opt/openvino -v /home/chris/workspace/flash-movidius-openvino/openvino-2020.3-rpi5/vendor/models:/models:ro openvino-2020.3-rpi5:latest /opt/openvino/bin/mobilenet_classify --device MYRIAD --model /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml --weights /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin --labels /models/labels/synset.txt --image /models/images/banana.ppm --topk 3
+model           : /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml + /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin
+network         : mobilenet-v2-ov203
+input           : data 1,3,224,224 FP16 NCHW
+output          : mobilenetv20_output_flatten0_reshape0 1,1000
+load+compile    : 1648.76 ms on MYRIAD
+input source    : /models/images/banana.ppm 224x224, mean 0.49,0.46,0.41 std 0.23,0.22,0.22
+inference       : 44.52 ms mean over 1 run(s) (22.5 fps)
+logits          : 1000 values, 4 B/elem, desc precision FP32
+
+top 3:
+   1.    954   0.7170  n07753592  banana  logit 13.211
+   2.    923   0.0417  n07579787  plate  logit 10.367
+   3.    684   0.0317  n03840681  ocarina, sweet potato  logit 10.094
+--- cup
+>> docker run --rm --platform linux/arm/v7 --name ov203-smoke-322417 --network=host -v /dev:/dev --device-cgroup-rule=c 189:* rwm -e OV_ROOT=/opt/openvino -v /home/chris/workspace/flash-movidius-openvino/openvino-2020.3-rpi5/vendor/models:/models:ro openvino-2020.3-rpi5:latest /opt/openvino/bin/mobilenet_classify --device MYRIAD --model /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml --weights /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin --labels /models/labels/synset.txt --image /models/images/cup.ppm --topk 3
+model           : /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml + /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin
+network         : mobilenet-v2-ov203
+input           : data 1,3,224,224 FP16 NCHW
+output          : mobilenetv20_output_flatten0_reshape0 1,1000
+load+compile    : 1682.36 ms on MYRIAD
+input source    : /models/images/cup.ppm 224x224, mean 0.49,0.46,0.41 std 0.23,0.22,0.22
+inference       : 44.60 ms mean over 1 run(s) (22.4 fps)
+logits          : 1000 values, 4 B/elem, desc precision FP32
+
+top 3:
+   1.    968   0.9600  n07930864  cup  logit 16.109
+   2.    967   0.0110  n07920052  espresso  logit 11.641
+   3.    504   0.0090  n03063599  coffee mug  logit 11.438
+
+## photos - full-frame squashfull
+--- dog
+>> docker run --rm --platform linux/arm/v7 --name ov203-smoke-322514 --network=host -v /dev:/dev --device-cgroup-rule=c 189:* rwm -e OV_ROOT=/opt/openvino -v /home/chris/workspace/flash-movidius-openvino/openvino-2020.3-rpi5/vendor/models:/models:ro openvino-2020.3-rpi5:latest /opt/openvino/bin/mobilenet_classify --device MYRIAD --model /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml --weights /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin --labels /models/labels/synset.txt --image /models/images/full/dog.ppm --topk 3
+model           : /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml + /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin
+network         : mobilenet-v2-ov203
+input           : data 1,3,224,224 FP16 NCHW
+output          : mobilenetv20_output_flatten0_reshape0 1,1000
+load+compile    : 1648.67 ms on MYRIAD
+input source    : /models/images/full/dog.ppm 224x224, mean 0.49,0.46,0.41 std 0.23,0.22,0.22
+inference       : 44.53 ms mean over 1 run(s) (22.5 fps)
+logits          : 1000 values, 4 B/elem, desc precision FP32
+
+top 3:
+   1.    196   0.1732  n02097047  miniature schnauzer  logit 10.078
+   2.    198   0.1652  n02097209  standard schnauzer  logit 10.031
+   3.    444   0.1652  n02835271  bicycle-built-for-two, tandem bicycle, tandem  logit 10.031
+--- cat
+>> docker run --rm --platform linux/arm/v7 --name ov203-smoke-322610 --network=host -v /dev:/dev --device-cgroup-rule=c 189:* rwm -e OV_ROOT=/opt/openvino -v /home/chris/workspace/flash-movidius-openvino/openvino-2020.3-rpi5/vendor/models:/models:ro openvino-2020.3-rpi5:latest /opt/openvino/bin/mobilenet_classify --device MYRIAD --model /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml --weights /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin --labels /models/labels/synset.txt --image /models/images/full/cat.ppm --topk 3
+model           : /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml + /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin
+network         : mobilenet-v2-ov203
+input           : data 1,3,224,224 FP16 NCHW
+output          : mobilenetv20_output_flatten0_reshape0 1,1000
+load+compile    : 1644.90 ms on MYRIAD
+input source    : /models/images/full/cat.ppm 224x224, mean 0.49,0.46,0.41 std 0.23,0.22,0.22
+inference       : 44.53 ms mean over 1 run(s) (22.5 fps)
+logits          : 1000 values, 4 B/elem, desc precision FP32
+
+top 3:
+   1.    278   0.2909  n02119789  kit fox, Vulpes macrotis  logit 10.750
+   2.    277   0.2841  n02119022  red fox, Vulpes vulpes  logit 10.727
+   3.    282   0.1005  n02123159  tiger cat  logit 9.688
+--- eagle
+>> docker run --rm --platform linux/arm/v7 --name ov203-smoke-322707 --network=host -v /dev:/dev --device-cgroup-rule=c 189:* rwm -e OV_ROOT=/opt/openvino -v /home/chris/workspace/flash-movidius-openvino/openvino-2020.3-rpi5/vendor/models:/models:ro openvino-2020.3-rpi5:latest /opt/openvino/bin/mobilenet_classify --device MYRIAD --model /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml --weights /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin --labels /models/labels/synset.txt --image /models/images/full/eagle.ppm --topk 3
+model           : /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml + /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin
+network         : mobilenet-v2-ov203
+input           : data 1,3,224,224 FP16 NCHW
+output          : mobilenetv20_output_flatten0_reshape0 1,1000
+load+compile    : 1672.97 ms on MYRIAD
+input source    : /models/images/full/eagle.ppm 224x224, mean 0.49,0.46,0.41 std 0.23,0.22,0.22
+inference       : 44.52 ms mean over 1 run(s) (22.5 fps)
+logits          : 1000 values, 4 B/elem, desc precision FP32
+
+top 3:
+   1.     22   0.5186  n01614925  bald eagle, American eagle, Haliaeetus leucocephalus  logit 14.242
+   2.     21   0.4367  n01608432  kite  logit 14.070
+   3.    139   0.0201  n02025239  ruddy turnstone, Arenaria interpres  logit 10.992
+--- banana
+>> docker run --rm --platform linux/arm/v7 --name ov203-smoke-322803 --network=host -v /dev:/dev --device-cgroup-rule=c 189:* rwm -e OV_ROOT=/opt/openvino -v /home/chris/workspace/flash-movidius-openvino/openvino-2020.3-rpi5/vendor/models:/models:ro openvino-2020.3-rpi5:latest /opt/openvino/bin/mobilenet_classify --device MYRIAD --model /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml --weights /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin --labels /models/labels/synset.txt --image /models/images/full/banana.ppm --topk 3
+model           : /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml + /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin
+network         : mobilenet-v2-ov203
+input           : data 1,3,224,224 FP16 NCHW
+output          : mobilenetv20_output_flatten0_reshape0 1,1000
+load+compile    : 1650.43 ms on MYRIAD
+input source    : /models/images/full/banana.ppm 224x224, mean 0.49,0.46,0.41 std 0.23,0.22,0.22
+inference       : 44.54 ms mean over 1 run(s) (22.5 fps)
+logits          : 1000 values, 4 B/elem, desc precision FP32
+
+top 3:
+   1.    954   0.9556  n07753592  banana  logit 15.258
+   2.    934   0.0179  n07697537  hotdog, hot dog, red hot  logit 11.281
+   3.    666   0.0041  n03786901  mortar  logit 9.812
+--- cup
+>> docker run --rm --platform linux/arm/v7 --name ov203-smoke-322900 --network=host -v /dev:/dev --device-cgroup-rule=c 189:* rwm -e OV_ROOT=/opt/openvino -v /home/chris/workspace/flash-movidius-openvino/openvino-2020.3-rpi5/vendor/models:/models:ro openvino-2020.3-rpi5:latest /opt/openvino/bin/mobilenet_classify --device MYRIAD --model /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml --weights /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin --labels /models/labels/synset.txt --image /models/images/full/cup.ppm --topk 3
+model           : /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml + /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin
+network         : mobilenet-v2-ov203
+input           : data 1,3,224,224 FP16 NCHW
+output          : mobilenetv20_output_flatten0_reshape0 1,1000
+load+compile    : 1650.88 ms on MYRIAD
+input source    : /models/images/full/cup.ppm 224x224, mean 0.49,0.46,0.41 std 0.23,0.22,0.22
+inference       : 44.59 ms mean over 1 run(s) (22.4 fps)
+logits          : 1000 values, 4 B/elem, desc precision FP32
+
+top 3:
+   1.    968   0.8362  n07930864  cup  logit 16.781
+   2.    967   0.0736  n07920052  espresso  logit 14.352
+   3.    504   0.0379  n03063599  coffee mug  logit 13.688
+
+stick after teardown: Bus 003 Device 117: ID 03e7:2150 Intel Myriad VPU [Movidius Neural Compute Stick]

@@ -1,0 +1,30 @@
+[notice] To update, run: pip install --upgrade pip
+Model Optimizer arguments:
+Common parameters:
+	- Path to the Input Model: 	/models/onnx/mobilenetv2-7.onnx
+	- Path for generated IR: 	/models/mobilenet-v2-ov203/fp16
+	- IR output name: 	mobilenet-v2-ov203
+	- Log level: 	ERROR
+	- Batch: 	Not specified, inherited from the model
+	- Input layers: 	Not specified, inherited from the model
+	- Output layers: 	Not specified, inherited from the model
+	- Input shapes: 	Not specified, inherited from the model
+	- Mean values: 	Not specified
+	- Scale values: 	Not specified
+	- Scale factor: 	Not specified
+	- Precision of IR: 	FP16
+	- Enable fusing: 	True
+	- Enable grouped convolutions fusing: 	True
+	- Move mean values to preprocess section: 	False
+	- Reverse input channels: 	False
+ONNX specific parameters:
+Model Optimizer version: 	unknown version
+
+[ SUCCESS ] Generated IR version 10 model.
+[ SUCCESS ] XML file: /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml
+[ SUCCESS ] BIN file: /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin
+[ SUCCESS ] Total execution time: 14.35 seconds. 
+[ SUCCESS ] Memory consumed: 148 MB. 
+It's been a while, check for a new version of Intel(R) Distribution of OpenVINO(TM) toolkit here https://software.intel.com/en-us/openvino-toolkit/choose-download?cid=&source=upgrade&content=2020_3_LTS or on the GitHub*
+/mo/mo/main.py:87: SyntaxWarning: "is" with a literal. Did you mean "=="?
+  if op is 'k':
