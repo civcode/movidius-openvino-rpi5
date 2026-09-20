@@ -1,0 +1,12 @@
+# Build-context hygiene.  The Dockerfile pulls the OpenVINO source tree and the
+# local dependency mirror in with --mount=type=bind, so those two have to be part
+# of the context; everything else under vendor/ (the downloaded official runtime,
+# the unpacked tarball, the raw firmware) is only used by scripts/ on the host.
+.git/
+logs/
+work/
+vendor/reference-runtime/
+vendor/firmware/
+vendor/models/
+vendor/*.tgz
+vendor/openvino-2020.3.2/.git/

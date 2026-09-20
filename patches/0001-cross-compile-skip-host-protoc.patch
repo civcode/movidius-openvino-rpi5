@@ -1,0 +1,16 @@
+--- a/cmake/dependencies.cmake
++++ b/cmake/dependencies.cmake
+@@ -6,7 +6,12 @@
+ 
+ include(dependency_solver)
+ 
+-if(CMAKE_CROSSCOMPILING)
++# PATCH (flash-movidius-openvino): the host-protoc fetch below only feeds the
++# nGraph ONNX importer (disabled in this build).  The hardcoded archive is an
++# x86_64 binary: on an ARM host (Raspberry Pi 5, arm/v7 container) it can be
++# neither fetched from the retired 01.org tree nor executed, so gate the whole
++# block on an x86_64 host instead of aborting the configure step.
++if(CMAKE_CROSSCOMPILING AND CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "amd64.*|x86_64.*|AMD64.*")
+ 	if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "amd64.*|x86_64.*|AMD64.*")
+ 	    set(HOST_X86_64 ON)
+ 	endif()

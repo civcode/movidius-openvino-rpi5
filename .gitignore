@@ -1,0 +1,26 @@
+# ---------------------------------------------------------------------------
+# Pinned third-party payload: recreated by the pinned fetchers, never committed
+#   scripts/clone-openvino.sh   -> vendor/openvino-2020.3.2/            (172 MB)
+#   scripts/fetch-runtime.sh    -> vendor/reference-runtime/, vendor/firmware/,
+#                                  vendor/openvino-2020.3.2-runtime-raspbian.tgz
+#   scripts/prepare-deps.sh     -> vendor/deps/
+#   scripts/prepare-mobilenet.sh-> vendor/models/  (ONNX + IR + photos, 57 MB)
+# ---------------------------------------------------------------------------
+vendor/
+
+# Scratch: reference-check images/outputs, staged Model Optimizer tree, the
+# extracted host runtime (regenerate with scripts/pull-runtime.sh), test blobs
+work/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Model Optimizer / conversion by-products (the IR itself lives in vendor/, ignored)
+*.mapping
+
+# Editor / OS noise
+*.swp
+*~
+.DS_Store

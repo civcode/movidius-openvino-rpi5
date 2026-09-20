@@ -1,0 +1,16 @@
+diff --git a/inference-engine/thirdparty/ade/sources/ade/CMakeLists.txt b/inference-engine/thirdparty/ade/sources/ade/CMakeLists.txt
+index 2d1dd20..e4252ab 100644
+--- a/inference-engine/thirdparty/ade/sources/ade/CMakeLists.txt
++++ b/inference-engine/thirdparty/ade/sources/ade/CMakeLists.txt
+@@ -11,7 +11,10 @@ file( GLOB_RECURSE sources source/*.cpp )
+ file( GLOB_RECURSE include *.hpp )
+ 
+ if (CMAKE_CXX_COMPILER_ID STREQUAL GNU)
+-    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wall -Wextra -Wconversion -Wshadow -Wno-error=cpp -Wformat -Wformat-security" )
++    # gcc >= 10 emits diagnostics (redundant-move etc.) in this code that
++    # -Werror would turn into build failures.  Keep -Werror, downgrade those
++    # specific warnings back to warnings.
++    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wall -Wextra -Wconversion -Wshadow -Wno-error=cpp -Wno-error=redundant-move -Wno-error=maybe-uninitialized -Wno-error=unused-variable -Wno-error=unknown-pragmas -Wformat -Wformat-security" )
+ endif()
+ 
+ add_library( ${PROJECT_NAME} STATIC ${include} ${sources} )

@@ -1,0 +1,316 @@
+
+[1m== local dependency mirror ==[0m
+   firmware package version: 1656
+   supported firmwares     : usb-ma2450 usb-ma2x8x pcie-ma248x
+wrote firmware_usb-ma2450_1656.zip (mvnc/usb-ma2450.mvcmd, 1795780 B)
+wrote firmware_usb-ma2x8x_1656.zip (mvnc/usb-ma2x8x.mvcmd, 2040216 B)
+wrote firmware_pcie-ma248x_1656.zip (mvnc/pcie-ma248x.mvcmd, 1800408 B)
+
+local dependency mirror (/home/chris/workspace/flash-movidius-openvino/openvino-2020.3-rpi5/vendor/deps):
+total 2740
+-rw-rw-r-- 1 chris chris  883723 Sep 20 00:31 firmware_pcie-ma248x_1656.zip
+-rw-rw-r-- 1 chris chris  909254 Sep 20 00:31 firmware_usb-ma2450_1656.zip
+-rw-rw-r-- 1 chris chris 1010192 Sep 20 00:31 firmware_usb-ma2x8x_1656.zip
+
+[1m== reset vendor/openvino-2020.3.2 to pristine and apply patches/ ==[0m
+   patches/0001-cross-compile-skip-host-protoc.patch applies cleanly (applied inside the build)
+SYNC_STAMP=0b3773b7405d955d48642667ac5113289b9baab2+2649931c8f590e5a3e0b1206bade6cd04b3e07fbcbf1c2924ea977395cae8635
+
+[1m== docker build -> openvino-2020.3-rpi5:latest ==[0m
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 10.00kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.4
+#2 DONE 0.7s
+
+#3 docker-image://docker.io/docker/dockerfile:1.4@sha256:9ba7531bd80fb0a858632727cf7a112fbfd19b17e94c4e84ced81e24ef1a0dbc
+#3 resolve docker.io/docker/dockerfile:1.4@sha256:9ba7531bd80fb0a858632727cf7a112fbfd19b17e94c4e84ced81e24ef1a0dbc 0.0s done
+#3 CACHED
+
+#4 [internal] load .dockerignore
+#4 transferring context: 471B done
+#4 DONE 0.0s
+
+#5 [internal] load metadata for docker.io/arm32v7/debian:bullseye
+#5 DONE 0.0s
+
+#6 [build-deps 1/5] FROM docker.io/arm32v7/debian:bullseye@sha256:fd8cf33bb1a98570e0f482f39a796b16b699ed6fd0d23b179f3586e0fd0a65f2
+#6 resolve docker.io/arm32v7/debian:bullseye@sha256:fd8cf33bb1a98570e0f482f39a796b16b699ed6fd0d23b179f3586e0fd0a65f2 0.1s done
+#6 DONE 0.1s
+
+#7 [internal] load build context
+#7 transferring context: 3.88MB 0.3s done
+#7 DONE 0.4s
+
+#8 [build-deps 2/5] RUN set -eux;     printf 'deb http://snapshot.debian.org/archive/debian/%s bullseye main\ndeb http://snapshot.debian.org/archive/debian-security/%s bullseye-security main\ndeb http://snapshot.debian.org/archive/debian/%s bullseye-updates main\n'         "20260824T000000Z" "20260824T000000Z" "20260824T000000Z" > /etc/apt/sources.list;     apt -o Acquire::Retries=5 -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false update;     apt-get -o Acquire::Retries=5 install -y --no-install-recommends         build-essential         cmake         pkg-config         patch         git         ca-certificates         libusb-1.0-0-dev         zlib1g-dev         python3         python3-venv;     rm -rf /var/lib/apt/lists/*
+#8 CACHED
+
+#9 [build-deps 3/5] RUN python3 -m venv /opt/venv
+#9 CACHED
+
+#10 [build-deps 4/5] COPY requirements-build.txt /tmp/requirements-build.txt
+#10 CACHED
+
+#11 [build-deps 5/5] RUN pip install --no-cache-dir -r /tmp/requirements-build.txt;     rm -rf /root/.cache/pip;     python -c 'import sys; print("venv python:", sys.executable, sys.version)'
+#11 CACHED
+
+#12 [configure 1/3] RUN mkdir -p /work/src /work/build /work/stage
+#12 CACHED
+
+#13 [configure 2/3] RUN --mount=type=bind,source=vendor/openvino-2020.3.2,target=/work/src-ro     --mount=type=bind,source=patches,target=/work/patches-ro     --mount=type=bind,source=toolchain,target=/work/toolchain-ro     --mount=type=cache,target=/work/src     set -eux;     if [ -f /work/src/.sync_stamp ] && [ "$(cat /work/src/.sync_stamp)" = "0b3773b7405d955d48642667ac5113289b9baab2+2649931c8f590e5a3e0b1206bade6cd04b3e07fbcbf1c2924ea977395cae8635" ]; then         echo "reusing patched source tree (stamp: 0b3773b7405d955d48642667ac5113289b9baab2+2649931c8f590e5a3e0b1206bade6cd04b3e07fbcbf1c2924ea977395cae8635)";     else         echo "re-syncing source tree (stamp: 0b3773b7405d955d48642667ac5113289b9baab2+2649931c8f590e5a3e0b1206bade6cd04b3e07fbcbf1c2924ea977395cae8635)";         find /work/src -mindepth 1 -delete;         cp -a /work/src-ro/. /work/src/;         for p in $(ls /work/patches-ro/*.patch 2>/dev/null | sort); do             echo "applying ${p}";             patch -p1 -d /work/src --quiet < "${p}";         done;         printf '%s' "0b3773b7405d955d48642667ac5113289b9baab2+2649931c8f590e5a3e0b1206bade6cd04b3e07fbcbf1c2924ea977395cae8635" > /work/src/.sync_stamp;     fi;     cmake --version; gcc --version | head -1
+#13 CACHED
+
+#14 [configure 3/3] RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro     --mount=type=bind,source=vendor/deps,target=/work/deps     --mount=type=cache,target=/work/src     --mount=type=cache,target=/work/build     set -eux;     test -f /work/src/CMakeLists.txt;     cmake -S /work/src -B /work/build         -DCMAKE_BUILD_TYPE=Release         -DCMAKE_TOOLCHAIN_FILE=/work/toolchain-ro/armv7-native.toolchain.cmake         -DCMAKE_INSTALL_PREFIX=/work/stage         -DTHREADS_PTHREAD_ARG=-pthread         -DCMAKE_EXE_LINKER_FLAGS=-pthread         -DCMAKE_SHARED_LINKER_FLAGS=-pthread         -DENABLE_VPU=ON         -DENABLE_MYRIAD=ON         -DENABLE_MYRIAD_NO_BOOT=OFF         -DENABLE_INTEL_MYRIAD_COMMON_ENABLE=ON         -DENABLE_IR_READER=ON         -DENABLE_GNA=OFF         -DENABLE_MKL_DNN=OFF         -DENABLE_CLDNN=OFF         -DENABLE_OPENCV=OFF         -DENABLE_SAMPLES=OFF         -DENABLE_TESTS=OFF         -DENABLE_FUNCTIONAL_TESTS=OFF         -DENABLE_BEH_TESTS=OFF         -DENABLE_PYTHON=OFF         -DENABLE_PROFILING_ITT=OFF         -DENABLE_DEBUG_SYMBOLS=OFF         -DENABLE_LTO=OFF         -DTHREADING=SEQ         -DNGRAPH_UNIT_TEST_ENABLE=FALSE         -DNGRAPH_ONNX_IMPORT_ENABLE=FALSE         -DNGRAPH_INTERPRETER_ENABLE=TRUE;     grep -E 'TARGET_ARCH|CMAKE_SYSTEM_PROCESSOR|CMAKE_CROSSCOMPILING|Enabling VPU|VPU firmware|Myriad|THREADING|ARCH'         /work/build/CMakeCache.txt /work/build/CMakeFiles/CMakeOutput.log 2>/dev/null || true;     ls -l /work/build
+#14 0.465 + test -f /work/src/CMakeLists.txt
+#14 0.465 + cmake -S /work/src -B /work/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=/work/toolchain-ro/armv7-native.toolchain.cmake -DCMAKE_INSTALL_PREFIX=/work/stage -DTHREADS_PTHREAD_ARG=-pthread -DCMAKE_EXE_LINKER_FLAGS=-pthread -DCMAKE_SHARED_LINKER_FLAGS=-pthread -DENABLE_VPU=ON -DENABLE_MYRIAD=ON -DENABLE_MYRIAD_NO_BOOT=OFF -DENABLE_INTEL_MYRIAD_COMMON_ENABLE=ON -DENABLE_IR_READER=ON -DENABLE_GNA=OFF -DENABLE_MKL_DNN=OFF -DENABLE_CLDNN=OFF -DENABLE_OPENCV=OFF -DENABLE_SAMPLES=OFF -DENABLE_TESTS=OFF -DENABLE_FUNCTIONAL_TESTS=OFF -DENABLE_BEH_TESTS=OFF -DENABLE_PYTHON=OFF -DENABLE_PROFILING_ITT=OFF -DENABLE_DEBUG_SYMBOLS=OFF -DENABLE_LTO=OFF -DTHREADING=SEQ -DNGRAPH_UNIT_TEST_ENABLE=FALSE -DNGRAPH_ONNX_IMPORT_ENABLE=FALSE -DNGRAPH_INTERPRETER_ENABLE=TRUE
+#14 0.532 -- The C compiler identification is GNU 10.2.1
+#14 0.602 -- The CXX compiler identification is GNU 10.2.1
+#14 0.611 -- Detecting C compiler ABI info
+#14 0.688 -- Detecting C compiler ABI info - done
+#14 0.705 -- Check for working C compiler: /usr/bin/gcc - skipped
+#14 0.705 -- Detecting C compile features
+#14 0.706 -- Detecting C compile features - done
+#14 0.711 -- Detecting CXX compiler ABI info
+#14 0.802 -- Detecting CXX compiler ABI info - done
+#14 0.820 -- Check for working CXX compiler: /usr/bin/g++ - skipped
+#14 0.820 -- Detecting CXX compile features
+#14 0.821 -- Detecting CXX compile features - done
+#14 0.832 fatal: not a git repository (or any parent up to mount point /work)
+#14 0.832 Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).
+#14 0.833 fatal: not a git repository (or any parent up to mount point /work)
+#14 0.833 Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).
+#14 0.838 -- Looking for pthread.h
+#14 0.919 -- Looking for pthread.h - found
+#14 0.919 -- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+#14 1.003 -- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+#14 1.005 -- Found Threads: TRUE  
+#14 1.005 -- CMAKE_BUILD_TYPE: Release
+#14 1.008 fatal: not a git repository (or any parent up to mount point /work)
+#14 1.008 Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).
+#14 1.010 fatal: not a git repository (or any parent up to mount point /work)
+#14 1.010 Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).
+#14 1.010 -- Detected 32 bit architecture
+#14 1.010 -- Inference Engine enabled features: 
+#14 1.010 -- 
+#14 1.010 --     CI_BUILD_NUMBER: custom__
+#14 1.010 --     ENABLE_MKL_DNN = OFF
+#14 1.010 --     ENABLE_CLDNN = OFF
+#14 1.010 --     ENABLE_LTO = OFF
+#14 1.010 --     OS_FOLDER = OFF
+#14 1.010 --     TREAT_WARNING_AS_ERROR = OFF
+#14 1.010 --     ENABLE_SANITIZER = OFF
+#14 1.010 --     ENABLE_THREAD_SANITIZER = OFF
+#14 1.010 --     COVERAGE = OFF
+#14 1.010 --     ENABLE_SSE42 = OFF
+#14 1.010 --     ENABLE_AVX2 = OFF
+#14 1.010 --     ENABLE_AVX512F = OFF
+#14 1.010 -- 
+#14 1.010 -- DL_SDK_TEMP environment is set : /work/stage
+#14 1.013 -- Could NOT find Wget (missing: WGET_EXECUTABLE) 
+#14 1.013 -- PROJECT ............................... OpenVINO
+#14 1.013 -- CMAKE_BINARY_DIR ...................... /work/build
+#14 1.013 -- OpenVINO_MAIN_SOURCE_DIR .............. /work/src
+#14 1.013 -- IE_MAIN_SOURCE_DIR .............. /work/src/inference-engine
+#14 1.013 -- CMAKE_GENERATOR ....................... Unix Makefiles
+#14 1.013 -- CMAKE_C_COMPILER_ID ................... GNU
+#14 1.013 -- CMAKE_BUILD_TYPE ...................... Release
+#14 1.019 -- Found Git: /usr/bin/git (found version "2.30.2") 
+#14 1.032 -- Current hash 
+#14 1.033 -- NGRAPH_VERSION 0.0.0+custom-build
+#14 1.033 -- NGRAPH_VERSION_SHORT 0.0.0
+#14 1.033 -- NGRAPH_WHEEL_VERSION 0.0.0
+#14 1.033 -- NGRAPH_API_VERSION 0.0
+#14 1.034 -- NGRAPH_CODE_COVERAGE_ENABLE:          OFF
+#14 1.034 -- NGRAPH_CPU_ENABLE:                    OFF
+#14 1.034 -- NGRAPH_CPU_STATIC_LIB_ENABLE:         OFF
+#14 1.034 -- NGRAPH_DEBUG_ENABLE:                  OFF
+#14 1.034 -- NGRAPH_DEPRECATED_ENABLE:             OFF
+#14 1.034 -- NGRAPH_DEX_ONLY:                      OFF
+#14 1.034 -- NGRAPH_DOC_BUILD_ENABLE:              OFF
+#14 1.034 -- NGRAPH_DYNAMIC_COMPONENTS_ENABLE:     OFF
+#14 1.034 -- NGRAPH_ENABLE_CPU_CONV_AUTO:          OFF
+#14 1.034 -- NGRAPH_EXPORT_TARGETS_ENABLE:         ON
+#14 1.034 -- NGRAPH_GENERIC_CPU_ENABLE:            OFF
+#14 1.034 -- NGRAPH_GPU_ENABLE:                    OFF
+#14 1.034 -- NGRAPH_INTERPRETER_ENABLE:            ON
+#14 1.034 -- NGRAPH_INTERPRETER_STATIC_LIB_ENABLE: OFF
+#14 1.034 -- NGRAPH_JSON_ENABLE:                   OFF
+#14 1.034 -- NGRAPH_LIB_VERSIONING_ENABLE:         OFF
+#14 1.034 -- NGRAPH_MLIR_ENABLE:                   OFF
+#14 1.034 -- NGRAPH_NATIVE_ARCH_ENABLE:            OFF
+#14 1.034 -- NGRAPH_NOP_ENABLE:                    OFF
+#14 1.034 -- NGRAPH_ONNX_IMPORT_ENABLE:            OFF
+#14 1.034 -- NGRAPH_PLAIDML_ENABLE:                OFF
+#14 1.034 -- NGRAPH_PLAIDML_STATIC_LIB_ENABLE:     OFF
+#14 1.034 -- NGRAPH_PYTHON_BUILD_ENABLE:           OFF
+#14 1.034 -- NGRAPH_STATIC_LIB_ENABLE:             OFF
+#14 1.034 -- NGRAPH_STRICT_ERROR_CHECKING:         OFF
+#14 1.034 -- NGRAPH_USE_LEGACY_MKLDNN:             OFF
+#14 1.034 -- NGRAPH_TEST_UTIL_ENABLE:              ON
+#14 1.034 -- NGRAPH_TOOLS_ENABLE:                  OFF
+#14 1.034 -- NGRAPH_UNIT_TEST_ENABLE:              OFF
+#14 1.034 -- NGRAPH_USE_LEGACY_MKLDNN:             OFF
+#14 1.034 -- NGRAPH_USE_PREBUILT_LLVM:             OFF
+#14 1.034 -- NGRAPH_USE_PREBUILT_MLIR:             OFF
+#14 1.034 -- NGRAPH_WARNINGS_AS_ERRORS:            OFF
+#14 1.034 -- NGRAPH_CXX_STANDARD:                  11
+#14 1.034 -- NGRAPH_FORWARD_CMAKE_ARGS -DCMAKE_C_COMPILER=/usr/bin/gcc;-DCMAKE_CXX_COMPILER=/usr/bin/g++;-DCMAKE_CXX_STANDARD:STRING=11;-DCMAKE_CXX_STANDARD_REQUIRED:BOOL=ON;-DCMAKE_CXX_EXTENSIONS:BOOL=OFF;-DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=ON;-DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON;-DCMAKE_BUILD_TYPE=Release
+#14 1.037 -- Installation directory: /work/stage
+#14 1.037 -- NGRAPH_COMMON_CXX_FLAGS -Wformat;-Wformat-security;-D_FORTIFY_SOURCE=2;-fstack-protector-strong;-s;-fsigned-char;-ffunction-sections;-fdata-sections;-fdiagnostics-show-option;-Wundef;-Wuninitialized;-Winit-self;-Wmaybe-uninitialized;-Wno-error=maybe-uninitialized;-Wno-error=return-type;-fPIC;-Wno-error=return-type;-Wno-undef
+#14 1.037 -- NGRAPH_COMMON_C_FLAGS -Wformat;-Wformat-security;-D_FORTIFY_SOURCE=2;-fstack-protector-strong;-s;-ffunction-sections;-fdata-sections;-fdiagnostics-show-option;-Wundef;-Wuninitialized;-Winit-self;-Wmaybe-uninitialized;-Wno-error=maybe-uninitialized;-Wno-error=return-type;-fPIC;-Wno-error=return-type;-Wno-undef
+#14 1.037 -- Compile Flags: -Wformat -Wformat-security -D_FORTIFY_SOURCE=2 -fstack-protector-strong -s -fsigned-char -ffunction-sections -fdata-sections -fdiagnostics-show-option -Wundef -Wuninitialized -Winit-self -Wmaybe-uninitialized -Wno-error=maybe-uninitialized -Wno-error=return-type -fPIC -Wno-error=return-type -Wno-undef -DEIGEN_MPL2_ONLY -DTBB_USE_THREADING_TOOLS
+#14 1.037 -- Shared Link Flags: -pthread -Wl,--gc-sections -Wl,--exclude-libs,ALL
+#14 1.037 -- CMAKE_CXX_FLAGS_RELEASE -O3 -DNDEBUG
+#14 1.037 -- CMAKE_CXX_FLAGS_DEBUG -O0 -g
+#14 1.063 -- tools disabled
+#14 1.103 -- unit tests disabled
+#14 1.109 fatal: not a git repository (or any parent up to mount point /work)
+#14 1.109 Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).
+#14 1.110 fatal: not a git repository (or any parent up to mount point /work)
+#14 1.110 Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).
+#14 1.114 -- Inference Engine enabled features: 
+#14 1.114 -- 
+#14 1.114 --     CI_BUILD_NUMBER: custom__
+#14 1.114 --     ENABLE_MKL_DNN = OFF
+#14 1.114 --     ENABLE_CLDNN = OFF
+#14 1.114 --     ENABLE_LTO = OFF
+#14 1.114 --     OS_FOLDER = OFF
+#14 1.114 --     TREAT_WARNING_AS_ERROR = OFF
+#14 1.114 --     ENABLE_SANITIZER = OFF
+#14 1.114 --     ENABLE_THREAD_SANITIZER = OFF
+#14 1.114 --     COVERAGE = OFF
+#14 1.114 --     ENABLE_SSE42 = OFF
+#14 1.114 --     ENABLE_AVX2 = OFF
+#14 1.114 --     ENABLE_AVX512F = OFF
+#14 1.114 --     ENABLE_GNA = OFF
+#14 1.114 --     ENABLE_CLDNN_TESTS = OFF
+#14 1.114 --     ENABLE_PROFILING_ITT = OFF
+#14 1.114 --     THREADING = SEQ
+#14 1.114 --     ENABLE_IR_READER = ON
+#14 1.114 --     ENABLE_VPU = ON
+#14 1.114 --     ENABLE_MYRIAD = ON
+#14 1.114 --     ENABLE_MYRIAD_NO_BOOT = OFF
+#14 1.114 --     ENABLE_TESTS = OFF
+#14 1.114 --     ENABLE_GAPI_TESTS = OFF
+#14 1.114 --     GAPI_TEST_PERF = OFF
+#14 1.114 --     ENABLE_MYRIAD_MVNC_TESTS = OFF
+#14 1.114 --     ENABLE_SAMPLES = OFF
+#14 1.114 --     ENABLE_BEH_TESTS = OFF
+#14 1.114 --     ENABLE_FUNCTIONAL_TESTS = OFF
+#14 1.114 --     ENABLE_SAMPLES = OFF
+#14 1.114 --     ENABLE_FUZZING = OFF
+#14 1.114 --     VERBOSE_BUILD = OFF
+#14 1.114 --     ENABLE_UNSAFE_LOCATIONS = OFF
+#14 1.114 --     ENABLE_ALTERNATIVE_TEMP = ON
+#14 1.114 --     ENABLE_OPENCV = OFF
+#14 1.114 --     ENABLE_DEBUG_SYMBOLS = OFF
+#14 1.114 --     ENABLE_PYTHON = OFF
+#14 1.114 --     ENABLE_CPP_CCT = OFF
+#14 1.114 --     ENABLE_C = ON
+#14 1.114 --     ENABLE_CPPLINT = OFF
+#14 1.114 --     ENABLE_CPPLINT_REPORT = OFF
+#14 1.114 --     ENABLE_CLANG_FORMAT = OFF
+#14 1.114 --     ENABLE_TBB_RELEASE_ONLY = OFF
+#14 1.114 -- 
+#14 1.117 -- Could NOT find Wget (missing: WGET_EXECUTABLE) 
+#14 1.141 -- Could NOT find Wget (missing: WGET_EXECUTABLE) 
+#14 1.142 -- Copying from local folder /work/deps/firmware_usb-ma2450_1656.zip to /work/stage/download/firmware_usb-ma2450_1656.zip ... 
+#14 1.144 -- extracting...
+#14 1.144          src='/work/stage/download/firmware_usb-ma2450_1656.zip'
+#14 1.144          dst='/work/stage/vpu/firmware/usb-ma2450'
+#14 1.144 unpacked_dir= /work/stage/vpu/firmware/usb-ma2450
+#14 1.144 -- extracting... [tar xfz]
+#14 1.168 -- Copying from local folder /work/deps/firmware_usb-ma2x8x_1656.zip to /work/stage/download/firmware_usb-ma2x8x_1656.zip ... 
+#14 1.170 -- extracting...
+#14 1.170          src='/work/stage/download/firmware_usb-ma2x8x_1656.zip'
+#14 1.170          dst='/work/stage/vpu/firmware/usb-ma2x8x'
+#14 1.170 unpacked_dir= /work/stage/vpu/firmware/usb-ma2x8x
+#14 1.170 -- extracting... [tar xfz]
+#14 1.197 -- Copying from local folder /work/deps/firmware_pcie-ma248x_1656.zip to /work/stage/download/firmware_pcie-ma248x_1656.zip ... 
+#14 1.198 -- extracting...
+#14 1.198          src='/work/stage/download/firmware_pcie-ma248x_1656.zip'
+#14 1.198          dst='/work/stage/vpu/firmware/pcie-ma248x'
+#14 1.198 unpacked_dir= /work/stage/vpu/firmware/pcie-ma248x
+#14 1.198 -- extracting... [tar xfz]
+#14 1.310 -- Looking for C++ include unistd.h
+#14 1.404 -- Looking for C++ include unistd.h - found
+#14 1.405 -- Looking for C++ include stdint.h
+#14 1.497 -- Looking for C++ include stdint.h - found
+#14 1.498 -- Looking for C++ include sys/types.h
+#14 1.592 -- Looking for C++ include sys/types.h - found
+#14 1.593 -- Looking for C++ include fnmatch.h
+#14 1.683 -- Looking for C++ include fnmatch.h - found
+#14 1.684 -- Looking for strtoll
+#14 1.783 -- Looking for strtoll - found
+#14 1.792 CMake Warning at inference-engine/samples/common/format_reader/CMakeLists.txt:26 (message):
+#14 1.792   OPENCV is disabled or not found, format_reader will be built without OPENCV
+#14 1.792   support
+#14 1.792 
+#14 1.792 
+#14 1.797 -- The name ngraph::ngraph is an ALIAS for ngraph. It will be exported to the InferenceEngineDeveloperPackage with the original name.
+#14 1.798 -- Register template_plugin to be built in build-plugins/template_plugin
+#14 1.917 -- Configuring done
+#14 2.212 -- Generating done
+#14 2.221 CMake Warning:
+#14 2.221   Manually-specified variables were not used by the project:
+#14 2.221 
+#14 2.221     ENABLE_INTEL_MYRIAD_COMMON_ENABLE
+#14 2.221     THREADS_PTHREAD_ARG
+#14 2.221 
+#14 2.221 
+#14 2.222 -- Build files have been written to: /work/build
+#14 2.243 + grep -E TARGET_ARCH|CMAKE_SYSTEM_PROCESSOR|CMAKE_CROSSCOMPILING|Enabling VPU|VPU firmware|Myriad|THREADING|ARCH /work/build/CMakeCache.txt /work/build/CMakeFiles/CMakeOutput.log
+#14 2.244 /work/build/CMakeCache.txt:NGRAPH_NATIVE_ARCH_ENABLE:BOOL=FALSE
+#14 2.244 /work/build/CMakeCache.txt:THREADING:STRING=SEQ
+#14 2.244 /work/build/CMakeCache.txt://STRINGS property for variable: THREADING
+#14 2.244 /work/build/CMakeCache.txt:THREADING-STRINGS:INTERNAL=TBB;TBB_AUTO;OMP;SEQ
+#14 2.244 + ls -l /work/build
+#14 2.245 total 504
+#14 2.245 -rw-r--r--  1 root root  33285 Sep 19 22:31 CMakeCache.txt
+#14 2.245 drwxr-xr-x 35 root root   4096 Sep 19 22:31 CMakeFiles
+#14 2.245 -rw-r--r--  1 root root   3985 Sep 19 22:31 CPackConfig.cmake
+#14 2.245 -rw-r--r--  1 root root   4406 Sep 19 22:31 CPackSourceConfig.cmake
+#14 2.245 -rw-r--r--  1 root root    295 Sep 19 22:31 CTestTestfile.cmake
+#14 2.245 -rw-r--r--  1 root root   2532 Sep 19 22:31 DartConfiguration.tcl
+#14 2.245 -rw-rw-r--  1 root root    479 Sep 19 22:31 InferenceEngineConfig-version.cmake
+#14 2.245 -rw-rw-r--  1 root root   1512 Sep 19 22:31 InferenceEngineConfig.cmake
+#14 2.245 -rw-rw-r--  1 root root    479 Sep 19 22:31 InferenceEngineDeveloperPackageConfig-version.cmake
+#14 2.245 -rw-rw-r--  1 root root   2543 Sep 19 22:31 InferenceEngineDeveloperPackageConfig.cmake
+#14 2.245 -rw-r--r--  1 root root  48373 Sep 19 22:31 Makefile
+#14 2.245 drwxr-xr-x  3 root root   4096 Sep 19 22:31 Testing
+#14 2.245 -rw-rw-r--  1 root root    471 Sep 19 22:31 adeConfig.cmake
+#14 2.245 -rw-r--r--  1 root root   1836 Sep 19 22:31 adeConfigVersion.cmake
+#14 2.245 -rw-r--r--  1 root root   2600 Sep 19 22:31 cmake_install.cmake
+#14 2.245 -rw-r--r--  1 root root 320886 Sep 19 22:31 compile_commands.json
+#14 2.245 -rw-r--r--  1 root root    194 Sep 19 22:31 dependencies_64.txt
+#14 2.245 drwxr-xr-x  5 root root   4096 Sep 19 22:31 docs
+#14 2.245 drwxr-xr-x  9 root root   4096 Sep 19 22:31 inference-engine
+#14 2.245 drwxr-xr-x  2 root root   4096 Sep 19 22:31 lib
+#14 2.245 drwxr-xr-x  7 root root   4096 Sep 19 22:31 ngraph
+#14 2.245 drwxr-xr-x  2 root root   4096 Sep 19 22:31 share
+#14 2.245 -rw-r--r--  1 root root   4586 Sep 19 22:31 targets.cmake
+#14 2.245 -rw-r--r--  1 root root  12059 Sep 19 22:31 targets_developer.cmake
+#14 2.245 drwxr-xr-x  3 root root   4096 Sep 19 22:31 thirdparty
+#14 DONE 4.0s
+
+#15 exporting to image
+#15 exporting layers
+#15 exporting layers 24.3s done
+#15 exporting manifest sha256:79ca59a99b831f0ef5964e3f5d7c68208d6e53e37546ada3ddbefb86f5fb9c53 0.1s done
+#15 exporting config sha256:824207f6861eaf9bc540cb7eedc6eaf22ed5ae71b7434a82a01e8eff7dba2562
+#15 exporting config sha256:824207f6861eaf9bc540cb7eedc6eaf22ed5ae71b7434a82a01e8eff7dba2562 0.0s done
+#15 naming to docker.io/library/openvino-2020.3-rpi5:latest done
+#15 unpacking to docker.io/library/openvino-2020.3-rpi5:latest
+#15 unpacking to docker.io/library/openvino-2020.3-rpi5:latest 3.4s done
+#15 DONE 27.9s
+
+[1m== built openvino-2020.3-rpi5:latest ==[0m
+IMAGE                         ID             DISK USAGE   CONTENT SIZE   EXTRA
+openvino-2020.3-rpi5:latest   79ca59a99b83        695MB          199MB        
+
+next: ./run.sh            (device enumeration + tiny-model inference)
+      ./run.sh --list-only
+      ./run.sh shell
