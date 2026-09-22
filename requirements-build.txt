@@ -1,20 +1,12 @@
-# Python packages used by this project.
+# Python packages used by the OpenVINO build helper environment.
 #
-# Policy: APT provides the base interpreter (python3) and the venv enabler
-# (python3-venv) only - every Python *library* is installed here, into the
-# isolated venv at /opt/venv.  No --break-system-packages, no global pip installs.
-#
-# The OpenVINO CMake build itself needs no Python package; the pins below give
-# the venv a usable, reproducible pip/setuptools/wheel trio for the helper
-# scripts (e.g. smoke-test/model/make_tiny_ir.py, which is stdlib-only).
-# Everything here is a pure-python (py3-none-any) wheel, so nothing has to be
-# compiled and no compiler toolchain is pulled into the venv.
+# APT provides python3 + python3-venv. Python libraries are isolated in
+# /opt/venv. These pins are pure-Python and therefore identical on armv7, arm64 and
+# amd64; the OpenVINO CMake build itself does not require NumPy/OpenCV here.
 pip==21.3.1
 setuptools==59.6.0
 wheel==0.37.1
 
-# NOTE on numpy/opencv-style packages: PyPI publishes no armv7l wheels for them
-# (checked numpy 1.21.6/1.22.4/1.24.4, pillow 9.5.0), so `pip install numpy`
-# inside this armhf image would try to build from source and needs gfortran.
-# On a Raspberry Pi the armhf wheels live on piwheels instead, e.g.
-#   python -m pip install --index-url https://www.piwheels.org/simple numpy
+# Model Optimizer dependencies are intentionally handled by
+# scripts/prepare-mobilenet.sh in a native host-architecture Python container.
+# They are not installed into the armv7/arm64/amd64 inference images.

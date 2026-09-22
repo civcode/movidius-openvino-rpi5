@@ -20,9 +20,8 @@ if(NOT EXISTS "${OV_ROOT}/include/inference_engine.hpp")
     message(FATAL_ERROR "no inference_engine.hpp under ${OV_ROOT}/include")
 endif()
 
-# the install tree places the shared objects in lib/<arch>/ (armv7l upstream,
-# aarch64 if the toolchain file is dropped) - glob it so this file is not
-# architecture-specific
+# The install tree places shared objects in lib/<arch>/. Discover the directory
+# from libinference_engine.so so this project does not assume armv7l/aarch64/intel64.
 file(GLOB ov_lib_dirs LIST_DIRECTORIES true "${OV_ROOT}/lib/*")
 list(FILTER ov_lib_dirs INCLUDE REGEX ".*/lib/[^/]+$")
 if(NOT ov_lib_dirs)
@@ -52,21 +51,20 @@ foreach(ov_name IN ITEMS
         ngraph)
     find_library(ov_found_${ov_name}
         NAMES ${ov_name}
-        PATHS ${ov_lib_dirs} "${NGRAPH_ROOT}/lib"
+        PATHS "${IE_LIBDIR}" "${NGRAPH_ROOT}/lib"
         REQUIRED NO_DEFAULT_PATH)
     list(APPEND ov_link_libs "${ov_found_${ov_name}}")
 endforeach()
 
 # rpath: the build-time library directories
-set(ov_rpath_build "${ov_lib_dirs}" "${NGRAPH_ROOT}/lib")
+set(ov_rpath_build "${IE_LIBDIR}" "${NGRAPH_ROOT}/lib")
 # When the executable is copied into the runtime image the build-time library
 # directories are gone, so the rpath is rewritten to the runtime install layout.
 set(OV_RUNTIME_PREFIX "" CACHE STRING
     "install prefix in the runtime image, e.g. /opt/openvino/inference_engine")
 if(OV_RUNTIME_PREFIX)
-    # keep the architecture directory the build actually produced (armv7l here)
-    list(GET ov_lib_dirs 0 ov_first_libdir)
-    get_filename_component(ov_arch "${ov_first_libdir}" NAME)
+    # keep the architecture directory the selected build actually produced
+    get_filename_component(ov_arch "${IE_LIBDIR}" NAME)
     set(ov_rpath_use "${OV_RUNTIME_PREFIX}/lib/${ov_arch};${OV_RUNTIME_PREFIX}/../ngraph/lib")
 else()
     set(ov_rpath_use "${ov_rpath_build}")
