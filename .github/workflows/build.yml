@@ -1,0 +1,43 @@
+name: multi-platform-build
+
+# Full OpenVINO 2020.3 builds are intentionally manual: the ARM jobs run under
+# QEMU on hosted x86 runners and are much heavier than the fast static PR checks.
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [armv7, arm64, amd64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm,arm64
+      - uses: docker/setup-buildx-action@v3
+      - name: Static regression checks
+        run: ./ci/verify-static.sh
+      - name: Build runtime image
+        env:
+          BUILD_JOBS: 2
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p logs/ci
+          ./build.sh --platform "${{ matrix.target }}" 2>&1 | tee "logs/ci/${{ matrix.target }}-build.log"
+      - name: Hardware-free runtime verification
+        shell: bash
+        run: |
+          set -o pipefail
+          ./scripts/verify.sh --platform "${{ matrix.target }}" --no-device 2>&1 | tee "logs/ci/${{ matrix.target }}-verify.log"
+      - name: Upload build and verification logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: movidius-${{ matrix.target }}-logs
+          path: logs/ci/
+          if-no-files-found: warn

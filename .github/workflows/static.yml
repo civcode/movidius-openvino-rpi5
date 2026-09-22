@@ -1,0 +1,18 @@
+name: multi-platform-static
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [armv7, arm64, amd64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell and platform regression checks
+        run: ./ci/verify-static.sh
+      - name: Selected target
+        run: ./build.sh --platform "${{ matrix.target }}" --print-platform
