@@ -1,40 +1,34 @@
 # syntax=docker/dockerfile:1.4
 # =============================================================================
-# OpenVINO 2020.3.2 with Intel Movidius (MA2450 / MYRIAD) support, built on a
-# Raspberry Pi 5 inside an ARMv7 (armhf) container.
+# OpenVINO 2020.3.2 + Intel Movidius MA2450/MYRIAD, built from the same pinned
+# source tree for three project targets:
+#   armv7 -> linux/arm/v7 (legacy/known-good Raspberry Pi ARMHF userspace)
+#   arm64 -> linux/arm64  (native AArch64; preferred Raspberry Pi 5 path)
+#   amd64 -> linux/amd64  (native x86_64 Linux)
 #
-# Why arm32v7: OpenVINO 2020.3 is the last release whose MYRIAD/VPU plugin
-# supports the MA2450 stick, and its prebuilt arm artifacts (and the whole
-# mvNC/fathom toolchain it wraps) are 32-bit armv7l.  The Pi 5 kernel has
-# CONFIG_COMPAT=y, so arm/v7 containers execute natively (no QEMU).
-#
-# Stages
-#   build-deps : apt + pip layer cache (everything that rarely changes)
-#   builder    : configure/build/install inference_engine + MYRIAD plugin for
-#                armv7l; source and build trees live in cache mounts
-#   smoke      : build smoke-test/hello_myriad against that install tree and
-#                generate the tiny FP16 IR used by the demo
-#   runtime    : small image with the install tree + hello_myriad + demo entry
-#
-# Build it with ./build.sh (it resets the vendor tree to pristine, applies
-# patches/*.patch and computes the SYNC_STAMP used below).
+# The application path is identical on all targets:
+# application -> Inference Engine -> libmyriadPlugin.so -> MVNC/XLink/libusb ->
+# usb-ma2450.mvcmd -> MA2450. MA2Host is not part of the normal runtime.
 # =============================================================================
 
+ARG TARGET=armv7
+ARG DOCKER_PLATFORM=linux/arm/v7
 ARG BASE_IMAGE=arm32v7/debian:bullseye
-# Debian 11 left LTS in June 2026: deb.debian.org still advertises
-# libc6-dev/linux-libc-dev versions in bullseye-security that its pool no
-# longer serves (404).  Pin the snapshot the base image itself was cut from.
+# Debian 11 package indices are pinned to a known snapshot for reproducibility.
 ARG SNAPSHOT_DATE=20260824T000000Z
 
 # -----------------------------------------------------------------------------
-# Stage 1: toolchain / dependency layers (cached aggressively)
+# Stage 1: build dependencies
 # -----------------------------------------------------------------------------
-FROM --platform=linux/arm/v7 ${BASE_IMAGE} AS build-deps
+FROM --platform=${DOCKER_PLATFORM} ${BASE_IMAGE} AS build-deps
 
+ARG TARGET
+ARG DOCKER_PLATFORM
 ARG SNAPSHOT_DATE
 ARG REQUIREMENTS=requirements-build.txt
 
 RUN set -eux; \
+    printf 'target=%s docker_platform=%s\n' "${TARGET}" "${DOCKER_PLATFORM}"; \
     printf 'deb http://snapshot.debian.org/archive/debian/%s bullseye main\ndeb http://snapshot.debian.org/archive/debian-security/%s bullseye-security main\ndeb http://snapshot.debian.org/archive/debian/%s bullseye-updates main\n' \
         "${SNAPSHOT_DATE}" "${SNAPSHOT_DATE}" "${SNAPSHOT_DATE}" > /etc/apt/sources.list; \
     apt -o Acquire::Retries=5 -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false update; \
@@ -51,8 +45,6 @@ RUN set -eux; \
         python3-venv; \
     rm -rf /var/lib/apt/lists/*
 
-# Every Python *library* lives in this venv: no python3-* APT packages, no
-# system-wide pip installs.  python3-venv above is only the venv enabler.
 RUN python3 -m venv /opt/venv
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH=/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -62,36 +54,31 @@ RUN pip install --no-cache-dir -r /tmp/requirements-build.txt; \
     python -c 'import sys; print("venv python:", sys.executable, sys.version)'
 
 # -----------------------------------------------------------------------------
-# Stage 2: build + install OpenVINO 2020.3.2 for armv7l
+# Stage 2: configure OpenVINO. ARMv7 uses the project toolchain; ARM64/amd64 are native.
 # -----------------------------------------------------------------------------
 FROM build-deps AS configure
 
+ARG TARGET
 ARG OPENVINO_SOURCE=vendor/openvino-2020.3.2
 ARG SYNC_STAMP=unpinned
 ARG BUILD_JOBS=2
-# set to 0 (./build.sh --no-patches) to reproduce the upstream failures that the
-# patches fix; build.sh changes SYNC_STAMP in that case so the cache re-syncs
 ARG APPLY_PATCHES=1
+ARG USE_CMAKE_TOOLCHAIN=1
 
-# inference-engine/cmake/dependencies.cmake sets CMAKE_STAGING_PREFIX to
-# $DL_SDK_TEMP when cross-compiling, so every install() lands here.
 ENV DL_SDK_TEMP=/work/stage
-# cmake/download/download_and_check.cmake: with IE_PATH_TO_DEPS set, every
-# dependency "URL" becomes a local path and is file(COPY)'ed instead of fetched.
 ENV IE_PATH_TO_DEPS=/work/deps
 ENV OV_BUILD_JOBS=${BUILD_JOBS}
 ENV MAKEFLAGS=
 
 RUN mkdir -p /work/src /work/build /work/stage
 
-# 2a. copy the pristine vendor tree + apply patches/NNNN-*.patch into a cache
-#     mount.  Bind mounts are read-only, so the patched copy has to live in the
-#     cache mount; SYNC_STAMP (pinned commit + patch hashes) decides whether the
-#     copy is reused from a previous build.
+# Target-qualified source/build caches prevent generated CMake state from one
+# architecture leaking into another target. The source tree itself is copied pristine
+# before patches are applied.
 RUN --mount=type=bind,source=${OPENVINO_SOURCE},target=/work/src-ro \
     --mount=type=bind,source=patches,target=/work/patches-ro \
     --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
-    --mount=type=cache,target=/work/src \
+    --mount=type=cache,id=ov203-src-${TARGET},target=/work/src \
     set -eux; \
     if [ -f /work/src/.sync_stamp ] && [ "$(cat /work/src/.sync_stamp)" = "${SYNC_STAMP}" ]; then \
         echo "reusing patched source tree (stamp: ${SYNC_STAMP})"; \
@@ -99,32 +86,33 @@ RUN --mount=type=bind,source=${OPENVINO_SOURCE},target=/work/src-ro \
         echo "re-syncing source tree (stamp: ${SYNC_STAMP})"; \
         find /work/src -mindepth 1 -delete; \
         cp -a /work/src-ro/. /work/src/; \
-        if [ "${APPLY_PATCHES}" = "1" ]; then \
-            for p in $(ls /work/patches-ro/*.patch 2>/dev/null | sort); do \
+        if [ "${APPLY_PATCHES}" = 1 ]; then \
+            for p in $(find /work/patches-ro -maxdepth 1 -type f -name '*.patch' | sort); do \
                 echo "applying ${p}"; \
                 patch -p1 -d /work/src --quiet < "${p}"; \
             done; \
         else \
-            echo "APPLY_PATCHES=${APPLY_PATCHES}: leaving the vendor tree unpatched"; \
+            echo "APPLY_PATCHES=${APPLY_PATCHES}: leaving vendor tree unpatched"; \
         fi; \
         printf '%s' "${SYNC_STAMP}" > /work/src/.sync_stamp; \
     fi; \
     cmake --version; gcc --version | head -1
 
-# 2b. configure.  The toolchain file reports CMAKE_SYSTEM_PROCESSOR=armv7l even
-#     though the kernel says aarch64 - that is what selects the armv7l code
-#     paths, the armv7l install directory and THREADING=SEQ.
 RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
     --mount=type=bind,source=vendor/deps,target=/work/deps \
-    --mount=type=cache,target=/work/src \
-    --mount=type=cache,target=/work/build \
+    --mount=type=cache,id=ov203-src-${TARGET},target=/work/src \
+    --mount=type=cache,id=ov203-build-${TARGET},target=/work/build \
     set -eux; \
     test -f /work/src/CMakeLists.txt; \
     test "$(cat /work/src/.sync_stamp)" = "${SYNC_STAMP}" \
-        || { echo "source cache does not match SYNC_STAMP - rebuild with --no-cache"; exit 1; }; \
+        || { echo "source cache does not match SYNC_STAMP"; exit 1; }; \
+    set --; \
+    if [ "${USE_CMAKE_TOOLCHAIN}" = 1 ]; then \
+        set -- "$@" -DCMAKE_TOOLCHAIN_FILE=/work/toolchain-ro/armv7-native.toolchain.cmake; \
+    fi; \
     cmake -S /work/src -B /work/build \
+        "$@" \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_TOOLCHAIN_FILE=/work/toolchain-ro/armv7-native.toolchain.cmake \
         -DCMAKE_INSTALL_PREFIX=/work/stage \
         -DTHREADS_PTHREAD_ARG=-pthread \
         -DCMAKE_EXE_LINKER_FLAGS=-pthread \
@@ -150,123 +138,189 @@ RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
         -DNGRAPH_UNIT_TEST_ENABLE=FALSE \
         -DNGRAPH_ONNX_IMPORT_ENABLE=FALSE \
         -DNGRAPH_INTERPRETER_ENABLE=TRUE; \
+    echo "target=${TARGET} dpkg_arch=$(dpkg --print-architecture) toolchain=${USE_CMAKE_TOOLCHAIN}"; \
     grep -E 'TARGET_ARCH|CMAKE_SYSTEM_PROCESSOR|CMAKE_CROSSCOMPILING|Enabling VPU|VPU firmware|Myriad|THREADING|ARCH' \
-        /work/build/CMakeCache.txt /work/build/CMakeFiles/CMakeOutput.log 2>/dev/null || true; \
-    ls -l /work/build
+        /work/build/CMakeCache.txt /work/build/CMakeFiles/CMakeOutput.log 2>/dev/null || true
 
-# 3. compile + install (jobs capped: 8 GB RAM, the fathom/MI translation units
-#    are heavy).  `--target configure` stops before this stage.
+# -----------------------------------------------------------------------------
+# Stage 3: compile and install the runtime/plugin stack
+# -----------------------------------------------------------------------------
 FROM configure AS builder
 
+ARG TARGET
+ARG DOCKER_PLATFORM
+ARG BASE_IMAGE
+ARG PROJECT_REVISION=unversioned
+ARG OPENVINO_COMMIT=unknown
 ARG SYNC_STAMP=unpinned
+ARG EXPECTED_ELF_CLASS=ELF32
+ARG EXPECTED_ELF_MACHINE_REGEX=ARM
+ARG EXPECTED_ELF_MACHINE_ID=40
 
-# The toolchain file has to be visible here too: make re-runs CMake's
-# cmake_check_build_system, which re-includes CMAKE_TOOLCHAIN_FILE from the
-# cache.
-# SYNC_STAMP appears in this instruction on purpose: BuildKit keys a layer on the
-# resolved instruction text, not on the *contents* of a cache mount, so without it
-# `make` could be skipped from cache after the source tree was re-synced.
 RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
     --mount=type=bind,source=vendor/deps,target=/work/deps \
-    --mount=type=cache,target=/work/src \
-    --mount=type=cache,target=/work/build \
+    --mount=type=cache,id=ov203-src-${TARGET},target=/work/src \
+    --mount=type=cache,id=ov203-build-${TARGET},target=/work/build \
     set -eux; \
-    test "$(cat /work/src/.sync_stamp)" = "${SYNC_STAMP}" \
-        || { echo "source cache does not match SYNC_STAMP - rebuild with --no-cache"; exit 1; }; \
+    test "$(cat /work/src/.sync_stamp)" = "${SYNC_STAMP}"; \
     make -C /work/build -j"${OV_BUILD_JOBS}"; \
     make -C /work/build install; \
-    # ngraph installs into the staging prefix top level (lib/, include/, cmake/)
-    # while the Inference Engine lands in deployment_tools/inference_engine/.
-    # Rearrange it into deployment_tools/ngraph/{lib,include,cmake} so the tree
-    # has the same shape as Intel's raspbian package - plugins.xml, the .mvcmd
-    # firmware and libmyriadPlugin.so stay in one directory, which is what the
-    # MYRIAD plugin requires (it locates the firmware with dladdr()).
     mkdir -p /work/stage/deployment_tools/ngraph/lib \
              /work/stage/deployment_tools/ngraph/include \
              /work/stage/deployment_tools/ngraph/cmake; \
-    mv /work/stage/lib/libngraph.so /work/stage/lib/libinterpreter_backend.so \
-       /work/stage/deployment_tools/ngraph/lib/; \
-    cp -a /work/stage/include/ngraph /work/stage/deployment_tools/ngraph/include/; \
-    mv /work/stage/cmake/ngraph*.cmake /work/stage/deployment_tools/ngraph/cmake/; \
-    find /work/stage -maxdepth 4 -name '*.so' -o -maxdepth 4 -name 'plugins.xml' | sort; \
+    NGRAPH_SO="$(find /work/stage -name libngraph.so -print -quit)"; \
+    test -n "${NGRAPH_SO}"; \
+    NGRAPH_SRC="$(dirname "${NGRAPH_SO}")"; \
+    if [ "${NGRAPH_SRC}" != /work/stage/deployment_tools/ngraph/lib ]; then \
+        cp -a "${NGRAPH_SRC}"/libngraph.so* /work/stage/deployment_tools/ngraph/lib/; \
+        if ls "${NGRAPH_SRC}"/libinterpreter_backend.so* >/dev/null 2>&1; then \
+            cp -a "${NGRAPH_SRC}"/libinterpreter_backend.so* /work/stage/deployment_tools/ngraph/lib/; \
+        fi; \
+    fi; \
+    if [ -d /work/stage/include/ngraph ]; then \
+        cp -a /work/stage/include/ngraph /work/stage/deployment_tools/ngraph/include/; \
+    fi; \
+    if ls /work/stage/cmake/ngraph*.cmake >/dev/null 2>&1; then \
+        cp -a /work/stage/cmake/ngraph*.cmake /work/stage/deployment_tools/ngraph/cmake/; \
+    fi; \
+    IE_PLUGIN="$(find /work/stage/deployment_tools/inference_engine/lib -mindepth 2 -maxdepth 2 -type f -name libmyriadPlugin.so -print -quit)"; \
+    test -n "${IE_PLUGIN}"; \
+    IE_LIB="$(dirname "${IE_PLUGIN}")"; \
+    echo "installed MYRIAD plugin: ${IE_PLUGIN}"; \
+    readelf -h "${IE_PLUGIN}" | tee /tmp/myriad-plugin.elf; \
+    grep -q "Class:.*${EXPECTED_ELF_CLASS}" /tmp/myriad-plugin.elf; \
+    grep -Eq "Machine:.*(${EXPECTED_ELF_MACHINE_REGEX})" /tmp/myriad-plugin.elf; \
+    test -f "${IE_LIB}/usb-ma2450.mvcmd"; \
+    test -f "${IE_LIB}/plugins.xml"; \
+    sha256sum "${IE_LIB}"/*.mvcmd; \
+    CMAKE_PROCESSOR="$(sed -n 's/^CMAKE_SYSTEM_PROCESSOR:.*=//p' /work/build/CMakeCache.txt | head -1)"; \
+    { \
+        printf 'PROJECT_REVISION=%s\n' "${PROJECT_REVISION}"; \
+        printf 'TARGET=%s\n' "${TARGET}"; \
+        printf 'EXPECTED_ELF_CLASS=%s\n' "${EXPECTED_ELF_CLASS}"; \
+        printf 'EXPECTED_ELF_MACHINE_ID=%s\n' "${EXPECTED_ELF_MACHINE_ID}"; \
+        printf 'DOCKER_PLATFORM=%s\n' "${DOCKER_PLATFORM}"; \
+        printf 'BASE_IMAGE=%s\n' "${BASE_IMAGE}"; \
+        printf 'OPENVINO_COMMIT=%s\n' "${OPENVINO_COMMIT}"; \
+        printf 'CMAKE_SYSTEM_PROCESSOR=%s\n' "${CMAKE_PROCESSOR}"; \
+        printf 'IE_LIB_BASENAME=%s\n' "$(basename "${IE_LIB}")"; \
+        printf 'CC_VERSION=%s\n' "$(gcc --version | head -1)"; \
+        for fw in "${IE_LIB}"/*.mvcmd; do printf 'FIRMWARE_SHA256_%s=%s\n' "$(basename "${fw}")" "$(sha256sum "${fw}" | cut -d' ' -f1)"; done; \
+    } > /work/stage/deployment_tools/BUILD-INFO.txt; \
+    cat /work/stage/deployment_tools/BUILD-INFO.txt; \
+    find /work/stage -maxdepth 5 \( -name '*.so' -o -name 'plugins.xml' -o -name '*.mvcmd' \) -print | sort; \
     du -sh /work/stage; \
-    LD_LIBRARY_PATH=/work/stage/deployment_tools/inference_engine/lib/armv7l:/work/stage/deployment_tools/ngraph/lib \
-        /work/stage/deployment_tools/inference_engine/lib/*/myriad_compile --help 2>&1 | head -6 || true
+    LD_LIBRARY_PATH="${IE_LIB}:/work/stage/deployment_tools/ngraph/lib" \
+        "${IE_LIB}/myriad_compile" --help 2>&1 | head -6 || true
 
 # -----------------------------------------------------------------------------
-# Stage 3: smoke test app + tiny model
+# Stage 4: build the smoke app natively for the selected target
 # -----------------------------------------------------------------------------
 FROM builder AS smoke
 
+ARG TARGET
+ARG USE_CMAKE_TOOLCHAIN=1
+ARG EXPECTED_ELF_CLASS=ELF32
+ARG EXPECTED_ELF_MACHINE_REGEX=ARM
 COPY smoke-test /work/smoke
 
 RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
     set -eux; \
     python3 /work/smoke/model/make_tiny_ir.py --outdir /work/smoke/model; \
+    set --; \
+    if [ "${USE_CMAKE_TOOLCHAIN}" = 1 ]; then \
+        set -- "$@" -DCMAKE_TOOLCHAIN_FILE=/work/toolchain-ro/armv7-native.toolchain.cmake; \
+    fi; \
     cmake -S /work/smoke -B /work/smoke-build \
+        "$@" \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_TOOLCHAIN_FILE=/work/toolchain-ro/armv7-native.toolchain.cmake \
         -DOV_ROOT=/work/stage/deployment_tools/inference_engine \
         -DOV_RUNTIME_PREFIX=/opt/openvino/inference_engine; \
     cmake --build /work/smoke-build -- -j"${OV_BUILD_JOBS}"; \
-    readelf -h /work/smoke-build/hello_myriad | head -12; \
-    LD_LIBRARY_PATH=/work/stage/deployment_tools/inference_engine/lib/armv7l:/work/stage/deployment_tools/ngraph/lib \
-        ldd /work/smoke-build/hello_myriad
+    readelf -h /work/smoke-build/hello_myriad | tee /tmp/hello.elf; \
+    grep -q "Class:.*${EXPECTED_ELF_CLASS}" /tmp/hello.elf; \
+    grep -Eq "Machine:.*(${EXPECTED_ELF_MACHINE_REGEX})" /tmp/hello.elf; \
+    IE_LIB="$(dirname "$(find /work/stage/deployment_tools/inference_engine/lib -mindepth 2 -maxdepth 2 -name libinference_engine.so -print -quit)")"; \
+    LD_LIBRARY_PATH="${IE_LIB}:/work/stage/deployment_tools/ngraph/lib" ldd /work/smoke-build/hello_myriad; \
+    ! LD_LIBRARY_PATH="${IE_LIB}:/work/stage/deployment_tools/ngraph/lib" ldd /work/smoke-build/hello_myriad | grep -q 'not found'
 
 # -----------------------------------------------------------------------------
-# Stage 3b: the MobileNet classification demo (mobilenet-test/)
+# Stage 5: build MobileNet demo natively for the selected target
 # -----------------------------------------------------------------------------
 FROM builder AS mobilenet
 
+ARG TARGET
+ARG USE_CMAKE_TOOLCHAIN=1
+ARG EXPECTED_ELF_CLASS=ELF32
+ARG EXPECTED_ELF_MACHINE_REGEX=ARM
 COPY mobilenet-test /work/mnb
 
 RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
     set -eux; \
+    set --; \
+    if [ "${USE_CMAKE_TOOLCHAIN}" = 1 ]; then \
+        set -- "$@" -DCMAKE_TOOLCHAIN_FILE=/work/toolchain-ro/armv7-native.toolchain.cmake; \
+    fi; \
     cmake -S /work/mnb -B /work/mnb-build \
+        "$@" \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_TOOLCHAIN_FILE=/work/toolchain-ro/armv7-native.toolchain.cmake \
         -DOV_ROOT=/work/stage/deployment_tools/inference_engine \
         -DOV_RUNTIME_PREFIX=/opt/openvino/inference_engine; \
     cmake --build /work/mnb-build -- -j"${OV_BUILD_JOBS}"; \
-    readelf -h /work/mnb-build/mobilenet_classify | head -12; \
-    LD_LIBRARY_PATH=/work/stage/deployment_tools/inference_engine/lib/armv7l:/work/stage/deployment_tools/ngraph/lib \
-        ldd /work/mnb-build/mobilenet_classify
+    readelf -h /work/mnb-build/mobilenet_classify | tee /tmp/mobilenet.elf; \
+    grep -q "Class:.*${EXPECTED_ELF_CLASS}" /tmp/mobilenet.elf; \
+    grep -Eq "Machine:.*(${EXPECTED_ELF_MACHINE_REGEX})" /tmp/mobilenet.elf; \
+    IE_LIB="$(dirname "$(find /work/stage/deployment_tools/inference_engine/lib -mindepth 2 -maxdepth 2 -name libinference_engine.so -print -quit)")"; \
+    LD_LIBRARY_PATH="${IE_LIB}:/work/stage/deployment_tools/ngraph/lib" ldd /work/mnb-build/mobilenet_classify; \
+    ! LD_LIBRARY_PATH="${IE_LIB}:/work/stage/deployment_tools/ngraph/lib" ldd /work/mnb-build/mobilenet_classify | grep -q 'not found'
 
 # -----------------------------------------------------------------------------
-# Stage 4: runtime image
+# Stage 6: runtime image
 # -----------------------------------------------------------------------------
-FROM --platform=linux/arm/v7 ${BASE_IMAGE} AS runtime
+FROM --platform=${DOCKER_PLATFORM} ${BASE_IMAGE} AS runtime
 
+ARG TARGET
+ARG DOCKER_PLATFORM
+ARG BASE_IMAGE
+ARG PROJECT_REVISION=unversioned
+ARG OPENVINO_COMMIT=unknown
 ARG SNAPSHOT_DATE
+ARG EXPECTED_ELF_CLASS
+ARG EXPECTED_ELF_MACHINE_ID
 ENV OV_ROOT=/opt/openvino
+ENV OV_TARGET=${TARGET}
 
 RUN set -eux; \
     printf 'deb http://snapshot.debian.org/archive/debian/%s bullseye main\ndeb http://snapshot.debian.org/archive/debian-security/%s bullseye-security main\ndeb http://snapshot.debian.org/archive/debian/%s bullseye-updates main\n' \
         "${SNAPSHOT_DATE}" "${SNAPSHOT_DATE}" "${SNAPSHOT_DATE}" > /etc/apt/sources.list; \
     apt -o Acquire::Retries=5 -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false update; \
     apt-get -o Acquire::Retries=5 install -y --no-install-recommends \
-        libusb-1.0-0 \
-        ca-certificates \
-        python3; \
+        libusb-1.0-0 ca-certificates python3; \
     rm -rf /var/lib/apt/lists/*
 
-# the install tree keeps lib/<arch>/*.so, plugins.xml and the .mvcmd firmware
-# files in one directory, which is what the MYRIAD plugin expects (it locates
-# the firmware next to libmyriadPlugin.so via dladdr)
 COPY --from=builder /work/stage/deployment_tools ${OV_ROOT}/
 COPY --from=smoke /work/smoke-build/hello_myriad ${OV_ROOT}/bin/hello_myriad
 COPY --from=smoke /work/smoke/model /opt/openvino-demo/model
 COPY --from=mobilenet /work/mnb-build/mobilenet_classify ${OV_ROOT}/bin/mobilenet_classify
 COPY container-entry.sh /opt/openvino-demo/run.sh
 
-# the MobileNet corpus (ONNX source, IR, labels, photos) stays on the host and is
-# mounted read-only by ./run.sh mobilenet, so the image does not carry 20 MB of model
-RUN chmod +x /opt/openvino-demo/run.sh ${OV_ROOT}/bin/hello_myriad ${OV_ROOT}/bin/mobilenet_classify \
-    && ls -l ${OV_ROOT} ${OV_ROOT}/bin ${OV_ROOT}/inference_engine/lib/*/ \
-    && LD_LIBRARY_PATH="$(ls -d ${OV_ROOT}/inference_engine/lib/*/):${OV_ROOT}/ngraph/lib" \
-       ${OV_ROOT}/bin/hello_myriad --help \
-    && LD_LIBRARY_PATH="$(ls -d ${OV_ROOT}/inference_engine/lib/*/):${OV_ROOT}/ngraph/lib" \
-       ${OV_ROOT}/bin/mobilenet_classify --help
+RUN set -eux; \
+    chmod +x /opt/openvino-demo/run.sh ${OV_ROOT}/bin/hello_myriad ${OV_ROOT}/bin/mobilenet_classify; \
+    IE_PLUGIN="$(find ${OV_ROOT}/inference_engine/lib -mindepth 2 -maxdepth 2 -type f -name libmyriadPlugin.so -print -quit)"; \
+    test -n "${IE_PLUGIN}"; \
+    IE_LIB="$(dirname "${IE_PLUGIN}")"; \
+    test -f "${IE_LIB}/usb-ma2450.mvcmd"; \
+    test -f "${IE_LIB}/plugins.xml"; \
+    printf 'PROJECT_REVISION=%s\nTARGET=%s\nDOCKER_PLATFORM=%s\nBASE_IMAGE=%s\nOPENVINO_COMMIT=%s\nIE_LIB_BASENAME=%s\nEXPECTED_ELF_CLASS=%s\nEXPECTED_ELF_MACHINE_ID=%s\n' \
+        "${PROJECT_REVISION}" "${TARGET}" "${DOCKER_PLATFORM}" "${BASE_IMAGE}" "${OPENVINO_COMMIT}" "$(basename "${IE_LIB}")" "${EXPECTED_ELF_CLASS}" "${EXPECTED_ELF_MACHINE_ID}" \
+        > ${OV_ROOT}/runtime-manifest.env; \
+    (cd ${OV_ROOT} && sha256sum "inference_engine/lib/$(basename "${IE_LIB}")"/*.mvcmd) > ${OV_ROOT}/firmware.sha256; \
+    cat ${OV_ROOT}/runtime-manifest.env; \
+    cat ${OV_ROOT}/firmware.sha256; \
+    LD_LIBRARY_PATH="${IE_LIB}:${OV_ROOT}/ngraph/lib" ${OV_ROOT}/bin/hello_myriad --help; \
+    LD_LIBRARY_PATH="${IE_LIB}:${OV_ROOT}/ngraph/lib" ${OV_ROOT}/bin/mobilenet_classify --help; \
+    ! LD_LIBRARY_PATH="${IE_LIB}:${OV_ROOT}/ngraph/lib" ldd ${OV_ROOT}/bin/hello_myriad | grep -q 'not found'; \
+    ! LD_LIBRARY_PATH="${IE_LIB}:${OV_ROOT}/ngraph/lib" ldd ${OV_ROOT}/bin/mobilenet_classify | grep -q 'not found'
 
 WORKDIR /opt/openvino-demo
 ENTRYPOINT ["/opt/openvino-demo/run.sh"]
