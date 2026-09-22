@@ -22,10 +22,30 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT}"
+# shellcheck source=platform.sh
+source "${ROOT}/scripts/platform.sh"
+# This validator intentionally uses Intel's ARMv7 Raspbian package. It is a
+# Pi/ARMv7 reference check, not the native arm64/amd64 self-built runtime validator.
+# Use scripts/verify.sh --platform arm64 or --platform amd64 for native images.
 
 IMAGE="ov203-reference-check:latest"
 WITH_DEVICE="yes"
-[[ "${1:-}" == "--no-device" ]] && WITH_DEVICE="no"
+TARGET_REQUEST="$(platform_default_request)"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --no-device) WITH_DEVICE="no"; shift ;;
+        --platform) TARGET_REQUEST="${2:-}"; shift 2 ;;
+        -h|--help) echo "usage: $0 [--platform armv7] [--no-device]"; exit 0 ;;
+        *) echo "unknown option: $1" >&2; exit 2 ;;
+    esac
+done
+
+platform_load "${TARGET_REQUEST}"
+if [[ "${TARGET}" != armv7 ]]; then
+    echo "SKIP: validate-reference.sh uses Intel's ARMv7 Raspbian reference runtime; selected target is ${TARGET}."
+    echo "Use ./scripts/verify.sh --platform ${TARGET} for the self-built runtime."
+    exit 0
+fi
 
 REF_DIR="$(ls -d vendor/reference-runtime/*/deployment_tools/inference_engine | head -1)"
 if [[ ! -d "${REF_DIR}" ]]; then
