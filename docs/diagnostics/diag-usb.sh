@@ -1,37 +1,38 @@
 #!/usr/bin/env bash
-# Throwaway diagnostic: trace what OpenVINO 2020.3 compile_tool sees on USB while
-# its MYRIAD plugin boots the MA2450 stick inside the armv7 container.
-set -uo pipefail
+# Trace host syscalls made while the selected self-built runtime boots/opens the
+# stick. Requires host strace and permission to ptrace the container process.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "${ROOT}/scripts/platform.sh"
+TARGET_REQUEST="$(platform_default_request)"; IMAGE_OVERRIDE="${IMAGE:-}"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --platform) TARGET_REQUEST="$2"; shift 2 ;;
+    --image) IMAGE_OVERRIDE="$2"; shift 2 ;;
+    *) echo "unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+platform_load "$TARGET_REQUEST"; IMAGE="${IMAGE_OVERRIDE:-${DEFAULT_IMAGE}}"
+OUT="$ROOT/work/diagnostics/$TARGET"; mkdir -p "$OUT"
+sudo python3 "$ROOT/scripts/reset-stick.py" >/dev/null 2>&1 || true
+command -v lsusb >/dev/null && echo "host before: $(lsusb | grep -i 03e7 || echo none)"
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REF=$ROOT/vendor/reference-runtime/l_openvino_toolkit_runtime_raspbian_p_2020.3.355/deployment_tools
-OUT=$ROOT/work/diag
-mkdir -p "$OUT"
-
-sudo python3 "$ROOT/scripts/reset-stick.py" >/dev/null 2>&1
-echo "host before: $(lsusb | grep 03e7)"
-
-C=$(docker run -d --privileged --platform linux/arm/v7 \
-      -v /dev:/dev \
-      -v "$REF/inference_engine":/ov:ro \
-      -v "$REF/ngraph":/ng:ro \
-      -v "$ROOT/smoke-test":/work/smoke:ro \
-      -v "$ROOT/work/reference-check":/out \
-      ov203-reference-check:latest \
-      bash -c 'export LD_LIBRARY_PATH=/ov/lib/armv7l:/ng/lib;
-               IE_VPU_LOG_LEVEL=LOG_DEBUG /ov/lib/armv7l/compile_tool -m /work/smoke/model/model.xml -d MYRIAD \
-                   -o /tmp/blob; echo "EXIT=$?"')
-PID=$(docker inspect -f '{{.State.Pid}}' "$C")
-echo "container pid=$PID"
-
-sudo timeout 40 strace -f -tt -p "$PID" -e trace=openat,ioctl -o "$OUT/trace.txt" -q
-sleep 1
-
-docker logs "$C" > "$OUT/compile.log" 2>&1
-docker rm -f "$C" >/dev/null 2>&1
-echo "host after: $(lsusb | grep 03e7 || echo none)"
-echo "compile_tool output:"; tail -5 "$OUT/compile.log"
+C="$(docker run -d --platform "$DOCKER_PLATFORM" --network=host -v /dev:/dev \
+      --device-cgroup-rule='c 189:* rwm' --entrypoint bash "$IMAGE" -lc '
+        sleep 2
+        IE_LIB="$(dirname "$(find /opt/openvino/inference_engine/lib -mindepth 2 -maxdepth 2 -name libmyriadPlugin.so -print -quit)")"
+        export LD_LIBRARY_PATH="$IE_LIB:/opt/openvino/ngraph/lib"
+        IE_VPU_LOG_LEVEL=LOG_DEBUG /opt/openvino/bin/hello_myriad --device MYRIAD --iterations 1 \
+          --model /opt/openvino-demo/model/model.xml --weights /opt/openvino-demo/model/model.bin
+      ')"
+trap 'docker rm -f "$C" >/dev/null 2>&1 || true' EXIT
+PID="$(docker inspect -f '{{.State.Pid}}' "$C")"
+echo "target=$TARGET container=$C pid=$PID"
+sudo timeout 90 strace -f -tt -p "$PID" -e trace=openat,ioctl -o "$OUT/trace.txt" -q || true
+docker wait "$C" >/dev/null || true
+docker logs "$C" >"$OUT/runtime.log" 2>&1 || true
+docker rm "$C" >/dev/null 2>&1 || true; trap - EXIT
+command -v lsusb >/dev/null && echo "host after: $(lsusb | grep -i 03e7 || echo none)"
+echo "runtime output:"; tail -20 "$OUT/runtime.log"
 echo "trace lines: $(wc -l < "$OUT/trace.txt")"
-echo "enumeration passes (sysfs dir opens): $(grep -c 'sys/bus/usb/devices/"' "$OUT/trace.txt")"
-echo "sysfs stick paths seen:"; grep -oE "devices/(3|4)-1" "$OUT/trace.txt" | sort | uniq -c
-echo "stick node opens (/dev/bus/usb):"; grep -oE "/dev/bus/usb/[0-9]+/[0-9]+" "$OUT/trace.txt" | sort | uniq -c
+echo 'USB node opens:'; grep -oE '/dev/bus/usb/[0-9]+/[0-9]+' "$OUT/trace.txt" | sort | uniq -c || true
