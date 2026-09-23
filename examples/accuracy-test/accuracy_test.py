@@ -26,14 +26,14 @@ Usage:
   python3 examples/accuracy-test/accuracy_test.py --limit 100
   python3 examples/accuracy-test/accuracy_test.py --ir fp32 --backend docker
 
-A MobileNetV2 top-1 accuracy around 70% on this set is expected (the
-official fp32 ImageNet top-1 is 71.9%; our fp16 VPU numbers should be
-close).  A near-zero score means the pipeline is broken (preprocessing,
-tensor layout or device output), not the model.
+A MobileNetV2 top-1 accuracy around 81% on this set is expected (the
+README's verified number on this dataset is 81.4%; the official fp32
+ImageNet-val top-1 is 71.9%, a harder benchmark).  A score far below ~80%
+means the pipeline is broken (preprocessing, tensor layout or device
+output), not the model.
 """
 
 import argparse
-import glob
 import os
 import sys
 import time
@@ -89,9 +89,11 @@ def main():
     if cv2 is None:
         die("OpenCV is required: pip install opencv-python numpy")
 
-    files = sorted(glob.glob(os.path.join(args.images_dir, "*.JPEG")) +
-                   glob.glob(os.path.join(args.images_dir, "*.jpg")) +
-                   glob.glob(os.path.join(args.images_dir, "*.png")))
+    # case-insensitive discovery (the dataset is .JPEG but users add others)
+    files = sorted(
+        os.path.join(args.images_dir, name)
+        for name in os.listdir(args.images_dir)
+        if name.lower().endswith((".jpeg", ".jpg", ".png")))
     if not files:
         die("no images in %s - run ./examples/accuracy-test/fetch-sample-images.sh"
             % args.images_dir)
@@ -107,8 +109,9 @@ def main():
 
     client = MyriadClient(args.backend, args.ir, args.device, args.request_timeout)
     total = len(files)
-    ok = skip = bad = top1_hits = top5_hits = 0
-    bad_rows = []
+    ok = skip = top1_hits = top5_hits = 0
+    bad_rows = []   # every top-1 miss (up to args.show_errors)
+    top5_misses = 0
     t0 = time.monotonic()
     t_first = None
     try:
@@ -130,11 +133,15 @@ def main():
             ok += 1
             if top1 == truth:
                 top1_hits += 1
+            else:
+                # a top-1 miss: record it (with the top-5 status) up to the cap
+                if len(bad_rows) < args.show_errors:
+                    bad_rows.append((base, labels[truth][1], top1, labels[top1][1],
+                                     float(logits[top1]), truth in top5))
             if truth in top5:
                 top5_hits += 1
-            elif len(bad_rows) < args.show_errors:
-                bad_rows.append((base, labels[truth][1], top1, labels[top1][1],
-                                float(logits[top1])))
+            else:
+                top5_misses += 1
             if t_first is None:
                 t_first = time.monotonic() - t0
     except RuntimeError as ex:
@@ -154,10 +161,12 @@ def main():
     print("throughput      : %.2f img/s (server start %.2f s, total %.1f s)"
           % (rate, t_first or 0.0, dt))
     if args.show_errors > 0 and bad_rows:
-        print("misclassified (top-1):")
-        for base, truth_name, top1, pred_name, p in bad_rows[:args.show_errors]:
-            print("  %s: expected %-38s got %s (%s) p=%.3f"
-                  % (base, truth_name, labels[top1][0], pred_name, p))
+        print("misclassified (top-1) - up to %d of %d shown:" %
+              (args.show_errors, ok - top1_hits))
+        for base, truth_name, top1, pred_name, p, in_top5 in bad_rows:
+            print("  %s: expected %-38s got %s (%s) p=%.3f%s"
+                  % (base, truth_name, labels[top1][0], pred_name, p,
+                     "" if in_top5 else "  [also a top-5 miss]"))
     print()
     sys.exit(1 if (args.fail_under > 0 and acc1 < args.fail_under) else 0)
 

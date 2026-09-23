@@ -43,6 +43,7 @@ from mobilenet_client import (            # noqa: E402
     note,
     preprocess,
     topk_probs,
+    windowed_fps,
 )
 
 try:
@@ -121,6 +122,8 @@ def main():
 
     last_probs = []
     last_infer_ms = 0.0
+    frame_times = []
+    fps = 0.0
     frame_no = 0
     classified_no = 0
     t_start = time.monotonic()
@@ -141,11 +144,15 @@ def main():
                 logits = client.infer(tensor)
                 last_infer_ms = (time.monotonic() - t0) * 1000.0
                 last_probs = topk_probs(logits, labels, args.topk)
+                # steady-state fps over the last 10 classified frames (excludes
+                # the one-time server compile, like the other clients)
+                frame_times.append(time.monotonic())
+                if len(frame_times) >= 2:
+                    fps = windowed_fps(frame_times)
             probs = last_probs
 
             # ------------------------------------------------------- reporting
             t = time.monotonic() - t_start
-            fps = frame_no / t if t > 0 else 0.0
             top = "\n".join(
                 "  %d. %7.4f %s %s" % (i + 1, p, cid, name)
                 for i, (p, cid, name) in enumerate(probs))

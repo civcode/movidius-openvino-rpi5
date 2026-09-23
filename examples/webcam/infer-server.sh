@@ -7,7 +7,8 @@
 #     backend : host | docker | auto   (default: auto)
 #               host  - native host binaries from work/host-runtime/<target> (no Docker)
 #               docker- inside the runtime image built by ./build.sh
-#               auto  - host if the runtime was pulled, otherwise docker
+#               auto  - host if the runtime was pulled, else docker, else
+#                       in-image fallback (running inside the runtime image)
 #     ir      : fp16 | fp32            (default: fp16, override with IR=...)
 #     device  : MYRIAD                 (default: MYRIAD)
 #
@@ -36,7 +37,7 @@ Arguments (all optional, positional):
   backend    host | docker | auto      default: auto
                host   - native binaries from work/host-runtime/<target> (no Docker)
                docker - inside the runtime image built by ./build.sh
-               auto   - host if the runtime was pulled, otherwise docker
+               auto   - host if pulled, else docker, else in-image fallback
   ir         fp16 | fp32               default: fp16
   device     MYRIAD                    default: MYRIAD
 
@@ -55,10 +56,13 @@ Examples:
       < vendor/models/test_data/input_0.f32
 EOF
 }
-if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-    usage
-    exit 0
-fi
+# -h/--help is accepted at any position
+for _arg in "$@"; do
+    if [[ "${_arg}" == "-h" || "${_arg}" == "--help" ]]; then
+        usage
+        exit 0
+    fi
+done
 
 BACKEND="${1:-auto}"
 IR="${2:-${IR:-fp16}}"
@@ -153,6 +157,7 @@ docker_backend() {
         --network=host \
         -v /dev:/dev \
         --device-cgroup-rule='c 189:* rwm' \
+        --device-cgroup-rule='c 81:* rwm' \
         -v "${ROOT}/vendor/models:/models:ro" \
         -e OV_QUIET=1 \
         "${IMAGE}" \
@@ -168,8 +173,12 @@ case "${BACKEND}" in
     auto)
         if host_runtime_ready; then
             host_backend
-        else
+        elif command -v docker >/dev/null 2>&1; then
             docker_backend
+        else
+            # no docker CLI - we are probably inside the runtime image
+            # itself; host_backend falls back to ${OV_ROOT}/bin/mobilenet_server
+            host_backend
         fi
         ;;
     *)

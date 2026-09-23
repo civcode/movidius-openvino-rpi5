@@ -5,7 +5,7 @@
 // stage as a guard. It exists because a past version of floatToHalf dropped
 // the sign bit in two return paths, silently flipping every negative input
 // value to positive and cutting top-1 accuracy roughly in half.
-#include "../half.hpp"  // shared IEEE-754 f16<->f32 conversion (unit-tested in examples/webcam/test_half.cpp)
+#include "half.hpp"  // shared IEEE-754 f16<->f32 conversion (unit-tested in examples/webcam/test_half.cpp)
 
 #include <cstdio>
 #include <cstring>

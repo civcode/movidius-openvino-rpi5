@@ -7,7 +7,8 @@
 #     backend : host | docker | auto   (default: auto)
 #               host  - native host binaries from work/host-runtime/<target> (no Docker)
 #               docker- inside the runtime image built by ./build.sh
-#               auto  - host if the runtime was pulled, otherwise docker
+#               auto  - host if the runtime was pulled, else docker, else
+#                       in-image fallback (running inside the runtime image)
 #     device  : MYRIAD                 (default: MYRIAD)
 #
 # The server inherits this script's stdin/stdout (the frame protocol of
@@ -60,10 +61,13 @@ Examples:
   examples/deeplab-seg/infer-seg-server.sh docker MYRIAD < /tmp/frame.bin
 EOF
 }
-if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-    usage
-    exit 0
-fi
+# -h/--help is accepted at any position
+for _arg in "$@"; do
+    if [[ "${_arg}" == "-h" || "${_arg}" == "--help" ]]; then
+        usage
+        exit 0
+    fi
+done
 
 BACKEND="${1:-auto}"
 DEVICE="${2:-MYRIAD}"

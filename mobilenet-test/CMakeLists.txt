@@ -2,8 +2,7 @@
 # mobilenet_classify: real image classification demo for the self-built
 # OpenVINO 2020.3.2 runtime (see mobilenet-test/main.cpp and README.md).
 #
-# Same link setup as the hello_myriad smoke test: the Inference Engine shared
-# objects only resolve as a link group.
+# The OV link setup is shared in cmake/ov203-link.cmake.
 # ---------------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.10)
 project(mobilenet_classify CXX)
@@ -11,67 +10,20 @@ project(mobilenet_classify CXX)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if(NOT DEFINED OV_ROOT)
-    message(FATAL_ERROR
-            "give the Inference Engine install tree: -DOV_ROOT=<...>/deployment_tools/inference_engine")
-endif()
-
-if(NOT EXISTS "${OV_ROOT}/include/inference_engine.hpp")
-    message(FATAL_ERROR "no inference_engine.hpp under ${OV_ROOT}/include")
-endif()
-
-# The install tree places shared objects in lib/<arch>/. Discover the directory
-# from libinference_engine.so so this project does not assume armv7l/aarch64/intel64.
-file(GLOB ov_lib_dirs LIST_DIRECTORIES true "${OV_ROOT}/lib/*")
-list(FILTER ov_lib_dirs INCLUDE REGEX ".*/lib/[^/]+$")
-if(NOT ov_lib_dirs)
-    message(FATAL_ERROR "no library directory found under ${OV_ROOT}/lib")
-endif()
-
-find_library(IE_LIBRARY
-    NAMES inference_engine
-    PATHS ${ov_lib_dirs}
-    REQUIRED NO_DEFAULT_PATH)
-
-get_filename_component(IE_LIBDIR "${IE_LIBRARY}" DIRECTORY)
-
-# ngraph is installed next to the inference engine (deployment_tools/ngraph).
-set(NGRAPH_ROOT "${OV_ROOT}/../ngraph" CACHE PATH "ngraph part of the install tree")
-
-# libinference_engine.so does not resolve on its own: it references
-# libinference_engine_legacy (the CNNNetwork / layer structs), the two
-# transformations libraries and libngraph, and some of those reference back into
-# libinference_engine.  Resolve the whole set as a link group.
-set(ov_link_libs "")
-foreach(ov_name IN ITEMS
-        inference_engine
-        inference_engine_legacy
-        inference_engine_transformations
-        inference_engine_lp_transformations
-        ngraph)
-    find_library(ov_found_${ov_name}
-        NAMES ${ov_name}
-        PATHS "${IE_LIBDIR}" "${NGRAPH_ROOT}/lib"
-        REQUIRED NO_DEFAULT_PATH)
-    list(APPEND ov_link_libs "${ov_found_${ov_name}}")
+# shared OV link setup + shared-header include dir (self-locating probe:
+# <root>/cmake in a checkout, /work/cmake in the Docker build)
+foreach(_cand "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake"
+              "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
+    if(EXISTS "${_cand}/ov203-link.cmake")
+        include("${_cand}/ov203-link.cmake")
+        break()
+    endif()
 endforeach()
 
-# rpath: the build-time library directories
-set(ov_rpath_build "${IE_LIBDIR}" "${NGRAPH_ROOT}/lib")
-# When the executable is copied into the runtime image the build-time library
-# directories are gone, so the rpath is rewritten to the runtime install layout.
-set(OV_RUNTIME_PREFIX "" CACHE STRING
-    "install prefix in the runtime image, e.g. /opt/openvino/inference_engine")
-if(OV_RUNTIME_PREFIX)
-    # keep the architecture directory the selected build actually produced
-    get_filename_component(ov_arch "${IE_LIBDIR}" NAME)
-    set(ov_rpath_use "${OV_RUNTIME_PREFIX}/lib/${ov_arch};${OV_RUNTIME_PREFIX}/../ngraph/lib")
-else()
-    set(ov_rpath_use "${ov_rpath_build}")
-endif()
-
 add_executable(mobilenet_classify main.cpp)
-target_include_directories(mobilenet_classify PRIVATE "${OV_ROOT}/include")
+target_include_directories(mobilenet_classify PRIVATE
+    "${OV_ROOT}/include"
+    "${SHARED_INCLUDE_DIR}")
 if(EXISTS "${NGRAPH_ROOT}/include")
     target_include_directories(mobilenet_classify PRIVATE "${NGRAPH_ROOT}/include")
 endif()

@@ -3,10 +3,11 @@
 // the Docker build stage (no MYRIAD needed).  Exit code 0 = all pass.
 #include <cmath>
 #include <cstdio>
+#include <fstream>
 #include <string>
 #include <vector>
 
-#include "../half.hpp"
+#include "half.hpp"
 #include "ssd_postprocess.hpp"
 
 static int failures = 0;
@@ -99,7 +100,7 @@ int main() {
               "max_detections=2 keeps the two highest-confidence rows");
     }
 
-    // 6. COCO label mapping, including sparse ids and the unknown-id fallback
+    // 6. COCO label mapping via labelFor, including sparse ids and the unknown-id fallback
     {
         std::map<int, std::string> labels;
         labels[1] = "person";
@@ -111,6 +112,25 @@ int main() {
         CHECK(labelFor(labels, 13) == "bear", "label 13 -> bear");
         CHECK(labelFor(labels, 90) == "toothbrush", "label 90 -> toothbrush");
         CHECK(labelFor(labels, 12) == "class_12", "unknown id 12 -> class_12 fallback");
+    }
+
+    // 6b. loadLabels accepts tab- and space-separated files, and multi-word names
+    {
+        const std::string path = "ssd_test_labels.tmp";
+        {
+            std::ofstream out(path);
+            out << "0\tbackground\n"           // tab-separated
+                 << "1\tperson\n"             // tab-separated
+                 << "6  fire hydrant\n"       // space-separated, multi-word name
+                 << "9   car\n";             // extra spaces
+        }
+        std::map<int, std::string> labels = loadLabels(path);
+        CHECK(labels.size() == 4, "loadLabels parses tab- and space-separated lines");
+        CHECK(labels[0] == "background", "tab line: id 0 -> background");
+        CHECK(labels[6] == "fire hydrant", "space line: id 6 -> 'fire hydrant' (multi-word)");
+        CHECK(labels[9] == "car", "space line: id 9 -> car");
+        CHECK(labelFor(labels, 6) == "fire hydrant", "labelFor returns the multi-word name");
+        std::remove(path.c_str());
     }
 
     // 7. shared half.hpp: sign bit survives the round trip (the 2024 bug)

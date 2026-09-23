@@ -15,8 +15,9 @@
 // The IR (vendor/models/ssdlite_mobilenet_v2/openvino/, produced by
 // scripts/prepare-ssdlite.sh) has its preprocessing baked in: the `image_tensor`
 // input is FP16 NCHW [1,3,300,300] and the first two ops are
-// x * (2/255) - 1.  So this client feeds raw 0..255 RGB pixel values (BGR from
-// the PPM, resized bilinearly to the model's input size) and the graph scales.
+// x * (2/255) - 1.  So this client feeds raw 0..255 RGB pixel values (straight
+// from the RGB PPM / stream frames, resized bilinearly to the model's input
+// size) and the graph scales.  No channel conversion happens anywhere.
 // The single `DetectionOutput` op runs NMS internally and yields keep_top_k
 // rows of [image_id, class, score, xmin, ymin, xmax, ymax] normalized 0..1;
 // ssd_postprocess.hpp turns those into clamped original-image pixel boxes.
@@ -30,7 +31,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -38,8 +38,9 @@
 #include <string>
 #include <vector>
 
-#include "../half.hpp"
-#include "../device_probe.hpp"  // shared MYRIAD device probe with retry
+#include "half.hpp"
+#include "device_probe.hpp"  // shared MYRIAD device probe with retry
+#include "frame_utils.hpp"   // shared PPM I/O + bilinear resize
 #include "ssd_postprocess.hpp"
 
 #include "inference_engine.hpp"
@@ -52,7 +53,9 @@ void usage() {
     std::cout
         << "ssd_detect --model <ir.xml> --weights <ir.bin> --labels <coco.txt>\n"
         << "            --image <photo.ppm> [--device MYRIAD] [--min-conf 0.5]\n"
-        << "            [--max-detections 10] [--iterations 1] [--debug]\n";
+        << "            [--max-detections 10] [--iterations 1] [--debug]\n"
+        << "            --stdin   (stream mode: frames on stdin, see header)\n\n"
+        << "Exit codes: 0 ok, 1 runtime failure, 2 device/CLI error, 3 model/shape error.\n";
 }
 
 struct Options {
@@ -97,63 +100,6 @@ Options parseArgs(int argc, char** argv) {
     return o;
 }
 
-struct PpmImage {
-    std::string path;
-    int width = 0;
-    int height = 0;
-    std::vector<unsigned char> rgb;  // w*h*3, RGB order (our PPMs are written by Pillow)
-};
-
-PpmImage readPpm(const std::string& path) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) throw std::runtime_error("cannot open " + path);
-    std::string magic;
-    if (!(in >> magic)) throw std::runtime_error("not a P6 PPM: " + path);
-    if (magic != "P6") throw std::runtime_error("expected P6, got " + magic + ": " + path);
-    int w, h, maxv;
-    if (!(in >> w >> h >> maxv)) throw std::runtime_error("bad PPM header in " + path);
-    in.get();  // single whitespace after maxval
-    PpmImage img;
-    img.path = path;
-    img.width = w;
-    img.height = h;
-    img.rgb.resize(static_cast<std::size_t>(w) * h * 3);
-    in.read(reinterpret_cast<char*>(img.rgb.data()),
-            static_cast<std::streamsize>(img.rgb.size()));
-    if (in.gcount() != static_cast<std::streamsize>(img.rgb.size()))
-        throw std::runtime_error("truncated PPM body: " + path);
-    return img;
-}
-
-// Bilinear resize to tw x th; src/dst are w*h*3 BGR buffers.  Half-pixel sample
-// (matches OpenCV::resize INTER_LINEAR, the reference for the model's input).
-void bilinearResize(const std::vector<unsigned char>& src, int sw, int sh,
-                    std::vector<unsigned char>& dst, int tw, int th) {
-    dst.assign(static_cast<std::size_t>(tw) * th * 3, 0);
-    const float xRatio = static_cast<float>(sw) / tw;
-    const float yRatio = static_cast<float>(sh) / th;
-    for (int y = 0; y < th; ++y) {
-        const float fy = (y + 0.5f) * yRatio - 0.5f;
-        const int y0 = std::max(0, static_cast<int>(std::floor(fy)));
-        const int y1 = std::min(sh - 1, y0 + 1);
-        const float wy = fy - y0;
-        for (int x = 0; x < tw; ++x) {
-            const float fx = (x + 0.5f) * xRatio - 0.5f;
-            const int x0 = std::max(0, static_cast<int>(std::floor(fx)));
-            const int x1 = std::min(sw - 1, x0 + 1);
-            const float wx = fx - x0;
-            for (int c = 0; c < 3; ++c) {
-                const float v00 = src[(y0 * sw + x0) * 3 + c];
-                const float v01 = src[(y0 * sw + x1) * 3 + c];
-                const float v10 = src[(y1 * sw + x0) * 3 + c];
-                const float v11 = src[(y1 * sw + x1) * 3 + c];
-                const float v = (v00 * (1 - wx) + v01 * wx) * (1 - wy) +
-                                (v10 * (1 - wx) + v11 * wx) * wy;
-                dst[(y * tw + x) * 3 + c] = static_cast<unsigned char>(v + 0.5f);
-            }
-        }
-    }
-}
 
 std::string dimsToString(const SizeVector& dims) {
     std::ostringstream s;
@@ -249,10 +195,10 @@ int main(int argc, char** argv) {
             std::cout << "in blob bytes   : " << inBytes << " (" << inElemBytes << "/elem)\n";
 
         // output: the MYRIAD TensorDesc can claim FP32 while handing back FP16,
-        // so decide the element width from the real byte size
+        // so the element width is decided from the real byte size, read after
+        // Infer (the blob's storage is only final after the first inference)
         Blob::Ptr outBlob = request.GetBlob(outputName);
         const std::size_t outElems = outBlob->size();
-        const int outElemBytes = static_cast<int>(outBlob->byteSize() / outElems);
         if (outElems != rowCount * 7) {
             std::cerr << "output blob has " << outElems << " elements, expected "
                       << rowCount * 7 << "\n";
@@ -265,7 +211,7 @@ int main(int argc, char** argv) {
 
         // run one frame: raw 0..255 RGB (w*h*3) in, (detections, infer ms) out
         auto runFrame = [&](const std::vector<unsigned char>& rgb, int fw, int fh) -> std::pair<std::vector<ssd::Detection>, double> {
-            bilinearResize(rgb, fw, fh, resized, modelW, modelH);
+            frameutils::bilinearResize(rgb.data(), fw, fh, resized, modelW, modelH);
             if (inElemBytes == 2) {
                 uint16_t* p = inBlob->buffer().as<uint16_t*>();
                 for (int c = 0; c < 3; ++c)
@@ -284,6 +230,8 @@ int main(int argc, char** argv) {
             request.Infer();
             const double ms = std::chrono::duration<double, std::milli>(
                 std::chrono::steady_clock::now() - a).count();
+            const int outElemBytes =
+                static_cast<int>(outBlob->byteSize() / outElems);  // post-Infer
             if (outElemBytes == 2) {
                 const uint16_t* p = outBlob->buffer().as<uint16_t*>();
                 for (std::size_t i = 0; i < outElems; ++i) rows[i] = halfToFloat(p[i]);
@@ -302,50 +250,62 @@ int main(int argc, char** argv) {
         std::ios::sync_with_stdio(false);
 
         if (opt.stdinStream) {
-            // stream mode: repeated frames on stdin (see the header comment)
-            uint32_t fw = 0, fh = 0;
-            std::vector<unsigned char> frame;
-            std::size_t frameNo = 0;
-            while (std::cin.read(reinterpret_cast<char*>(&fw), sizeof(fw)) &&
-                   std::cin.read(reinterpret_cast<char*>(&fh), sizeof(fh))) {
-                if (fw == 0 || fh == 0 || fw > 8192 || fh > 8192)
-                    throw std::runtime_error("frame header out of range: " +
-                                             std::to_string(fw) + "x" + std::to_string(fh));
-                frame.resize(static_cast<std::size_t>(fw) * fh * 3);
-                std::cin.read(reinterpret_cast<char*>(frame.data()), frame.size());
-                if (static_cast<std::size_t>(std::cin.gcount()) != frame.size())
-                    throw std::runtime_error("truncated frame body (" +
-                                             std::to_string(frame.size()) + " bytes expected)");
-                auto res = runFrame(frame, fw, fh);
-                ++frameNo;
-                std::cout << "FRAME " << fw << " " << fh << " "
-                          << std::fixed << std::setprecision(1) << res.second << "\n";
-                for (const ssd::Detection& d : res.first) {
-                    std::cout << "DET " << ssd::labelFor(labels, d.class_id) << " "
-                              << std::fixed << std::setprecision(2) << d.confidence
-                              << " " << d.x1 << " " << d.y1 << " " << d.x2 << " " << d.y2 << "\n";
+            // stream mode: repeated frames on stdin (see the header comment).
+            // stdout carries the frame protocol, so failures are reported as
+            // "ERROR <message>" on stdout (plus a copy on stderr) - the stream
+            // clients turn that into a readable error instead of a bare
+            // "server closed the pipe".
+            int rc = 0;
+            try {
+                uint32_t fw = 0, fh = 0;
+                std::vector<unsigned char> frame;
+                std::size_t frameNo = 0;
+                while (std::cin.read(reinterpret_cast<char*>(&fw), sizeof(fw)) &&
+                       std::cin.read(reinterpret_cast<char*>(&fh), sizeof(fh))) {
+                    if (fw == 0 || fh == 0 || fw > 8192 || fh > 8192)
+                        throw std::runtime_error("frame header out of range: " +
+                                                 std::to_string(fw) + "x" + std::to_string(fh));
+                    frame.resize(static_cast<std::size_t>(fw) * fh * 3);
+                    std::cin.read(reinterpret_cast<char*>(frame.data()), frame.size());
+                    if (static_cast<std::size_t>(std::cin.gcount()) != frame.size())
+                        throw std::runtime_error("truncated frame body (" +
+                                                 std::to_string(frame.size()) + " bytes expected)");
+                    auto res = runFrame(frame, fw, fh);
+                    ++frameNo;
+                    std::cout << "FRAME " << fw << " " << fh << " "
+                              << std::fixed << std::setprecision(1) << res.second << "\n";
+                    for (const ssd::Detection& d : res.first) {
+                        std::cout << "DET " << ssd::labelFor(labels, d.class_id) << " "
+                                  << std::fixed << std::setprecision(2) << d.confidence
+                                  << " " << d.x1 << " " << d.y1 << " " << d.x2 << " " << d.y2 << "\n";
+                    }
+                    std::cout << "END\n";
+                    std::cout.flush();
                 }
-                std::cout << "END\n";
+                std::cerr << "ssd_detect: stream done (" << frameNo << " frame(s))\n";
+            } catch (const std::exception& e) {
+                std::cout << "ERROR " << e.what() << "\n";
                 std::cout.flush();
+                std::cerr << "error: " << e.what() << "\n";
+                rc = 1;
             }
-            std::cerr << "ssd_detect: stream done (" << frameNo << " frame(s))\n";
-            return 0;
+            return rc;
         }
 
         // single-image mode
-        PpmImage img = readPpm(opt.image);
+        frameutils::Ppm img = frameutils::readPpm(opt.image);
         std::vector<unsigned char> unused;
         const auto t2 = std::chrono::steady_clock::now();
-        bilinearResize(img.rgb, img.width, img.height, unused, modelW, modelH);
+        frameutils::bilinearResize(img.rgb.data(), img.w, img.h, unused, modelW, modelH);
         const auto t3 = std::chrono::steady_clock::now();
-        std::cout << "input image     : " << img.path << " " << img.width << "x" << img.height
+        std::cout << "input image     : " << opt.image << " " << img.w << "x" << img.h
                   << " -> " << modelW << "x" << modelH << " in "
                   << std::chrono::duration<double, std::milli>(t3 - t2).count() << " ms\n";
 
         double inferMs = 0.0;
         std::vector<ssd::Detection> dets;
         for (int it = 0; it < opt.iterations; ++it) {
-            auto res = runFrame(img.rgb, img.width, img.height);
+            auto res = runFrame(img.rgb, img.w, img.h);
             inferMs += res.second;
             dets = std::move(res.first);
         }

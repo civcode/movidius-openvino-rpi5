@@ -61,10 +61,13 @@ Examples:
   examples/ssd-detect/infer-ssd-server.sh docker MYRIAD 0.5 < /tmp/frame.bin
 EOF
 }
-if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-    usage
-    exit 0
-fi
+# -h/--help is accepted at any position
+for _arg in "$@"; do
+    if [[ "${_arg}" == "-h" || "${_arg}" == "--help" ]]; then
+        usage
+        exit 0
+    fi
+done
 
 BACKEND="${1:-auto}"
 DEVICE="${2:-MYRIAD}"

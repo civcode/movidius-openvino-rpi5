@@ -6,11 +6,11 @@ Sends camera frames (or a single image file) to the C++ seg_detect
 server in --stdin mode and renders a per-pixel class map over the frame.
 
 Usage:
-  python3 seg_stream.py --server-cmd "bash examples/deeplab-seg/infer-seg-server.sh"
-  python3 seg_stream.py --camera 0 --width 640 --height 480
-  python3 seg_stream.py --headless            # no GUI: print class stats
-  python3 seg_stream.py --file image.ppm      # single image, no camera
-  python3 seg_stream.py --mask-out mask.ppm   # also write the class map
+  python3 examples/deeplab-seg/seg_stream.py                 # GUI, webcam 0
+  python3 examples/deeplab-seg/seg_stream.py --headless       # CLI output only
+  python3 examples/deeplab-seg/seg_stream.py --file dog_ssd.ppm --frames 1
+  python3 examples/deeplab-seg/seg_stream.py --backend docker --mask-out mask.ppm
+  python3 examples/deeplab-seg/seg_stream.py my-server.sh host MYRIAD
 
 The server protocol (see seg_detect.cpp):
 
@@ -21,14 +21,33 @@ The server protocol (see seg_detect.cpp):
        MASK   <w> <h>  + w*h uint16 LE class ids
        END
 
+--mask-out writes the class map as a P6 PPM (1 byte/pixel, value = class
+id 0..20); map it to colours with the PALETTE in this file or the
+seg_detect README.
+
 Requires numpy + opencv:  pip3 install numpy opencv-python(-headless)
 """
 
 import argparse
 import os
+import signal
 import struct
 import subprocess
 import sys
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_SERVER_CMD = "bash %s/infer-seg-server.sh" % os.path.join(HERE, "infer-seg-server.sh")
+
+sys.path.insert(0, os.path.dirname(HERE))  # examples/ (shared client helpers)
+from mobilenet_client import LinePipe, server_exit_meaning, windowed_fps
+
+import numpy as np
+
+try:
+    import cv2
+except ImportError:
+    cv2 = None
 
 # Pascal VOC palette (index = class id)
 PALETTE = [
@@ -56,51 +75,79 @@ PALETTE = [
 ]
 
 
+def note(msg):
+    print(msg, file=sys.stderr, flush=True)
+
+
+def die(msg, code=1):
+    print("seg_stream: " + msg, file=sys.stderr, flush=True)
+    sys.exit(code)
+
+
+def read_ppm(path):
+    """Minimal P6 PPM reader (Pillow-independent); returns HxWx3 RGB uint8.
+    PIL writes PPM in RGB order, and the server expects RGB - no conversion."""
+    with open(path, "rb") as f:
+        data = f.read()
+    if data[:2] != b"P6":
+        raise ValueError("not a P6 PPM: " + path)
+    idx = 2
+
+    def next_int():
+        nonlocal idx
+        while data[idx:idx + 1] in (b" ", b"\n", b"\r", b"\t"):
+            idx += 1
+        s = idx
+        while 48 <= data[idx] <= 57:
+            idx += 1
+        return int(data[s:idx])
+
+    w, h, mv = next_int(), next_int(), next_int()
+    idx += 1
+    body = data[idx:idx + w * h * 3]
+    if len(body) != w * h * 3:
+        raise ValueError("truncated PPM body: " + path)
+    return np.frombuffer(body, dtype=np.uint8).reshape(h, w, 3)
+
+
 class SegClient:
-    def __init__(self, proc):
-        self.proc = proc
-        self.stdin = proc.stdin
-        self.fd = os.dup(proc.stdout.fileno())
-        self._line_buf = bytearray()
+    """Drives the seg_detect --stdin child process over its stdin/stdout pipes."""
 
-    def _readline(self):
-        while b"\n" not in self._line_buf:
-            chunk = os.read(self.fd, 65536)
-            if not chunk:
-                return None
-            self._line_buf += chunk
-        line, self._line_buf = self._line_buf.split(b"\n", 1)
-        return line.decode("utf-8", "replace")
-
-    def _read_bytes(self, n):
-        buf = bytearray()
-        if self._line_buf:
-            buf += self._line_buf[:n]
-            self._line_buf = self._line_buf[n:]
-        while len(buf) < n:
-            chunk = os.read(self.fd, max(n - len(buf), 4096))
-            if not chunk:
-                raise RuntimeError("server closed while reading MASK payload")
-            buf += chunk
-        return bytes(buf)
+    def __init__(self, server_cmd, backend, device, request_timeout):
+        self.request_timeout = request_timeout
+        self.proc = subprocess.Popen(
+            [server_cmd, backend, device],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=None,            # server diagnostics stream to our terminal
+            start_new_session=True, # so we can kill the whole group (docker too)
+        )
+        self.pipe = LinePipe(self.proc.stdout.fileno(), self.proc)
+        note("inference backend: %s device=%s (server pid %d)"
+             % (backend, device, self.proc.pid))
 
     def segment(self, rgb, w, h):
         """Send one RGB frame; returns (classes, mask_bytes, total_ms,
         infer_ms) where classes is a list of (id, name, pixels)."""
-        hdr = struct.pack("<II", w, h)
         try:
-            self.stdin.write(hdr + rgb.tobytes())
-            self.stdin.flush()
+            self.proc.stdin.write(struct.pack("<II", w, h))
+            self.proc.stdin.write(np.ascontiguousarray(rgb, dtype=np.uint8).tobytes())
+            self.proc.stdin.flush()
         except (BrokenPipeError, OSError) as e:
-            raise RuntimeError(f"server pipe closed: {e}")
+            code = self.proc.poll()
+            raise RuntimeError(
+                "server closed its stdin pipe before the first response"
+                " (exit code %s: %s)" % (code, server_exit_meaning(code))) from e
 
         classes = []
         mask_bytes = None
         total_ms = infer_ms = 0.0
-        for _ in range(64):
+        while True:
             line = self._readline()
             if line is None:
                 raise RuntimeError("server closed stdout mid-frame")
+            if line.startswith("ERROR"):
+                raise RuntimeError("server reported: " + line[5:].strip())
             tok = line.split()
             if not tok:
                 continue
@@ -112,36 +159,57 @@ class SegClient:
                     l = self._readline()
                     if l is None:
                         raise RuntimeError("server closed mid-CLASS")
-                    p = l.split()
-                    classes.append((int(p[1]), p[2], int(p[3])))
+                    t = l.split()
+                    # CLASS <id> <name ...> <pixels>; the name may contain
+                    # spaces, so take the id first and the pixel count last
+                    if len(t) < 4 or t[0] != "CLASS":
+                        raise RuntimeError("unexpected server line: %r" % l)
+                    classes.append((int(t[1]), " ".join(t[2:-1]), int(t[-1])))
             elif tok[0] == "MASK":
                 fw, fh = int(tok[1]), int(tok[2])
-                mask_bytes = self._read_bytes(fw * fh * 2)
+                mask_bytes = self.pipe.read_exact(fw * fh * 2)
             elif tok[0] == "END":
                 return classes, mask_bytes, total_ms, infer_ms
-            elif tok[0] == "ERROR":
-                raise RuntimeError(line[6:])
-        raise RuntimeError("no END line from server")
+        # unreachable
+
+    def _readline(self):
+        try:
+            return self.pipe.readline(timeout=self.request_timeout)
+        except TimeoutError as ex:
+            raise RuntimeError(str(ex)) from ex
 
     def close(self):
-        try:
-            self.stdin.close()
-        except Exception:
-            pass
-        try:
-            self.proc.wait(timeout=5)
-        except Exception:
-            self.proc.kill()
+        if self.proc.poll() is None:
+            try:
+                os.killpg(os.getpgid(self.proc.pid), signal.SIGTERM)
+            except (ProcessLookupError, PermissionError):
+                self.proc.terminate()
+            try:
+                self.proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                os.killpg(os.getpgid(self.proc.pid), signal.SIGKILL)
+        for stream in (self.proc.stdin, self.proc.stdout):
+            try:
+                stream.close()
+            except Exception:
+                pass
 
 
 def overlay(frame_bgr, mask_u16, w, h, alpha=0.4):
-    import numpy as np
     m = np.frombuffer(mask_u16, dtype="uint16").reshape(h, w)
     pal = np.array(PALETTE, dtype="uint8")
-    colored = pal[m]              # (h, w, 3) BGR-ish RGB from palette
+    colored = pal[m]              # (h, w, 3) RGB from palette
     rgb_frame = frame_bgr[:, :, ::-1]
     out = (alpha * colored + (1 - alpha) * rgb_frame).astype("uint8")
     return out[:, :, ::-1]        # back to BGR for cv2
+
+
+def write_class_map(path, mask_u16, w, h):
+    """Write the class map as a 1-byte/pixel P6 PPM (value = class id 0..20)."""
+    m = np.frombuffer(mask_u16, dtype="uint16").reshape(h, w).astype("uint8")
+    with open(path, "wb") as f:
+        f.write(b"P6\n%d %d\n255\n" % (w, h))
+        f.write(m.tobytes())
 
 
 def print_classes(classes, total_ms, infer_ms, w, h):
@@ -154,101 +222,143 @@ def print_classes(classes, total_ms, infer_ms, w, h):
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--server-cmd",
-                    default="bash examples/deeplab-seg/infer-seg-server.sh")
-    ap.add_argument("--camera", type=int, default=0)
-    ap.add_argument("--width", type=int, default=640)
-    ap.add_argument("--height", type=int, default=480)
-    ap.add_argument("--headless", action="store_true")
-    ap.add_argument("--file", help="process a single image file and exit")
-    ap.add_argument("--mask-out", help="write the class map of the last frame to this PPM")
+    ap = argparse.ArgumentParser(
+        description="live webcam DeepLabV3 (Pascal VOC) segmentation on the "
+                    "Movidius MA2450 (OpenVINO 2020.3 MYRIAD)",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    ap.add_argument("server_cmd", nargs="?", default=DEFAULT_SERVER_CMD,
+                    help="server script to run for inference (see examples/deeplab-seg/README.md)")
+    ap.add_argument("--backend", choices=["auto", "host", "docker"], default="auto",
+                    help="where seg_detect runs (passed to the server script)")
+    ap.add_argument("--device", default="MYRIAD", help="OpenVINO device name")
+    ap.add_argument("--request-timeout", type=float, default=60.0,
+                    help="max seconds to wait for one frame response (first frame "
+                         "includes the ~1.7 s stick boot + 513x513 inference)")
+    ap.add_argument("--camera", type=int, default=0, help="webcam index (/dev/videoN)")
+    ap.add_argument("--width", type=int, default=640, help="request capture width (0 = device default)")
+    ap.add_argument("--height", type=int, default=480, help="request capture height (0 = device default)")
+    ap.add_argument("--file", default=None,
+                    help="read frames from this image file (.ppm/.jpg/.png) instead of the webcam "
+                         "(image kept at its native resolution)")
+    ap.add_argument("--frames", type=int, default=0,
+                    help="in --file mode, stop after N frames (0 = loop forever)")
+    ap.add_argument("--headless", action="store_true",
+                    help="no GUI window; results are printed to stdout")
+    ap.add_argument("--mask-out", default=None,
+                    help="write the class map of the last frame as a 1-byte/pixel P6 PPM")
     args = ap.parse_args()
 
-    proc = subprocess.Popen(
-        args.server_cmd.split(),
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-        stderr=None,  # server diagnostics go to our stderr
-        text=False)
-    client = SegClient(proc)
+    # GUI (and webcam capture) need OpenCV; headless --file .ppm only needs numpy
+    if cv2 is None and not (args.headless and args.file
+                            and args.file.lower().endswith(".ppm")):
+        die("OpenCV is required: pip install opencv-python numpy")
 
+    client = SegClient(args.server_cmd, args.backend, args.device, args.request_timeout)
+
+    stopping = {"flag": False}
+    def on_sigint(_signum, _frame):
+        note("\ninterrupt - shutting down")
+        stopping["flag"] = True
+    signal.signal(signal.SIGINT, on_sigint)
+
+    frame_times = []
     try:
         if args.file:
-            import cv2
-            import numpy as np
-            img = cv2.imread(args.file)
-            if img is None:
-                sys.exit(f"cannot read {args.file}")
-            if img.shape[0] != args.height or img.shape[1] != args.width:
-                img = cv2.resize(img, (args.width, args.height))
-            rgb = img[:, :, ::-1]
-            classes, mask, total_ms, infer_ms = client.segment(
-                np.ascontiguousarray(rgb), args.width, args.height)
-            print_classes(classes, total_ms, infer_ms, args.width, args.height)
-            if args.mask_out:
-                m = np.frombuffer(mask, dtype="uint16")
-                with open(args.mask_out, "wb") as f:
-                    f.write(b"P6\n%d %d\n255\n" % (args.width, args.height))
-                    f.write(m.tobytes())
-                print(f"wrote class map to {args.mask_out}")
-            if not args.headless:
-                overlaid = overlay(img, mask, args.width, args.height)
+            if args.file.lower().endswith(".ppm"):
+                rgb = read_ppm(args.file)
+            else:
+                frame = cv2.imread(args.file)
+                if frame is None:
+                    die("cannot read image %s (OpenCV %s)" % (args.file, cv2.__version__))
+                rgb = frame[:, :, ::-1]
+            h, w = rgb.shape[:2]
+            n = 0
+            while args.frames == 0 or n < args.frames:
+                if stopping["flag"]:
+                    break
+                t0 = time.monotonic()
+                classes, mask, total_ms, infer_ms = client.segment(rgb, w, h)
+                frame_times.append(time.monotonic() - t0)
+                n += 1
+                fps = windowed_fps(frame_times)
+                print("[frame %d] %dx%d %5.1f fps total %6.0f ms (infer %5.0f ms): "
+                      % (n, w, h, fps, total_ms, infer_ms)
+                      + ", ".join("%s %.1f%%" % (name, 100.0 * px / (w * h))
+                                  for cid, name, px in classes),
+                      flush=True)
+                if args.mask_out:
+                    write_class_map(args.mask_out, mask, w, h)
+                    note("wrote class map to %s" % args.mask_out)
+            if not args.headless and n:
+                overlaid = overlay(rgb[:, :, ::-1], mask, w, h)
                 cv2.imshow("DeepLabV3 segmentation", overlaid)
                 cv2.waitKey(0)
                 cv2.destroyAllWindows()
         else:
-            import cv2
-            import numpy as np
             cap = cv2.VideoCapture(args.camera)
             if not cap.isOpened():
-                sys.exit(f"cannot open camera {args.camera}")
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
-
-            if args.headless:
-                import time
-                t_last = time.time()
-                n = 0
+                die("cannot open camera %d (%s); try --camera <N> or v4l2-ctl --list-devices"
+                    % (args.camera, cv2.__version__))
+            if args.width:
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
+            if args.height:
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
+            note("camera %d: %dx%d" % (args.camera, int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                                       int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))
+            last_mask = None
+            last_dims = None
+            try:
                 while True:
+                    if stopping["flag"]:
+                        break
                     ok, frame = cap.read()
                     if not ok:
-                        break
+                        die("camera frame grab failed")
+                    h, w = frame.shape[:2]
                     rgb = frame[:, :, ::-1]
-                    classes, mask, total_ms, infer_ms = client.segment(
-                        np.ascontiguousarray(rgb), args.width, args.height)
-                    t_now = time.time()
-                    fps = 1.0 / max(t_now - t_last, 1e-6)
-                    t_last = t_now
-                    n += 1
-                    print(f"[{n}] {fps:.1f} fps server {total_ms:.0f} ms "
-                          f"(infer {infer_ms:.0f} ms) "
-                          + " ".join(f"{name} {100.0*px/(args.width*args.height):.1f}%"
-                                    for cid, name, px in classes))
-            else:
-                while True:
-                    ok, frame = cap.read()
-                    if not ok:
-                        break
-                    rgb = frame[:, :, ::-1]
-                    classes, mask, total_ms, infer_ms = client.segment(
-                        np.ascontiguousarray(rgb), args.width, args.height)
-                    overlaid = overlay(frame, mask, args.width, args.height)
-                    txt = " ".join(f"{name} {100.0*px/(args.width*args.height):.0f}%"
-                                  for cid, name, px in classes[:5])
-                    cv2.putText(overlaid, f"{total_ms:.0f} ms  {txt}",
-                                (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                                (0, 255, 0), 1, cv2.LINE_AA)
-                    cv2.imshow("DeepLabV3 segmentation", overlaid)
-                    if cv2.waitKey(1) & 0xFF == ord("q"):
-                        break
-                cv2.destroyAllWindows()
-            cap.release()
-    except Exception as e:
-        print(f"client error: {e}", file=sys.stderr)
-        return 1
+                    t0 = time.monotonic()
+                    classes, mask, total_ms, infer_ms = client.segment(rgb, w, h)
+                    frame_times.append(time.monotonic() - t0)
+                    fps = windowed_fps(frame_times)
+                    last_mask = mask
+                    last_dims = (w, h)
+                    if args.headless:
+                        print("[t=%7.2fs fps=%5.1f total=%6.0f ms (infer %5.0f ms)] %s"
+                              % (sum(frame_times), fps, total_ms, infer_ms,
+                                 ", ".join("%s %.1f%%" % (name, 100.0 * px / (w * h))
+                                           for cid, name, px in classes)),
+                              flush=True)
+                    else:
+                        overlaid = overlay(frame, mask, w, h)
+                        txt = " ".join("%s %.0f%%" % (name, 100.0 * px / (w * h))
+                                       for cid, name, px in classes[:5])
+                        cv2.putText(overlaid, "%.0f ms  fps %.1f  %s" % (total_ms, fps, txt),
+                                    (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                                    (0, 255, 0), 1, cv2.LINE_AA)
+                        cv2.imshow("DeepLabV3 segmentation", overlaid)
+                        key = cv2.waitKey(1) & 0xFF
+                        if key == ord("q") or key == 27:
+                            break
+                        if cv2.getWindowProperty("DeepLabV3 segmentation",
+                                                 cv2.WND_PROP_VISIBLE) < 1:
+                            break
+            finally:
+                cap.release()
+            if args.mask_out and last_mask is not None:
+                last_w, last_h = last_dims
+                write_class_map(args.mask_out, last_mask, last_w, last_h)
+                note("wrote class map to %s" % args.mask_out)
+    except RuntimeError as ex:
+        die("inference failure: %s" % ex)
     finally:
+        if not args.headless:
+            try:
+                cv2.destroyAllWindows()
+            except Exception:
+                pass
         client.close()
+        note("bye (%d frame%s read)"
+             % (len(frame_times), "s" if len(frame_times) != 1 else ""))
     return 0
 
 

@@ -18,6 +18,7 @@
 #define SSD_POSTPROCESS_HPP
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <fstream>
 #include <map>
@@ -73,17 +74,25 @@ inline std::vector<Detection> parseDetections(const float* rows, std::size_t row
     return out;
 }
 
-// Label files are "id<TAB>name" lines (0 = background, sparse COCO ids for 1..90).
+// Label files are "id<whitespace>name" lines (0 = background, sparse COCO
+// ids for 1..90); the first field is the id and the rest of the line is the
+// name, so tab- and space-separated files (and multi-word names) all work.
 inline std::map<int, std::string> loadLabels(const std::string& path) {
     std::ifstream in(path);
     if (!in) throw std::runtime_error("cannot open label file " + path);
     std::map<int, std::string> labels;
     std::string line;
     while (std::getline(in, line)) {
-        std::size_t tab = line.find('\t');
-        if (tab == std::string::npos) continue;
+        std::size_t space = line.find_first_of(" \t");
+        if (space == std::string::npos) continue;
+        // skip runs of whitespace so '9   car' names start clean
+        std::size_t nameStart = space;
+        while (nameStart < line.size() &&
+               (line[nameStart] == ' ' || line[nameStart] == '\t'))
+            ++nameStart;
+        if (nameStart >= line.size()) continue;
         try {
-            labels[std::stoi(line.substr(0, tab))] = line.substr(tab + 1);
+            labels[std::stoi(line.substr(0, space))] = line.substr(nameStart);
         } catch (const std::exception&) {
             // not an id line - skip
         }

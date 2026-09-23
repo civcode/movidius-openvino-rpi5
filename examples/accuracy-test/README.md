@@ -54,8 +54,8 @@ Reported numbers:
 * `top-1 accuracy` — predicted class equals the file-name synset
 * `top-5 accuracy` — the truth synset is inside the 5 highest logits
 * `throughput` — classified images per second in steady state
-* a list of up to `--show-errors` misclassified images with the expected
-  and predicted labels
+* up to `--show-errors` top-1 misses with the expected and predicted labels
+  (a `[also a top-5 miss]` tag marks the rarer misses that failed top-5 too)
 
 The test reuses the shared client in `examples/mobilenet_client.py`
 (same binary stdio protocol as the webcam example) and the identical
@@ -68,6 +68,6 @@ the same model and preprocessing scored 81.3% on CPU.  Instrumenting the
 server showed every *negative* value in the input tensor arriving at the
 network **positive**: a copy of `floatToHalf` in `mobilenet_server.cpp`
 was missing the sign bit in two return paths.  The conversion now lives in
-`examples/webcam/half.hpp` (shared, with a device-free unit test
+the repo-root `half.hpp` (shared, with a device-free unit test
 `examples/webcam/test_half.cpp` that runs in the Docker build stage), and
 the MYRIAD accuracy above was measured with the fix in place.

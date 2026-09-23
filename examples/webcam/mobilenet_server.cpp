@@ -24,8 +24,8 @@
 #include <string>
 #include <vector>
 
-#include "../half.hpp"  // shared IEEE-754 f16<->f32 conversion (unit-tested in examples/webcam/test_half.cpp)
-#include "../device_probe.hpp"  // shared MYRIAD device probe with retry
+#include "half.hpp"  // shared IEEE-754 f16<->f32 conversion (unit-tested in examples/webcam/test_half.cpp)
+#include "device_probe.hpp"  // shared MYRIAD device probe with retry
 using namespace InferenceEngine;
 
 namespace {
@@ -55,7 +55,8 @@ int main(int argc, char** argv) {
             std::printf("usage: mobilenet_server --model <IR.xml> [--weights <IR.bin>]"
                         " [--device MYRIAD]\n"
                         "stdin : 1x3x224x224 float32 tensors (602112 B each)\n"
-                        "stdout: float32 logits (1000 * 4 B) per request, until EOF\n");
+                        "stdout: float32 logits (1000 * 4 B) per request, until EOF\n"
+                        "exit codes: 0 ok, 2 no device, 3 model/IO failure, 4 bad command line\n");
             return 0;
         } else {
             std::fprintf(stderr, "unknown argument: %s\n", arg.c_str());
@@ -97,6 +98,15 @@ int main(int argc, char** argv) {
         ExecutableNetwork executable = ie.LoadNetwork(network, device);
         InferRequest request = executable.CreateInferRequest();
         Blob::Ptr inBlob = request.GetBlob(inputName);
+        // verify the input blob really is FP16 before casting: the TensorDesc
+        // and the handed-back buffer can disagree, and writing uint16_t into a
+        // float32 blob would be undefined behaviour
+        const size_t inElemBytes = inElems ? inBlob->byteSize() / inElems : 0;
+        if (inElemBytes != 2) {
+            std::fprintf(stderr, "expected a FP16 input blob (2 B/elem), got %zu B/elem\n",
+                         inElemBytes);
+            return 3;
+        }
         uint16_t* inHalf = inBlob->buffer().as<uint16_t*>();
 
         const size_t inBytes = inElems * 4;   // request tensor arrives as float32
@@ -134,9 +144,15 @@ int main(int argc, char** argv) {
             request.Infer();
 
             // the MYRIAD output TensorDesc can claim a precision that does not match
-            // the buffer handed back, so decide from the real bytes per element
+            // the buffer handed back, so decide from the real bytes per element.
+            // Check the element count BEFORE copying so an oversized blob cannot
+            // overflow the logits vector.
             Blob::Ptr outBlob = request.GetBlob(outputName);
             const size_t n = outBlob->size();
+            if (n != outElems) {
+                std::fprintf(stderr, "output has %zu values, expected %zu\n", n, outElems);
+                return 3;
+            }
             const uint8_t* raw = outBlob->cbuffer().as<uint8_t*>();
             const size_t bytesPerElem = n ? outBlob->byteSize() / n : 0;
             if (bytesPerElem == 2) {
@@ -149,10 +165,6 @@ int main(int argc, char** argv) {
                 std::memcpy(logits.data(), raw, n * 4);
             } else {
                 std::fprintf(stderr, "unsupported output element size %zu\n", bytesPerElem);
-                return 3;
-            }
-            if (n != outElems) {
-                std::fprintf(stderr, "output has %zu values, expected %zu\n", n, outElems);
                 return 3;
             }
 

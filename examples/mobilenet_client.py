@@ -50,6 +50,102 @@ def die(msg, code=1):
     sys.exit(code)
 
 
+# The C++ servers' exit codes (shared by all three inference servers):
+#   0 clean   1 runtime failure   2 device missing / bad command line
+#   3 model or IO failure   4 bad command line (mobilenet_server)
+def server_exit_meaning(code):
+    return {
+        1: "runtime failure (see its diagnostics)",
+        2: "device not available or bad command line",
+        3: "model or IO failure",
+        4: "bad command line",
+    }.get(code, "unknown")
+
+
+class LinePipe:
+    """Line/binary reader over a server's stdout file descriptor.
+
+    Keeps a per-instance remainder buffer so a chunk read can end in the
+    middle of a line or a binary payload.  `readline(timeout)` returns text
+    lines (raising TimeoutError if the server is silent past `timeout`),
+    and `read_exact(n)` returns exactly n bytes (for binary payloads such
+    as the seg MASK body).  When a subprocess is attached, an exited server
+    is detected and the pipe drained before the failure is reported.
+
+    Shared by the ssd/seg stream clients so the line/binary buffering has
+    one tested implementation.
+    """
+
+    def __init__(self, fd, proc=None):
+        self.fd = fd
+        self.proc = proc
+        self.buf = bytearray()
+
+    def _fill(self):
+        try:
+            chunk = os.read(self.fd, 65536)
+        except OSError:
+            chunk = b""
+        self.buf += chunk
+        return chunk
+
+    def readline(self, timeout=None):
+        """Return the next line (no newline) as text, or None on clean EOF."""
+        deadline = None if timeout is None else time.monotonic() + timeout
+        while True:
+            pos = self.buf.find(b"\n")
+            if pos != -1:
+                line, self.buf = self.buf[:pos], self.buf[pos + 1:]
+                return line.decode("utf-8", "replace")
+            if self.proc is not None and self.proc.poll() is not None:
+                # server exited: drain whatever is left in the pipe
+                self._fill()
+                pos = self.buf.find(b"\n")
+                if pos == -1:
+                    if self.buf:
+                        line, self.buf = bytes(self.buf), bytearray()
+                        return line.decode("utf-8", "replace")
+                    raise RuntimeError(
+                        "inference server exited with code %s before the "
+                        "response was complete (see its diagnostics above)"
+                        % self.proc.returncode)
+                line, self.buf = self.buf[:pos], self.buf[pos + 1:]
+                return line.decode("utf-8", "replace")
+            if deadline is not None and time.monotonic() >= deadline:
+                raise TimeoutError("no server response within %.0f s" % timeout)
+            if deadline is not None:
+                ready, _, _ = select.select([self.fd], [], [],
+                                            max(0.001, deadline - time.monotonic()))
+                if not ready:
+                    continue
+            if not self._fill():
+                # EOF: return the trailing partial line, else None
+                line, self.buf = bytes(self.buf), bytearray()
+                return line.decode("utf-8", "replace") if line else None
+
+    def read_exact(self, n):
+        """Return exactly n bytes, drawing on any buffered remainder first."""
+        out = bytes(self.buf[:n])
+        self.buf = self.buf[n:]
+        while len(out) < n:
+            chunk = os.read(self.fd, max(n - len(out), 4096))
+            if not chunk:
+                raise RuntimeError("server closed while reading a binary payload")
+            out += chunk
+        return bytes(out)
+
+
+def windowed_fps(times, n=10):
+    """Average fps over the last n frame intervals (the `times` list holds
+    per-frame elapsed seconds, most recent last).  Honest for short runs:
+    excludes the one-time server compile and settles at the steady rate."""
+    tail = list(times)[-n:]
+    if not tail:
+        return 0.0
+    total = sum(tail)
+    return len(tail) / total if total > 0 else 0.0
+
+
 def load_labels(path):
     """(class_id, display_name) per line, like the 'n0xxxxx name' synset lines."""
     if not path or not os.path.isfile(path):
@@ -72,6 +168,8 @@ def load_labels(path):
 
 def preprocess(frame_bgr):
     """BGR uint8 image -> model input tensor (float32, NCHW, 1x3x224x224)."""
+    if cv2 is None:
+        die("OpenCV is required: pip install opencv-python numpy")
     small = cv2.resize(frame_bgr, (224, 224), interpolation=cv2.INTER_AREA)
     rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
     rgb = (rgb - MEAN) / STD
@@ -136,8 +234,14 @@ class MyriadClient:
         if len(data) != INPUT_BYTES:
             raise AssertionError("tensor is %d bytes, expected %d"
                                  % (len(data), INPUT_BYTES))
-        self.proc.stdin.write(data)
-        self.proc.stdin.flush()
+        try:
+            self.proc.stdin.write(data)
+            self.proc.stdin.flush()
+        except (BrokenPipeError, OSError) as e:
+            code = self.proc.poll()
+            raise RuntimeError(
+                "server closed its stdin pipe before the first response"
+                " (exit code %s: %s)" % (code, server_exit_meaning(code))) from e
         raw = self._read_exact(OUTPUT_BYTES)
         return np.frombuffer(raw, dtype="<f4")
 
@@ -151,5 +255,8 @@ class MyriadClient:
                 self.proc.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 os.killpg(os.getpgid(self.proc.pid), signal.SIGKILL)
-        self.proc.stdin.close()
-        self.proc.stdout.close()
+        for stream in (self.proc.stdin, self.proc.stdout):
+            try:
+                stream.close()
+            except Exception:
+                pass

@@ -21,7 +21,7 @@
 #include <string>
 #include <vector>
 
-#include "../half.hpp"
+#include "half.hpp"
 #include "seg_postprocess.hpp"
 
 static int failures = 0;

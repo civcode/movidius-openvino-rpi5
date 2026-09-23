@@ -48,6 +48,9 @@ except ImportError:
 HERE = os.path.dirname(os.path.abspath(__file__))
 INFER_SERVER = os.path.join(HERE, "infer-ssd-server.sh")
 
+sys.path.insert(0, os.path.dirname(HERE))  # examples/ (shared client helpers)
+from mobilenet_client import LinePipe, server_exit_meaning, windowed_fps
+
 
 def note(msg):
     print(msg, file=sys.stderr, flush=True)
@@ -59,58 +62,32 @@ def die(msg, code=1):
 
 
 class SsdClient:
-    """Drives the ssd_detect --stdin child process over its stdin/stdout pipes."""
+    """Drives the ssd_detect --stdin child process over its stdin/stdout pipes.
 
-    def __init__(self, backend, device, min_conf, request_timeout):
+    The frame response is read with raw os.read on the pipe fd (never the
+    buffered reader), via the shared LinePipe, because mixing select() with
+    a buffered reader can leave whole responses sitting in the reader's
+    internal buffer while select() reports the fd as empty.
+    """
+
+    def __init__(self, server_cmd, backend, device, min_conf, request_timeout):
         self.request_timeout = request_timeout
-        self._line_buf = bytearray()
         self.proc = subprocess.Popen(
-            [INFER_SERVER, backend, device, str(min_conf)],
+            [server_cmd, backend, device, str(min_conf)],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=None,            # server diagnostics stream to our terminal
             start_new_session=True, # so we can kill the whole group (docker too)
         )
+        self.pipe = LinePipe(self.proc.stdout.fileno(), self.proc)
         note("inference backend: %s device=%s min-conf=%s (server pid %d)"
              % (backend, device, min_conf, self.proc.pid))
 
-    # The frame response is read with raw os.read on the pipe fd (never the
-    # buffered reader), because mixing select() with a buffered reader can
-    # leave whole responses sitting in the reader's internal buffer while
-    # select() reports the fd as empty.  A chunk can contain several lines;
-    # they are split at the first newline and the rest is kept in _line_buf.
     def _readline(self):
-        deadline = time.monotonic() + self.request_timeout
-        while True:
-            pos = self._line_buf.find(b"\n")
-            if pos != -1:
-                line = bytes(self._line_buf[:pos])
-                del self._line_buf[:pos + 1]
-                return line.decode("ascii", "replace")
-            if self.proc.poll() is not None:
-                # server exited: drain what is left in the pipe, then decide
-                try:
-                    self._line_buf += os.read(self.proc.stdout.fileno(), 1 << 20)
-                except OSError:
-                    pass
-                pos = self._line_buf.find(b"\n")
-                if pos == -1:
-                    raise RuntimeError(
-                        "inference server exited with code %s before the frame "
-                        "response was complete (see its diagnostics above)" % self.proc.returncode)
-                line = bytes(self._line_buf[:pos])
-                del self._line_buf[:pos + 1]
-                return line.decode("ascii", "replace")
-            if time.monotonic() >= deadline:
-                raise RuntimeError("no frame response within %.0f s" % self.request_timeout)
-            ready, _, _ = select.select([self.proc.stdout], [], [],
-                                        max(0.001, deadline - time.monotonic()))
-            if not ready:
-                continue
-            chunk = os.read(self.proc.stdout.fileno(), 65536)
-            if not chunk:
-                raise RuntimeError("inference server closed the response pipe")
-            self._line_buf += chunk
+        try:
+            return self.pipe.readline(timeout=self.request_timeout)
+        except TimeoutError as ex:
+            raise RuntimeError(str(ex)) from ex
 
     def detect(self, rgb):
         """rgb: HxWx3 uint8 (RGB order); returns (w, h, infer_ms, detections).
@@ -120,23 +97,37 @@ class SsdClient:
             self.proc.stdin.write(struct.pack("<II", w, h))
             self.proc.stdin.write(np.ascontiguousarray(rgb, dtype=np.uint8).tobytes())
             self.proc.stdin.flush()
-        except BrokenPipeError:
-            raise RuntimeError("inference server closed its stdin pipe (see its "
-                               "diagnostics above)")
+        except (BrokenPipeError, OSError) as e:
+            code = self.proc.poll()
+            raise RuntimeError(
+                "server closed its stdin pipe before the first response"
+                " (exit code %s: %s)" % (code, server_exit_meaning(code))) from e
         line = self._readline()
+        if line is None:
+            raise RuntimeError("server closed the response pipe")
         parts = line.split()
+        if parts[0] == "ERROR":
+            raise RuntimeError("server reported: " + line[5:].strip())
         if parts[0] != "FRAME":
             raise RuntimeError("unexpected server line: %r" % line)
         infer_ms = float(parts[3])
         dets = []
         while True:
             line = self._readline()
+            if line is None:
+                raise RuntimeError("server closed the response before END")
             if line == "END":
                 break
-            p = line.split()
-            if p[0] != "DET" or len(p) != 7:
+            if line.startswith("ERROR"):
+                raise RuntimeError("server reported: " + line[5:].strip())
+            # The label may contain spaces (COCO has multi-word classes, e.g.
+            # 'fire hydrant'), so split off the five trailing numeric fields
+            # and treat everything between DET and them as the label.
+            p = line.split("DET", 1)[1].rsplit(" ", 5)
+            if len(p) != 6:
                 raise RuntimeError("unexpected server line: %r" % line)
-            dets.append((p[1], float(p[2]), int(p[3]), int(p[4]), int(p[5]), int(p[6])))
+            dets.append((p[0].strip(), float(p[1]), int(p[2]), int(p[3]),
+                        int(p[4]), int(p[5])))
         return w, h, infer_ms, dets
 
     def close(self):
@@ -185,12 +176,17 @@ def frame_source(args):
     """Yields BGR uint8 frames from the webcam or a looping image file."""
     if args.file:
         if args.file.lower().endswith(".ppm"):
-            frame = read_ppm(args.file)
+            # read_ppm returns RGB directly (PIL writes PPM in RGB order);
+            # the model expects RGB - no channel conversion at all.
+            rgb = read_ppm(args.file)
         else:
+            if cv2 is None:
+                die("OpenCV is required for %s (pip install opencv-python); "
+                    "or convert the file to .ppm" % args.file)
             frame = cv2.imread(args.file)
             if frame is None:
                 die("cannot read image %s (OpenCV %s)" % (args.file, cv2.__version__))
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         n = 0
         while args.frames == 0 or n < args.frames:
             yield rgb
@@ -224,6 +220,8 @@ def main():
     ap.add_argument("--camera", type=int, default=0, help="webcam index (/dev/videoN)")
     ap.add_argument("--camera-width", type=int, default=0, help="request capture width (0 = device default)")
     ap.add_argument("--camera-height", type=int, default=0, help="request capture height (0 = device default)")
+    ap.add_argument("infer_server", nargs="?", default=INFER_SERVER,
+                    help="server script to run for inference (see examples/ssd-detect/README.md)")
     ap.add_argument("--file", default=None,
                     help="read frames from this image file (.ppm/.jpg/.png) instead of the webcam")
     ap.add_argument("--frames", type=int, default=0,
@@ -244,7 +242,8 @@ def main():
     if cv2 is None and not (args.headless and args.file):
         die("OpenCV is required: pip install opencv-python numpy")
 
-    client = SsdClient(args.backend, args.device, args.min_conf, args.request_timeout)
+    client = SsdClient(args.infer_server, args.backend, args.device,
+                       args.min_conf, args.request_timeout)
 
     stopping = {"flag": False}
 
@@ -260,16 +259,17 @@ def main():
 
     t_start = time.monotonic()
     frame_no = 0
+    frame_times = []
     try:
         for rgb in frame_source(args):
             if stopping["flag"]:
                 break
             t0 = time.monotonic()
             w, h, infer_ms, dets = client.detect(rgb)
-            dt = time.monotonic() - t0
             frame_no += 1
+            frame_times.append(time.monotonic() - t0)
             t = time.monotonic() - t_start
-            fps = frame_no / t if t > 0 else 0.0
+            fps = windowed_fps(frame_times)
 
             # results always go to the command line
             if dets:

@@ -43,8 +43,9 @@
 #include <string>
 #include <vector>
 
-#include "../half.hpp"
-#include "../device_probe.hpp"  // shared MYRIAD device probe with retry
+#include "half.hpp"
+#include "device_probe.hpp"  // shared MYRIAD device probe with retry
+#include "frame_utils.hpp"   // shared PPM I/O + bilinear resize
 #include "seg_postprocess.hpp"
 
 #include "inference_engine.hpp"
@@ -101,9 +102,10 @@ int parseArgs(int argc, char** argv, Args& a) {
         } else if (s == "--debug") {
             a.debug = true;
         } else if (s == "-h" || s == "--help") {
-            std::cerr << "usage: seg_detect --model M --weights W --labels L "
-                         "[--image img.ppm | --stdin] [--device MYRIAD] "
-                         "[--mask-out m.ppm] [--debug]\n";
+            std::cout << "seg_detect --model <ir.xml> --weights <ir.bin> --labels <voc.txt>\n"
+                        << "            --image <photo.ppm> [--device MYRIAD] [--mask-out m.ppm] [--debug]\n"
+                        << "            --stdin   (stream mode: frames on stdin, see header)\n\n"
+                        << "Exit codes: 0 ok, 1 runtime failure, 2 device/CLI error, 3 model/shape error.\n";
             a.help = true;
             return 0;
         } else {
@@ -120,85 +122,6 @@ int parseArgs(int argc, char** argv, Args& a) {
         return 2;
     }
     return 0;
-}
-
-struct Ppm {
-    int w = 0, h = 0;
-    std::vector<uint8_t> rgb;  // w*h*3, row-major
-};
-
-Ppm readPpm(const std::string& path) {
-    std::ifstream in(path, std::ios::binary);
-    Ppm p;
-    if (!in)
-        throw std::runtime_error("cannot open " + path);
-    std::string magic;
-    in >> magic;
-    if (magic != "P6")
-        throw std::runtime_error("unsupported PPM magic: " + magic);
-    auto skipComments = [&]() {
-        int c;
-        while ((c = in.peek()) == '#') {
-            std::string line;
-            std::getline(in, line);
-        }
-    };
-    int w, h, maxv;
-    skipComments();
-    in >> w;
-    skipComments();
-    in >> h;
-    skipComments();
-    in >> maxv;
-    if (w <= 0 || h <= 0 || maxv != 255)
-        throw std::runtime_error("bad PPM dimensions: " + std::to_string(w) +
-                                 "x" + std::to_string(h) + " maxval " +
-                                 std::to_string(maxv));
-    in.get();  // single whitespace after maxval
-    p.w = w;
-    p.h = h;
-    p.rgb.assign((size_t)w * (size_t)h * 3, 0);
-    in.read((char*)p.rgb.data(), (std::streamsize)p.rgb.size());
-    if (!in)
-        throw std::runtime_error("truncated PPM data in " + path);
-    return p;
-}
-
-// Bilinear resize of an interleaved RGB buffer (used to get the client's
-// image to the model's input size).
-void bilinearResize(const uint8_t* src, int sw, int sh,
-                    std::vector<uint8_t>& dst, int dw, int dh) {
-    dst.assign((size_t)dw * (size_t)dh * 3, 0);
-    for (int y = 0; y < dh; ++y) {
-        float fy = (y + 0.5f) * sh / dh - 0.5f;
-        int y0 = (int)fy;
-        if (y0 < 0)
-            y0 = 0;
-        if (y0 > sh - 2)
-            y0 = sh - 2;
-        float wy = fy - y0;
-        int y1 = y0 + 1;
-        for (int x = 0; x < dw; ++x) {
-            float fx = (x + 0.5f) * sw / dw - 0.5f;
-            int x0 = (int)fx;
-            if (x0 < 0)
-                x0 = 0;
-            if (x0 > sw - 2)
-                x0 = sw - 2;
-            float wx = fx - x0;
-            int x1 = x0 + 1;
-            for (int c = 0; c < 3; ++c) {
-                float v00 = src[((size_t)y0 * sw + x0) * 3 + c];
-                float v01 = src[((size_t)y0 * sw + x1) * 3 + c];
-                float v10 = src[((size_t)y1 * sw + x0) * 3 + c];
-                float v11 = src[((size_t)y1 * sw + x1) * 3 + c];
-                float v = v00 * (1 - wx) * (1 - wy) + v01 * wx * (1 - wy) +
-                          v10 * (1 - wx) * wy + v11 * wx * wy;
-                dst[((size_t)y * dw + x) * 3 + c] =
-                    (uint8_t)(v + 0.5f);
-            }
-        }
-    }
 }
 
 std::string dimsToString(const SizeVector& dims) {
@@ -317,11 +240,12 @@ int main(int argc, char** argv) {
         }
         const std::size_t plane = (std::size_t)modelW * modelH;
 
-        // output: the MYRIAD TensorDesc can claim FP32 while handing back FP16,
-        // so decide the element width from the real byte size
+        // output: the MYRIAD TensorDesc can claim a precision that does not
+        // match the handed-back buffer, so the element width is decided from
+        // the real byte size, read after Infer (the blob storage is only
+        // final after the first inference)
         Blob::Ptr outBlob = request.GetBlob(outputName);
         const std::size_t outElems = outBlob->size();
-        const int outElemBytes = (int)(outBlob->byteSize() / outElems);
         const int outH = (int)outDims[1];
         const int outW = (int)outDims[2];
 
@@ -333,7 +257,7 @@ int main(int argc, char** argv) {
         // run one frame: raw 0..255 RGB (w*h*3) in, 513x513 class map out
         auto runFrame = [&](const std::vector<uint8_t>& rgb, int fw, int fh) -> FrameResult {
             const auto pp0 = std::chrono::steady_clock::now();
-            bilinearResize(rgb.data(), fw, fh, resized, modelW, modelH);
+            frameutils::bilinearResize(rgb.data(), fw, fh, resized, modelW, modelH);
             if (inElemBytes == 2) {
                 uint16_t* p = inBlob->buffer().as<uint16_t*>();
                 for (int c = 0; c < 3; ++c) {
@@ -359,6 +283,7 @@ int main(int argc, char** argv) {
             const auto ia = std::chrono::steady_clock::now();
             request.Infer();
             const auto ib = std::chrono::steady_clock::now();
+            const int outElemBytes = (int)(outBlob->byteSize() / outElems);  // post-Infer
 
             const auto post0 = std::chrono::steady_clock::now();
             // the IR declares the ArgMax output as I32 class ids, but the
@@ -392,7 +317,13 @@ int main(int argc, char** argv) {
         std::ios::sync_with_stdio(false);
 
         if (a.stdinMode) {
-            // stream mode: repeated frames on stdin (see the header comment)
+            // stream mode: repeated frames on stdin (see the header comment).
+            // stdout carries the frame protocol, so failures are reported as
+            // "ERROR <message>" on stdout (plus a copy on stderr) - the stream
+            // client turns that into a readable error instead of a bare
+            // "server closed the pipe".
+            int rc = 0;
+            try {
             uint32_t fw = 0, fh = 0;
             std::vector<uint8_t> frame;
             std::size_t frameNo = 0;
@@ -444,11 +375,17 @@ int main(int argc, char** argv) {
                 std::cout.flush();
             }
             std::cerr << "seg_detect: stream done (" << frameNo << " frame(s))\n";
-            return 0;
+            } catch (const std::exception& e) {
+                std::cout << "ERROR " << e.what() << "\n";
+                std::cout.flush();
+                std::cerr << "seg_detect: " << e.what() << "\n";
+                rc = 1;
+            }
+            return rc;
         }
 
         // single-image mode
-        Ppm img = readPpm(a.image);
+        frameutils::Ppm img = frameutils::readPpm(a.image);
         FrameResult res = runFrame(img.rgb, img.w, img.h);
 
         seg::ClassMap big;

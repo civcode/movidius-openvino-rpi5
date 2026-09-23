@@ -22,7 +22,7 @@
 #include <string>
 #include <vector>
 
-#include "../half.hpp"
+#include "half.hpp"
 
 namespace seg {
 
@@ -189,6 +189,9 @@ struct Labels {
     std::vector<std::string> names;  // index = class id
 };
 
+// Label files are "id<whitespace>name" lines (0 = background .. 20); the
+// first field is the id and the rest of the line is the name, so tab- and
+// space-separated files (and multi-word names) all work.
 inline Labels loadLabels(const std::string& path) {
     std::ifstream in(path);
     if (!in)
@@ -200,12 +203,19 @@ inline Labels loadLabels(const std::string& path) {
             line.pop_back();
         if (line.empty() || line[0] == '#')
             continue;
-        size_t tab = line.find('\t');
-        std::string key = (tab == std::string::npos) ? line : line.substr(0, tab);
-        std::string name = (tab == std::string::npos) ? "" : line.substr(tab + 1);
+        size_t sep = line.find_first_of(" \t");
+        if (sep == std::string::npos)
+            continue;
+        // skip runs of whitespace so the name starts clean
+        size_t nameStart = sep;
+        while (nameStart < line.size() &&
+               (line[nameStart] == ' ' || line[nameStart] == '\t'))
+            ++nameStart;
+        if (nameStart >= line.size())
+            continue;
         int id = 0;
         try {
-            id = std::stoi(key);
+            id = std::stoi(line.substr(0, sep));
         } catch (...) {
             continue;
         }
@@ -213,8 +223,10 @@ inline Labels loadLabels(const std::string& path) {
             continue;
         if ((int)names.size() <= id)
             names.resize((size_t)id + 1);
-        names[(size_t)id] = name;
+        names[(size_t)id] = line.substr(nameStart);
     }
+    if (names.empty())
+        throw std::runtime_error("no labels parsed from " + path);
     return Labels{names};
 }
 

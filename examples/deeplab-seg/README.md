@@ -63,8 +63,10 @@ python3 examples/deeplab-seg/seg_stream.py --file img.ppm      # single image, n
 python3 examples/deeplab-seg/seg_stream.py --mask-out mask.ppm # also save the class map
 ```
 
-`seg_stream.py` starts the server via `infer-seg-server.sh`
-(host/docker/auto backend, same pattern as the SSDLite launcher).
+`--file` keeps the image at its native resolution (the C++ server resizes
+internally).  `seg_stream.py` starts the server via `infer-seg-server.sh`
+(host/docker/auto backend, same pattern as the SSDLite launcher);
+pass a different launcher as the first positional argument.
 
 ## Streaming protocol (`seg_detect --stdin`)
 
@@ -102,7 +104,8 @@ Startup diagnostics go to stderr; stdout carries only the protocol.
 
 ## Visualization
 
-Class-map PPM (`--mask-out`): single-channel P6, pixel value = class id.
+Class-map PPM (`--mask-out`): single-channel P6 (maxval 255), 1 byte/pixel,
+value = class id 0..20.
 The GUI client draws a fixed 21-colour Pascal VOC palette over the frame
 (alpha 0.4); class statistics go to stderr/overlay text.  The mask file
 and the overlay are separate artifacts — the mask is never drawn through

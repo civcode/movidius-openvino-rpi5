@@ -224,6 +224,7 @@ ARG EXPECTED_ELF_CLASS=ELF32
 ARG EXPECTED_ELF_MACHINE_REGEX=ARM
 COPY smoke-test /work/smoke
 COPY half.hpp /work/half.hpp
+COPY cmake /work/cmake
 
 RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
     set -eux; \
@@ -256,6 +257,7 @@ ARG EXPECTED_ELF_CLASS=ELF32
 ARG EXPECTED_ELF_MACHINE_REGEX=ARM
 COPY mobilenet-test /work/mnb
 COPY half.hpp /work/half.hpp
+COPY cmake /work/cmake
 
 RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
     set -eux; \
@@ -288,6 +290,7 @@ ARG EXPECTED_ELF_MACHINE_REGEX=ARM
 COPY examples/webcam /work/webcam
 COPY half.hpp /work/half.hpp
 COPY device_probe.hpp /work/device_probe.hpp
+COPY cmake /work/cmake
 
 RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
     set -eux; \
@@ -321,6 +324,8 @@ ARG EXPECTED_ELF_MACHINE_REGEX=ARM
 COPY examples/ssd-detect /work/ssd
 COPY half.hpp /work/half.hpp
 COPY device_probe.hpp /work/device_probe.hpp
+COPY frame_utils.hpp /work/frame_utils.hpp
+COPY cmake /work/cmake
 
 RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
     set -eux; \
@@ -354,6 +359,8 @@ ARG EXPECTED_ELF_MACHINE_REGEX=ARM
 COPY examples/deeplab-seg /work/seg
 COPY half.hpp /work/half.hpp
 COPY device_probe.hpp /work/device_probe.hpp
+COPY frame_utils.hpp /work/frame_utils.hpp
+COPY cmake /work/cmake
 
 RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
     set -eux; \

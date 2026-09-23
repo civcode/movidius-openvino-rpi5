@@ -28,10 +28,13 @@ Examples:
   python3 examples/accuracy-test/accuracy_test.py --fail-under 80
 EOF
 }
-if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-    usage
-    exit 0
-fi
+# -h/--help is accepted at any position
+for _arg in "$@"; do
+    if [[ "${_arg}" == "-h" || "${_arg}" == "--help" ]]; then
+        usage
+        exit 0
+    fi
+done
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEST="${HERE}/images"
@@ -40,6 +43,11 @@ URL="${IMAGENET_SAMPLE_REPO:-https://github.com/EliSchwartz/imagenet-sample-imag
 if [[ -d "${DEST}/.git" ]]; then
     echo "already cloned - updating"
     git -C "${DEST}" pull --ff-only
+elif [[ -e "${DEST}" && -n "$(ls -A "${DEST}" 2>/dev/null)" ]]; then
+    # a non-empty directory that is not our clone: never delete user data
+    echo "error: ${DEST} exists, is non-empty and is not a git clone;" >&2
+    echo "       refusing to overwrite it - move or rename it first" >&2
+    exit 1
 else
     rm -rf "${DEST}"
     git clone --depth 1 "${URL}" "${DEST}"

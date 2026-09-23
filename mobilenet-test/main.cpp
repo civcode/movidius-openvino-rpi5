@@ -33,7 +33,7 @@
 #include <string>
 #include <vector>
 
-#include "../half.hpp"  // shared IEEE-754 f16<->f32 conversion (unit-tested in examples/webcam/test_half.cpp)
+#include "half.hpp"  // shared IEEE-754 f16<->f32 conversion (unit-tested in examples/webcam/test_half.cpp)
 
 using namespace InferenceEngine;
 
