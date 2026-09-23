@@ -29,7 +29,27 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IMAGE="${IMAGE:-openvino-2020.3-rpi5:latest}"
+# shellcheck source=scripts/platform.sh
+source "${ROOT}/scripts/platform.sh"
+
+# Consume a leading --platform/-p <target> before mode parsing; it selects the
+# image but must not be forwarded into the container as binary arguments.
+_req="$(platform_default_request)"
+_reargs=()
+_args=("$@")
+for (( _i=0; _i<${#_args[@]}; _i++ )); do
+    case "${_args[_i]}" in
+        --platform|-p)
+            (( _i < ${#_args[@]} - 1 )) || { echo "missing value for ${_args[_i]}" >&2; exit 2; }
+            _req="${_args[_i+1]}"
+            _i=$((_i + 1))
+            ;;
+        *) _reargs+=("${_args[_i]}") ;;
+    esac
+done
+set -- "${_reargs[@]+"${_reargs[@]}"}"
+platform_load "${_req}"
+IMAGE="${IMAGE:-${DEFAULT_IMAGE}}"
 MODE="${1:-demo}"
 case "${MODE}" in
     demo|--demo|list|demo-list|shell|bench|custom|mobilenet)
@@ -44,7 +64,7 @@ fi
 
 DOCKER_ARGS=(
     --rm
-    --platform linux/arm/v7
+    --platform "${DOCKER_PLATFORM}"
     --name "ov203-smoke-$$"
     --network=host
     -v /dev:/dev

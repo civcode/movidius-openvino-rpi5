@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# verify.sh - one report that shows the whole stack works: host, arm32 userspace,
-# the built runtime image, and a real inference on the Movidius stick.
+# verify.sh - one report that shows the whole stack works: host, target
+# userspace, the built runtime image, and a real inference on the Movidius stick.
 #
 #   ./scripts/verify.sh > logs/VERIFICATION.md
 #   ./scripts/verify.sh --no-device     # skip the two steps that need the stick
@@ -10,8 +10,18 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT}"
+# Load platform variables without inheriting platform.sh's `set -e` (this
+# script is designed to print every section even when a step fails).
+platform_dump=$(bash -c "source scripts/platform.sh; platform_load \"\$(platform_default_request)\"; \
+    printf 'TARGET=%s\\nDOCKER_PLATFORM=%s\\nDEFAULT_IMAGE=%s\\nEXPECTED_ELF_CLASS=%s\\nEXPECTED_ELF_MACHINE_ID=%s\\nTARGET_LIB_DIR=%s\\n' \
+    \"\${TARGET}\" \"\${DOCKER_PLATFORM}\" \"\${DEFAULT_IMAGE}\" \"\${EXPECTED_ELF_CLASS}\" \"\${EXPECTED_ELF_MACHINE_ID}\" \"\${TARGET_LIB_DIR}\"" )
+eval "${platform_dump}"
 
-IMAGE="${IMAGE:-openvino-2020.3-rpi5:latest}"
+# docker image .Architecture per target: armv7:arm, arm64:arm64, amd64:amd64
+IMAGE_ARCH="armv7:arm arm64:arm64 amd64:amd64"
+EXPECT_IMAGE_ARCH=$(for p in ${IMAGE_ARCH}; do [[ "${p%%:*}" == "${TARGET}" ]] && printf '%s' "${p#*:}"; done)
+
+IMAGE="${IMAGE:-${DEFAULT_IMAGE}}"
 WITH_DEVICE=1
 [[ "${1:-}" == "--no-device" ]] && WITH_DEVICE=0
 
@@ -54,34 +64,44 @@ docker version --format 'server {{.Server.Version}} {{.Server.Os}}/{{.Server.Arc
 docker buildx version | head -1
 docker info --format 'docker info: server={{.ServerVersion}} os={{.OSType}} arch={{.Architecture}} kernel={{.KernelVersion}} cpus={{.NCPU}} containers={{.Containers}} images={{.Images}} storage={{.Driver}} cgroup={{.CgroupDriver}}'
 docker image inspect "${IMAGE}" \
-    --format 'image {{.Id}} {{.Os}}/{{.Architecture}} size={{.Size}}' 2>/dev/null \
-    || echo "image ${IMAGE} not built yet (run ./build.sh)"
+    --format 'image {{.Id}} {{.Os}}/{{.Architecture}} size={{.Size}' 2>/dev/null \
+    || echo "image ${IMAGE} not built yet (run ./build.sh --platform ${TARGET})"
+docker image inspect --format '{{.Architecture}}' "${IMAGE}" 2>/dev/null | \
+    grep -qx "${EXPECT_IMAGE_ARCH}" || \
+    echo "ERROR: image architecture does not match target ${TARGET} (expected '${EXPECT_IMAGE_ARCH}')"
 end
 
 # ---------------------------------------------------------------------------
-sec '3. The container really runs 32-bit armv7 userspace'
-docker run --rm --platform linux/arm/v7 "${IMAGE}" bash -c '
-    echo "kernel   : $(uname -m)          (the host kernel, arm32 processes run on it)"
+sec "3. The container userspace matches target ${TARGET} (${EXPECTED_ELF_CLASS})"
+docker run --rm --platform "${DOCKER_PLATFORM}" "${IMAGE}" bash -c '
+    echo "kernel   : $(uname -m)          (the host kernel)"
     echo "userspace: $(getconf LONG_BIT)-bit"
     echo "uname -P : $(uname -p 2>/dev/null || echo unknown)"
     echo "hello_myriad ELF header:"
     od -An -tx1 -N20 /opt/openvino/bin/hello_myriad | sed "s/^/  /"
-    echo "  EI_CLASS=01 (ELF32), e_machine=28 00 (EM_ARM = 0x0028)"
+    echo "  bytes: EI_CLASS = offset 4, e_machine = offset 18-19 (little endian)"
     echo "linked libraries (rpath resolved):"
     ldd /opt/openvino/bin/hello_myriad | sed "s/^/  /"
 ' 2>&1
+case "${EXPECTED_ELF_CLASS}" in
+    ELF32) EI_BYTE=1 ;;
+    ELF64) EI_BYTE=2 ;;
+esac
+printf '  expected for %s: EI_CLASS=%d (%s), e_machine=%02x %02x (machine id %d)\n' \
+    "${TARGET}" "${EI_BYTE}" "${EXPECTED_ELF_CLASS}" \
+    $(( EXPECTED_ELF_MACHINE_ID & 0xff )) $(( EXPECTED_ELF_MACHINE_ID >> 8 )) \
+    "${EXPECTED_ELF_MACHINE_ID}"
 end
 
 # ---------------------------------------------------------------------------
 sec '4. Runtime image contents'
-docker run --rm --platform linux/arm/v7 --entrypoint bash "${IMAGE}" -c '
-    echo "plugins shipped in plugins.xml:"
-    grep -o "plugin name=\"[A-Z]*\"" /opt/openvino/inference_engine/lib/armv7l/plugins.xml
-    echo "firmware next to libmyriadPlugin.so (getFirmwarePath uses dladdr):"
-    ls -1 /opt/openvino/inference_engine/lib/armv7l/*.mvcmd
-    echo "ngraph part of the install tree:"
-    ls -1 /opt/openvino/ngraph/lib
-' 2>&1
+docker run --rm --platform "${DOCKER_PLATFORM}" --entrypoint bash "${IMAGE}" -c \
+    "echo \"plugins shipped in plugins.xml:\"
+    grep -o \"plugin name=\\\"[A-Z]*\\\"\" /opt/openvino/inference_engine/lib/${TARGET_LIB_DIR}/plugins.xml
+    echo \"firmware next to libmyriadPlugin.so (getFirmwarePath uses dladdr):\"
+    ls -1 /opt/openvino/inference_engine/lib/${TARGET_LIB_DIR}/*.mvcmd
+    echo \"ngraph part of the install tree:\"
+    ls -1 /opt/openvino/ngraph/lib" 2>&1
 end
 
 if [[ ${WITH_DEVICE} == 1 ]]; then
@@ -101,15 +121,15 @@ if [[ ${WITH_DEVICE} == 1 ]]; then
 
     # -----------------------------------------------------------------------
     sec '7. compile_tool from the same build (blob produced on the VPU)'
-    timeout 600 docker run --rm --platform linux/arm/v7 --network=host \
+    timeout 600 docker run --rm --platform "${DOCKER_PLATFORM}" --network=host \
         -v /dev:/dev --device-cgroup-rule='c 189:* rwm' --entrypoint bash \
-        -v "${ROOT}/smoke-test/model:/model:ro" -v "${ROOT}/work:/out" "${IMAGE}" -c '
-            export LD_LIBRARY_PATH=/opt/openvino/inference_engine/lib/armv7l:/opt/openvino/ngraph/lib
+        -v "${ROOT}/smoke-test/model:/model:ro" -v "${ROOT}/work:/out" "${IMAGE}" -c \
+        "set -eu
+            export LD_LIBRARY_PATH=/opt/openvino/inference_engine/lib/${TARGET_LIB_DIR}:/opt/openvino/ngraph/lib
             rm -f /out/verify_blob.bin
-            /opt/openvino/inference_engine/lib/armv7l/compile_tool -m /model/model.xml -d MYRIAD -ip FP16 -o /out/verify_blob.bin 2>&1 | tail -3
+            /opt/openvino/inference_engine/lib/${TARGET_LIB_DIR}/compile_tool -m /model/model.xml -d MYRIAD -ip FP16 -o /out/verify_blob.bin 2>&1 | tail -3
             md5sum /out/verify_blob.bin
-            ls -l /out/verify_blob.bin
-        ' 2>&1 | tail -6
+            ls -l /out/verify_blob.bin" 2>&1 | tail -6
     if [[ -f work/reference-check/blob/blob.bin ]]; then
         echo "blob produced by the official Intel raspbian runtime (same IR, same -d MYRIAD):"
         md5sum work/reference-check/blob/blob.bin

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
 # scripts/host-run.sh - run the extracted OpenVINO 2020.3.2 runtime directly on
-# the aarch64 host: no Docker, no container, no QEMU at inference time.
+# the host: no Docker, no container, no QEMU at inference time.
 #
 #   ./scripts/host-run.sh list                    device enumeration
 #   ./scripts/host-run.sh demo                    tiny model on the stick
@@ -11,46 +11,84 @@
 #                                 --blob  vendor/models/blobs/mobilenet-v2.blob
 #   ./scripts/host-run.sh shell                   bash with ov_* wrappers on PATH
 #
-# Everything is a host path here (no /models mount): the binaries are the arm32v7
-# ones from the image, executed by the armhf loader extracted with
-# ./scripts/pull-runtime.sh.  See logs/HOST-RUN.md for the two host-side
-# requirements (USB node permissions, /tmp/mvnc.mutex ownership).
+# Target selection follows scripts/platform.sh (OV_PLATFORM / TARGET env or
+# host-CPU auto-detection):
+#   armv7  the extracted binaries are ARMHF; they run through the armhf loader
+#          (sysroot/lib/ld-linux-armhf.so.3) pulled by pull-runtime.sh, either
+#          on an armv7l host or an aarch64 host in compat mode.
+#   arm64  native AArch64 host; the binaries run directly, no loader.
+#   amd64  native x86_64 host; the binaries run directly, no loader.
+#
+# See logs/HOST-RUN.md for the two host-side requirements (USB node
+# permissions, /tmp/mvnc.mutex ownership).
 # ---------------------------------------------------------------------------
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/platform.sh
+source "${ROOT}/scripts/platform.sh"
+platform_load "$(platform_default_request)"
+
 RT="${ROOT}/work/host-runtime"
-SYSROOT="${RT}/sysroot"
 OV="${RT}/openvino"
-LD="${SYSROOT}/lib/ld-linux-armhf.so.3"
-LP="${SYSROOT}/lib/arm-linux-gnueabihf:${SYSROOT}/usr/lib/arm-linux-gnueabihf:${OV}/inference_engine/lib/armv7l:${OV}/ngraph/lib"
-BIN="${RT}/bin"
+LIBDIR="${OV}/inference_engine/lib/${TARGET_LIB_DIR}"
 IR="${IR:-fp16}"
 MODELS="${ROOT}/vendor/models"
 
-if [[ ! -x "${LD}" || ! -d "${OV}" ]]; then
+# Host acceptance: target:host-CPU pairs that are allowed to run this target.
+# armv7 binaries run on an aarch64 host in compat mode (CONFIG_COMPAT=y).
+HOST_ACCEPT="armv7:armv7l armv7:aarch64 arm64:aarch64 amd64:x86_64"
+host_cpu="$(uname -m)"
+accepted=0
+for pair in ${HOST_ACCEPT}; do
+    [[ "${pair%%:*}" == "${TARGET}" && "${pair#*:}" == "${host_cpu}" ]] && accepted=1
+done
+if (( ! accepted )); then
+    echo "target '${TARGET}' cannot run on host CPU '${host_cpu}' (accepted: ${HOST_ACCEPT});" >&2
+    echo "try OV_PLATFORM=armv7|arm64|amd64 and rebuild with ./build.sh --platform <target>" >&2
+    exit 1
+fi
+
+if [[ ! -d "${OV}" || ! -x "${OV}/bin/hello_myriad" ]]; then
     echo "work/host-runtime is not populated yet - running ./scripts/pull-runtime.sh" >&2
     "${ROOT}/scripts/pull-runtime.sh"
 fi
 
-# armhf glibc resolves a SONAME only from a directory it can search; the PT_INTERP
-# /lib/ld-linux-armhf.so.3 does not exist on the host, so every binary needs the
-# loader wrapper below.  They are cheap and regenerated on every call.
-mkdir -p "${BIN}"
-for b in "${OV}/bin/"* "${OV}/inference_engine/lib/armv7l/compile_tool"; do
-    [[ -x "${b}" && ! -d "${b}" ]] || continue
-    name="$(basename "${b}")"
-    cat > "${BIN}/${name}" <<EOF
+if [[ "${TARGET}" == armv7 ]]; then
+    # armhf glibc resolves a SONAME only from a directory it can search; the
+    # PT_INTERP /lib/ld-linux-armhf.so.3 does not exist on an aarch64 host, so
+    # every binary needs the loader wrapper below.  They are cheap and
+    # regenerated on every call.
+    SYSROOT="${RT}/sysroot"
+    LD="${SYSROOT}/lib/ld-linux-armhf.so.3"
+    if [[ ! -x "${LD}" ]]; then
+        echo "armhf sysroot missing - re-running ./scripts/pull-runtime.sh" >&2
+        "${ROOT}/scripts/pull-runtime.sh"
+    fi
+    LP="${SYSROOT}/lib/arm-linux-gnueabihf:${SYSROOT}/usr/lib/arm-linux-gnueabihf:${LIBDIR}:${OV}/ngraph/lib"
+    BIN="${RT}/bin"
+    mkdir -p "${BIN}"
+    for b in "${OV}/bin/"* "${LIBDIR}/compile_tool"; do
+        [[ -x "${b}" && ! -d "${b}" ]] || continue
+        name="$(basename "${b}")"
+        cat > "${BIN}/${name}" <<EOF
 #!/usr/bin/env bash
 exec "${LD}" --library-path "${LP}" "${b}" "\$@"
 EOF
-    chmod +x "${BIN}/${name}"
-done
-ov_run() { "${LD}" --library-path "${LP}" "$@"; }
+        chmod +x "${BIN}/${name}"
+    done
+    ov_run() { "${LD}" --library-path "${LP}" "$@"; }
+else
+    # Native target: binaries match the host, so no loader is needed.
+    LP="${LIBDIR}:${OV}/ngraph/lib"
+    BIN="${OV}/bin"
+    ov_run() { LD_LIBRARY_PATH="${LP}" "$@"; }
+fi
 
-# mvnc's global lock is a fixed path, open()ed with O_CREAT by whoever gets there
-# first.  With fs.protected_regular != 0 (Debian: 2) a file created by another
-# user in world-writable /tmp is not openable - even by root - and mvnc aborts
-# with "global mutex initialization failed".  Warn instead of exiting(1).
+# mvnc's global lock is a fixed path, open()ed with O_CREAT by whoever gets
+# there first.  With fs.protected_regular != 0 (Debian: 2) a file created by
+# another user in world-writable /tmp is not openable - even by root - and
+# mvnc aborts with "global mutex initialization failed".  Warn instead of
+# exiting(1).
 mutex="${MVNC_MUTEX:-/tmp/mvnc.mutex}"
 if [[ -e "${mutex}" ]]; then
     owner="$(stat -c '%u %a' "${mutex}")"
@@ -102,15 +140,15 @@ case "${MODE}" in
         done
         [[ -n "${model}" && -n "${blob}" ]] || { echo "compile needs --model <xml> --blob <path>" >&2; exit 2; }
         mkdir -p "$(dirname "${blob}")"
-        ov_run "${OV}/inference_engine/lib/armv7l/compile_tool" \
+        ov_run "${LIBDIR}/compile_tool" \
             -m "${model}" -d MYRIAD -o "${blob}"
         ls -l "${blob}"
         ;;
     shell)
-        echo "host-native OpenVINO 2020.3 shell: ov wrappers on PATH (hello_myriad,"
-        echo "mobilenet_classify, compile_tool).  LD_LIBRARY_PATH is exported too."
+        echo "host-native OpenVINO 2020.3 shell (${TARGET}): hello_myriad, mobilenet_classify,"
+        echo "compile_tool reachable via PATH.  LD_LIBRARY_PATH is exported too."
         LD_LIBRARY_PATH="${LP}" PATH="${BIN}:${PATH}" PS1='hostov# ' exec bash
         ;;
     *)
-        sed -n '2,22p' "$0"; exit 2 ;;
+        sed -n '2,24p' "$0"; exit 2 ;;
 esac

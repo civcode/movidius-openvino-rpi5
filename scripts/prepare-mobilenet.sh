@@ -12,10 +12,10 @@
 #     vendor/openvino-2020.3.2/model-optimizer, staged into work/mo-2020.3 without
 #     its unit tests (mo/utils/import_extensions.py imports every .py file it sees,
 #     and those tests import a test-only helper that is not part of the tree),
-#   * Model Optimizer itself runs in a native arm64 python:3.8-slim container: MO is
-#     pure Python, and the Pi 5 kernel executes arm64 containers natively, so no
-#     emulation and no armhf wheels are needed.  Inference still runs in the arm32v7
-#     OpenVINO container built by ./build.sh.
+#   * Model Optimizer itself runs in a native python:3.8-slim container matching
+#     the host architecture: MO is pure Python and the IR it emits is
+#     architecture-independent, so no emulation is needed anywhere.  Inference
+#     still runs in the OpenVINO container built by ./build.sh for the target.
 #
 # Usage:
 #   ./scripts/prepare-mobilenet.sh
@@ -31,10 +31,23 @@ MO_STAGE=work/mo-2020.3
 MODELS=vendor/models
 MODEL_NAME=mobilenet-v2-ov203
 MO_IMAGE="${MO_IMAGE:-python:3.8-slim}"
-MO_PLATFORM="${MO_PLATFORM:-linux/arm64}"
+# The converter runs natively on the host (override with MO_PLATFORM=... if you
+# want to convert under emulation instead).
+if [[ -z "${MO_PLATFORM:-}" ]]; then
+	case "$(uname -m)" in
+		x86_64)  MO_PLATFORM=linux/amd64 ;;
+		aarch64) MO_PLATFORM=linux/arm64 ;;
+		armv7l)  MO_PLATFORM=linux/arm/v7 ;;
+		*)       MO_PLATFORM="linux/$(uname -m)" ;;
+	esac
+fi
 PIP_PINS='numpy==1.21.6 networkx==2.6.3 protobuf==3.19.6 defusedxml==0.7.1 onnx==1.12.0'
 
-ZOO_TGZ_URL='https://s3.amazonaws.com/download.onnx/models/opset_7/mobilenetv2-7.tar.gz'
+# The legacy S3 bucket (download.onnx) now answers 403; the same artifact is
+# hosted in the onnx/models repo (Git LFS, fetched via the media endpoint).
+# The sha256 below is unchanged - it is the LFS oid of the file.
+ZOO_TGZ_URL='https://media.githubusercontent.com/media/onnx/models/main/validated/vision/classification/mobilenet/model/mobilenetv2-7.tar.gz'
+ZOO_TGZ_URL_FALLBACK='https://s3.amazonaws.com/download.onnx/models/opset_7/mobilenetv2-7.tar.gz'
 ZOO_TGZ_SHA256='b463ad62dae99f13afd88549ca7d43e9bda6876614f3592ebb41177e1db0fcc5'
 ZOO_ONNX_SHA256='c1c513582d56afceff8516c73804e484c81c6a830712ab6d682253f4a3cd042f'
 LABELS_URL='https://raw.githubusercontent.com/onnx/models/main/validated/vision/classification/synset.txt'
@@ -51,10 +64,19 @@ IMAGE_NAMES=(dog cat eagle banana cup)
 
 mkdir -p "$MODELS/onnx" "$MODELS/labels" "$MODELS/images/src" "$MODELS/test_data"
 
-fetch() {  # $1 = url, $2 = path, $3 = optional sha256
+fetch() {  # $1 = url(s, space separated), $2 = path, $3 = optional sha256
 	if [[ ! -f "$2" ]]; then
-		echo "    fetching ${1##*/} -> $2"
-		curl -sSfL --max-time 900 -o "$2" "$1"
+		for url in $1; do
+			echo "    fetching ${url##*/} -> $2"
+			if curl -sSfL --max-time 900 -o "$2" "$url"; then
+				break
+			fi
+			rm -f "$2"
+			if [[ "${url}" == "${1##* }" ]]; then
+				echo "    all download URLs failed for ${url##*/}" >&2
+				return 1
+			fi
+		done
 	fi
 	if [[ -n "${3:-}" ]]; then
 		echo "$3  $2" | sha256sum -c -
@@ -63,7 +85,7 @@ fetch() {  # $1 = url, $2 = path, $3 = optional sha256
 
 # --------------------------------------------------------- 1. model + test tensors
 echo "== ONNX model zoo: mobilenetv2-7 =="
-fetch "$ZOO_TGZ_URL" "$MODELS/onnx/mobilenetv2-7.tar.gz" "$ZOO_TGZ_SHA256"
+fetch "${ZOO_TGZ_URL} ${ZOO_TGZ_URL_FALLBACK}" "$MODELS/onnx/mobilenetv2-7.tar.gz" "$ZOO_TGZ_SHA256"
 tar xzf "$MODELS/onnx/mobilenetv2-7.tar.gz" -C "$MODELS/onnx" \
 	--strip-components=1 mobilenetv2-7/mobilenetv2-7.onnx
 tar xzf "$MODELS/onnx/mobilenetv2-7.tar.gz" -C "$MODELS/test_data" \
