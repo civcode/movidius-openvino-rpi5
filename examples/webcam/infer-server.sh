@@ -22,6 +22,44 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${ROOT}/scripts/platform.sh"
 platform_load "$(platform_default_request)"
 
+usage() {
+    cat <<EOF
+Usage: $(basename "$0") [backend] [ir] [device]
+
+Starts mobilenet_server, the MYRIAD inference backend for the webcam
+example.  The server inherits this script's stdin/stdout (the binary
+tensor protocol of mobilenet_server) and prints startup diagnostics on
+stderr.  Normally you do not run it directly - webcam_mobilenet.py
+starts it for you.
+
+Arguments (all optional, positional):
+  backend    host | docker | auto      default: auto
+               host   - native binaries from work/host-runtime (no Docker)
+               docker - inside the runtime image built by ./build.sh
+               auto   - host if the runtime was pulled, otherwise docker
+  ir         fp16 | fp32               default: fp16
+  device     MYRIAD                    default: MYRIAD
+
+Environment overrides:
+  IR=<fp16|fp32>            inference precision
+  IMAGE=<name>              Docker image (default: ${DEFAULT_IMAGE})
+  OV_PLATFORM=<p>           target platform (see scripts/platform.sh)
+  MVNC_MUTEX=<path>         mvnc global lock file (default /tmp/mvnc.mutex)
+
+Examples:
+  # run the client (it starts the server itself):
+  python3 examples/webcam/webcam_mobilenet.py
+
+  # drive the server directly with the reference fp32 input tensor:
+  examples/webcam/infer-server.sh docker fp16 MYRIAD \\
+      < vendor/models/test_data/input_0.f32
+EOF
+}
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+fi
+
 BACKEND="${1:-auto}"
 IR="${2:-${IR:-fp16}}"
 DEVICE="${3:-MYRIAD}"

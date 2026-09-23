@@ -22,6 +22,50 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${ROOT}/scripts/platform.sh"
 platform_load "$(platform_default_request)"
 
+usage() {
+    cat <<EOF
+Usage: $(basename "$0") [backend] [device] [min-conf]
+
+Starts ssd_detect --stdin, the MYRIAD inference server for the SSDLite
+webcam detection example.  The server inherits this script's
+stdin/stdout (the binary frame protocol of ssd_detect --stdin) and prints
+startup diagnostics on stderr.  Normally you do not run it directly -
+ssd_stream.py starts it for you.
+
+Arguments (all optional, positional):
+  backend    host | docker | auto      default: auto
+               host   - native binaries from work/host-runtime (no Docker)
+               docker - inside the runtime image built by ./build.sh
+               auto   - host if pulled, else docker, else in-image fallback
+  device     MYRIAD                    default: MYRIAD
+  min-conf   float                     default: 0.5
+               keep detections with score >= min-conf
+
+Environment overrides:
+  IMAGE=<name>              Docker image (default: ${DEFAULT_IMAGE})
+  OV_PLATFORM=<p>           target platform (see scripts/platform.sh)
+  MVNC_MUTEX=<path>         mvnc global lock file (default /tmp/mvnc.mutex)
+
+Protocol (stdin -> stdout):
+  in : repeated frames, each = uint32 width + uint32 height (little endian)
+       + width*height*3 RGB bytes
+  out: per frame:  "FRAME <w> <h> <infer_ms>"
+               "DET <label> <score> <x1> <y1> <x2> <y2>"   (0..N lines)
+               "END"
+
+Examples:
+  # run the client (it starts the server itself):
+  python3 examples/ssd-detect/ssd_stream.py --headless
+
+  # drive the server directly with one binary frame:
+  examples/ssd-detect/infer-ssd-server.sh docker MYRIAD 0.5 < /tmp/frame.bin
+EOF
+}
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+fi
+
 BACKEND="${1:-auto}"
 DEVICE="${2:-MYRIAD}"
 MINCONF="${3:-0.5}"
