@@ -287,6 +287,7 @@ ARG EXPECTED_ELF_CLASS=ELF32
 ARG EXPECTED_ELF_MACHINE_REGEX=ARM
 COPY examples/webcam /work/webcam
 COPY half.hpp /work/half.hpp
+COPY device_probe.hpp /work/device_probe.hpp
 
 RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
     set -eux; \
@@ -319,6 +320,7 @@ ARG EXPECTED_ELF_CLASS=ELF32
 ARG EXPECTED_ELF_MACHINE_REGEX=ARM
 COPY examples/ssd-detect /work/ssd
 COPY half.hpp /work/half.hpp
+COPY device_probe.hpp /work/device_probe.hpp
 
 RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
     set -eux; \
@@ -351,6 +353,7 @@ ARG EXPECTED_ELF_CLASS=ELF32
 ARG EXPECTED_ELF_MACHINE_REGEX=ARM
 COPY examples/deeplab-seg /work/seg
 COPY half.hpp /work/half.hpp
+COPY device_probe.hpp /work/device_probe.hpp
 
 RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
     set -eux; \

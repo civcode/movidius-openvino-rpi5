@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "../half.hpp"  // shared IEEE-754 f16<->f32 conversion (unit-tested in examples/webcam/test_half.cpp)
+#include "../device_probe.hpp"  // shared MYRIAD device probe with retry
 using namespace InferenceEngine;
 
 namespace {
@@ -66,8 +67,8 @@ int main(int argc, char** argv) {
 
     try {
         Core ie;
-        const auto devices = ie.GetAvailableDevices();
-        if (std::find(devices.begin(), devices.end(), device) == devices.end()) {
+        std::vector<std::string> devices;
+        if (!waitDevice(ie, device, devices)) {
             std::fprintf(stderr, "device %s not available (have: ", device.c_str());
             for (size_t i = 0; i < devices.size(); ++i) {
                 std::fprintf(stderr, "%s%s", i ? ", " : "", devices[i].c_str());

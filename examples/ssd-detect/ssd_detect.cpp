@@ -39,6 +39,7 @@
 #include <vector>
 
 #include "../half.hpp"
+#include "../device_probe.hpp"  // shared MYRIAD device probe with retry
 #include "ssd_postprocess.hpp"
 
 #include "inference_engine.hpp"
@@ -176,12 +177,13 @@ int main(int argc, char** argv) {
 
     try {
         Core ie;
-        const auto devices = ie.GetAvailableDevices();
-        if (std::find(devices.begin(), devices.end(), opt.device) == devices.end()) {
+        std::vector<std::string> devices;
+        if (!waitDevice(ie, opt.device, devices)) {
+            // whole message on stderr: in stream mode stdout is the frame protocol
             std::cerr << "device " << opt.device << " not available (have: ";
             for (size_t i = 0; i < devices.size(); ++i)
-                std::cout << (i ? ", " : "") << devices[i];
-            std::cout << ")\n";
+                std::cerr << (i ? ", " : "") << devices[i];
+            std::cerr << ")\n";
             return 2;
         }
 

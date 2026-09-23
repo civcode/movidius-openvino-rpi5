@@ -85,9 +85,10 @@ loop runs at the device rate.
 
 ## Troubleshooting
 
-* `device MYRIAD not available` - run `./scripts/verify.sh --no-device`
-  first, then check `lsusb`, udev permissions and (container backend) the
-  device-cgroup rule.
+* `device MYRIAD not available` - the server retries the device probe
+  (6 attempts, 500 ms apart) to ride out transient USB/mvnc states; if it
+  still fails, run `./scripts/verify.sh --no-device` first, then check
+  `lsusb`, udev permissions and (container backend) the device-cgroup rule.
 * `host runtime missing .../mobilenet_server` - rebuild the image and re-run
   `./scripts/pull-runtime.sh --platform <target>` (older pulls predate this
   example).
