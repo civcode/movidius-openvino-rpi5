@@ -216,6 +216,24 @@ frontend (OpenCV capture, GUI or `--headless` CLI output) drives a small
 long-running C++ inference server that keeps the stick's compiled network
 warm.  See `examples/webcam/README.md`.
 
+### Object detection (SSDLite-MobileNetV2, COCO)
+
+`examples/ssd-detect/` runs the COCO-pretrained SSDLite detector
+(`ssdlite_mobilenet_v2_coco_2018_05_09`, FP16 IR from
+`scripts/prepare-ssdlite.sh`) on the stick: one photo in, a list of labelled
+bounding boxes out.
+
+```bash
+./run.sh ssd --image /models/images/dog_ssd.ppm
+```
+
+Verified on MA2450: 4 detections on `dog_ssd.ppm` (bicycle 0.96, dog 0.88,
+car 0.87, cat 0.63), inference 92 ms (~11 fps), matching a CPU reference run
+of the same IR (boxes within a couple of pixels, scores within fp16 noise).
+`ssd_test` (17 device-free checks) passes in the Docker build stage.
+
+See `examples/ssd-detect/README.md`.
+
 ## Host-native execution without Docker at inference time
 
 Docker remains the primary and most deterministic runtime, but the built tree
@@ -306,6 +324,7 @@ ci/verify-static.sh                no-hardware architecture regressions
 smoke-test/                        tiny OpenVINO example
 mobilenet-test/                    MobileNet classifier example
 examples/webcam/                   live webcam classifier (Python + inference server)
+examples/ssd-detect/               SSDLite-MobileNetV2 COCO detector
 toolchain/armv7-native.toolchain.cmake
 logs/                              historical Pi build/runtime evidence
 ```

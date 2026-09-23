@@ -12,6 +12,8 @@
 #                                          # the ONNX model zoo reference output
 #   ./run.sh mobilenet --image /models/images/dog.ppm
 #   IR=fp32 ./run.sh mobilenet             # use the FP32 weights instead of FP16
+#   ./run.sh ssd --image /models/images/dog_ssd.ppm
+#                                            # SSDLite detection (prepare-ssdlite.sh)
 #
 # USB access (measured on this Pi 5 - see README "USB access" section):
 #   --network=host        libusb, which OpenVINO's MYRIAD plugin uses through
@@ -52,7 +54,7 @@ platform_load "${_req}"
 IMAGE="${IMAGE:-${DEFAULT_IMAGE}}"
 MODE="${1:-demo}"
 case "${MODE}" in
-    demo|--demo|list|demo-list|shell|bench|custom|mobilenet)
+    demo|--demo|list|demo-list|shell|bench|custom|mobilenet|ssd)
         if [[ $# -gt 0 ]]; then shift; fi
         ;;
     *) MODE="demo" ;;   # extra hello_myriad flags with the default demo mode
@@ -114,6 +116,19 @@ case "${MODE}" in
                "--model" "/models/mobilenet-v2-ov203/${IR}/mobilenet-v2-ov203.xml"
                "--weights" "/models/mobilenet-v2-ov203/${IR}/mobilenet-v2-ov203.bin"
                "--labels" "/models/labels/synset.txt" "$@")
+        ;;
+    ssd)
+        # the corpus prepared by ./scripts/prepare-ssdlite.sh stays on the host
+        MODEL_DIR="${ROOT}/vendor/models/ssdlite_mobilenet_v2"
+        if [[ ! -f "${MODEL_DIR}/openvino/ssdlite_mobilenet_v2.xml" ]]; then
+            echo "no IR in ${MODEL_DIR} - run ./scripts/prepare-ssdlite.sh first" >&2
+            exit 1
+        fi
+        DOCKER_ARGS+=(-v "${ROOT}/vendor/models:/models:ro")
+        ENTRY=("/opt/openvino/bin/ssd_detect" "--device" "MYRIAD"
+               "--model" "/models/ssdlite_mobilenet_v2/openvino/ssdlite_mobilenet_v2.xml"
+               "--weights" "/models/ssdlite_mobilenet_v2/openvino/ssdlite_mobilenet_v2.bin"
+               "--labels" "/models/labels/coco.txt" "$@")
         ;;
 esac
 

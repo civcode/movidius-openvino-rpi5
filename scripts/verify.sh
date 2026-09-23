@@ -191,3 +191,21 @@ else
     echo 'corpus not present - run ./scripts/prepare-mobilenet.sh first'
 fi
 end
+
+sec '11. SSDLite MobileNetV2 detection on the stick (single image)'
+if [[ -f vendor/models/ssdlite_mobilenet_v2/openvino/ssdlite_mobilenet_v2.xml && -f vendor/models/images/dog_ssd.ppm ]]; then
+    if [[ "$WITH_DEVICE" == 1 ]]; then
+        echo 'run.sh ssd on dog_ssd.ppm (expected: person/dog-family detections):'
+        timeout 600 ./run.sh ssd --image /models/images/dog_ssd.ppm 2>&1 | \
+            grep -E 'model |input image|compile|inference |postprocess|^[a-z]+ +[01]?\.[0-9]+ \[' || true
+        echo
+        echo 'reference (CPU, same IR + same preprocessing, OpenVINO 2026.4):'
+        echo '  bicycle 0.96 (141, 119, 568, 430)   car 0.88 (460, 81, 690, 172)'
+        echo '  dog 0.84 (132, 218, 315, 539)       cat 0.70 (132, 218, 315, 539)'
+    else
+        echo 'skipped: --no-device'
+    fi
+else
+    echo 'model or test image not present - run ./scripts/prepare-ssdlite.sh first'
+fi
+end
