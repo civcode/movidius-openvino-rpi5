@@ -1,24 +1,14 @@
 #!/usr/bin/env bash
-# ---------------------------------------------------------------------------
-# fetch-runtime.sh - download the official OpenVINO 2020.3.2 raspbian runtime
-#
-# Two reasons this is part of the project:
-#   1. It is the authoritative source of the MA2450 firmware blob
-#      (usb-ma2450.mvcmd) that this build needs.  OpenVINO 2020.3's own
-#      download server (download.01.org) is retired, so the firmware has to be
-#      supplied from the release package instead - see scripts/prepare-deps.sh.
-#   2. The armv7l libraries inside it (libmyriadPlugin.so etc.) are the exact
-#      upstream reference for what our build should produce; they are kept in
-#      vendor/reference-runtime/ for comparison only and are NOT used by the
-#      container image.
-# ---------------------------------------------------------------------------
+# Download Intel's OpenVINO 2020.3.2 Raspbian runtime as a pinned source for the
+# MA2450 device firmware. The host-side ARM libraries are reference material only;
+# all armv7, arm64 and amd64 project images build libmyriadPlugin.so from source.
 set -euo pipefail
-
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PKG="l_openvino_toolkit_runtime_raspbian_p_2020.3.355"
 URL="https://storage.openvinotoolkit.org/repositories/openvino/packages/2020.3.2/${PKG}.tgz"
 TARBALL="${ROOT}/vendor/${PKG}-runtime-raspbian.tgz"
 UNPACK="${ROOT}/vendor/reference-runtime"
+FW_DIR="${ROOT}/vendor/firmware"
 
 mkdir -p "${ROOT}/vendor"
 if [[ ! -f "${TARBALL}" ]]; then
@@ -33,9 +23,18 @@ if [[ ! -d "${UNPACK}/${PKG}" ]]; then
 fi
 
 IE_LIBS="${UNPACK}/${PKG}/deployment_tools/inference_engine/lib/armv7l"
-mkdir -p "${ROOT}/vendor/firmware"
+mkdir -p "${FW_DIR}"
 for f in usb-ma2450 usb-ma2x8x pcie-ma248x; do
-    cp -f "${IE_LIBS}/${f}.mvcmd" "${ROOT}/vendor/firmware/${f}.mvcmd"
+    test -f "${IE_LIBS}/${f}.mvcmd"
+    cp -f "${IE_LIBS}/${f}.mvcmd" "${FW_DIR}/${f}.mvcmd"
 done
-echo "firmware copied to ${ROOT}/vendor/firmware:"
-md5sum "${ROOT}"/vendor/firmware/*.mvcmd
+
+# The package revision used by this project is known to contain these sizes.
+# This catches an obviously wrong/truncated payload even on first acquisition.
+[[ "$(stat -c%s "${FW_DIR}/usb-ma2450.mvcmd")" == 1795780 ]] || { echo "unexpected usb-ma2450.mvcmd size" >&2; exit 1; }
+[[ "$(stat -c%s "${FW_DIR}/usb-ma2x8x.mvcmd")" == 2040216 ]] || { echo "unexpected usb-ma2x8x.mvcmd size" >&2; exit 1; }
+[[ "$(stat -c%s "${FW_DIR}/pcie-ma248x.mvcmd")" == 1800408 ]] || { echo "unexpected pcie-ma248x.mvcmd size" >&2; exit 1; }
+
+(cd "${FW_DIR}" && sha256sum pcie-ma248x.mvcmd usb-ma2450.mvcmd usb-ma2x8x.mvcmd > SHA256SUMS && sha256sum -c SHA256SUMS)
+echo "firmware copied to ${FW_DIR}; it is device-side and shared by both host targets:"
+cat "${FW_DIR}/SHA256SUMS"

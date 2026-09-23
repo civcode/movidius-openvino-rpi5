@@ -25,6 +25,18 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+# shellcheck source=platform.sh
+source "$ROOT/scripts/platform.sh"
+
+TARGET_REQUEST="$(platform_default_request)"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --platform) TARGET_REQUEST="$2"; shift 2 ;;
+        -h|--help) echo "usage: $0 [--platform armv7|arm64|amd64]"; exit 0 ;;
+        *) echo "unknown option: $1" >&2; exit 2 ;;
+    esac
+done
+platform_load "$TARGET_REQUEST"
 
 MO_SRC=vendor/openvino-2020.3.2/model-optimizer
 MO_STAGE=work/mo-2020.3
@@ -35,12 +47,13 @@ MO_IMAGE="${MO_IMAGE:-python:3.8-slim}"
 # want to convert under emulation instead).
 if [[ -z "${MO_PLATFORM:-}" ]]; then
 	case "$(uname -m)" in
-		x86_64)  MO_PLATFORM=linux/amd64 ;;
-		aarch64) MO_PLATFORM=linux/arm64 ;;
-		armv7l)  MO_PLATFORM=linux/arm/v7 ;;
-		*)       MO_PLATFORM="linux/$(uname -m)" ;;
+		x86_64|amd64)  MO_PLATFORM=linux/amd64 ;;
+		aarch64|arm64) MO_PLATFORM=linux/arm64 ;;
+		armv7l)        MO_PLATFORM=linux/arm/v7 ;;
+		*)             MO_PLATFORM="linux/$(uname -m)" ;;
 	esac
 fi
+export MO_PLATFORM
 PIP_PINS='numpy==1.21.6 networkx==2.6.3 protobuf==3.19.6 defusedxml==0.7.1 onnx==1.12.0'
 
 # The legacy S3 bucket (download.onnx) now answers 403; the same artifact is
@@ -103,6 +116,7 @@ printf '    %s lines\n' "$(wc -l < "$MODELS/labels/synset.txt")"
 # ------------------------------------------------ 3. Model Optimizer 2020.3.2
 echo
 echo "== Model Optimizer 2020.3.2 (vendored, staged without unit tests) =="
+echo "    project target: $TARGET; MO host platform: $MO_PLATFORM"
 rm -rf "$MO_STAGE"; mkdir -p "$MO_STAGE"
 rsync -a --exclude='*_test.py' --exclude='automation/' --exclude='install_prerequisites/' \
 	"$MO_SRC/" "$MO_STAGE/"

@@ -5,7 +5,7 @@
 #
 #   examples/ssd-detect/infer-ssd-server.sh [backend] [device] [min-conf]
 #     backend : host | docker | auto   (default: auto)
-#               host  - native host binaries from work/host-runtime (no Docker)
+#               host  - native host binaries from work/host-runtime/<target> (no Docker)
 #               docker- inside the runtime image built by ./build.sh
 #               auto  - host if the runtime was pulled, otherwise docker
 #     device  : MYRIAD                 (default: MYRIAD)
@@ -34,7 +34,7 @@ ssd_stream.py starts it for you.
 
 Arguments (all optional, positional):
   backend    host | docker | auto      default: auto
-               host   - native binaries from work/host-runtime (no Docker)
+               host   - native binaries from work/host-runtime/<target> (no Docker)
                docker - inside the runtime image built by ./build.sh
                auto   - host if pulled, else docker, else in-image fallback
   device     MYRIAD                    default: MYRIAD
@@ -74,7 +74,7 @@ MODEL_XML="${ROOT}/vendor/models/ssdlite_mobilenet_v2/openvino/ssdlite_mobilenet
 MODEL_BIN="${ROOT}/vendor/models/ssdlite_mobilenet_v2/openvino/ssdlite_mobilenet_v2.bin"
 LABELS="${ROOT}/vendor/models/labels/coco.txt"
 
-RT="${ROOT}/work/host-runtime"
+RT="${ROOT}/work/host-runtime/${TARGET}"
 OV="${RT}/openvino"
 SERVER="${OV}/bin/ssd_detect"
 LIBDIR="${OV}/inference_engine/${TARGET_LIB_DIR}"

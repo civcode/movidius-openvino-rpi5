@@ -40,7 +40,7 @@ used by `mobilenet-test/main.cpp`: resize to 224x224 (area), BGR -> RGB,
 * One of the inference backends, selected automatically by
   `infer-server.sh` (override with `--backend`):
   * **host** (preferred, no Docker): `./scripts/pull-runtime.sh --platform <t>`
-    so that `work/host-runtime/openvino/bin/mobilenet_server` exists.
+    so that `work/host-runtime/<target>/openvino/bin/mobilenet_server` exists.
     If the host runtime is missing but `/opt/openvino/bin/mobilenet_server`
     exists (i.e. you are already inside the runtime image), the server is
     launched from there automatically.

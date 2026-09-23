@@ -5,7 +5,7 @@
 #
 #   examples/deeplab-seg/infer-seg-server.sh [backend] [device]
 #     backend : host | docker | auto   (default: auto)
-#               host  - native host binaries from work/host-runtime (no Docker)
+#               host  - native host binaries from work/host-runtime/<target> (no Docker)
 #               docker- inside the runtime image built by ./build.sh
 #               auto  - host if the runtime was pulled, otherwise docker
 #     device  : MYRIAD                 (default: MYRIAD)
@@ -33,7 +33,7 @@ starts it for you.
 
 Arguments (all optional, positional):
   backend    host | docker | auto      default: auto
-               host   - native binaries from work/host-runtime (no Docker)
+               host   - native binaries from work/host-runtime/<target> (no Docker)
                docker - inside the runtime image built by ./build.sh
                auto   - host if pulled, else docker, else in-image fallback
   device     MYRIAD                    default: MYRIAD
@@ -72,7 +72,7 @@ MODEL_XML="${ROOT}/vendor/models/deeplabv3/openvino/deeplabv3.xml"
 MODEL_BIN="${ROOT}/vendor/models/deeplabv3/openvino/deeplabv3.bin"
 LABELS="${ROOT}/vendor/models/labels/pascal_voc.txt"
 
-RT="${ROOT}/work/host-runtime"
+RT="${ROOT}/work/host-runtime/${TARGET}"
 OV="${RT}/openvino"
 SERVER="${OV}/bin/seg_detect"
 LIBDIR="${OV}/inference_engine/${TARGET_LIB_DIR}"

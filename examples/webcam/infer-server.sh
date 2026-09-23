@@ -5,7 +5,7 @@
 #
 #   examples/webcam/infer-server.sh [backend] [ir] [device]
 #     backend : host | docker | auto   (default: auto)
-#               host  - native host binaries from work/host-runtime (no Docker)
+#               host  - native host binaries from work/host-runtime/<target> (no Docker)
 #               docker- inside the runtime image built by ./build.sh
 #               auto  - host if the runtime was pulled, otherwise docker
 #     ir      : fp16 | fp32            (default: fp16, override with IR=...)
@@ -34,7 +34,7 @@ starts it for you.
 
 Arguments (all optional, positional):
   backend    host | docker | auto      default: auto
-               host   - native binaries from work/host-runtime (no Docker)
+               host   - native binaries from work/host-runtime/<target> (no Docker)
                docker - inside the runtime image built by ./build.sh
                auto   - host if the runtime was pulled, otherwise docker
   ir         fp16 | fp32               default: fp16
@@ -68,7 +68,7 @@ case "${IR}" in
     *) echo "ir must be fp16 or fp32 (got '${IR}')" >&2; exit 2 ;;
 esac
 
-RT="${ROOT}/work/host-runtime"
+RT="${ROOT}/work/host-runtime/${TARGET}"
 OV="${RT}/openvino"
 SERVER="${OV}/bin/mobilenet_server"
 LIBDIR="${OV}/inference_engine/${TARGET_LIB_DIR}"
