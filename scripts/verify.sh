@@ -70,7 +70,7 @@ expected = {"armv7": (1, 40), "arm64": (2, 183), "amd64": (2, 62)}[target]
 for path in sys.argv[2:]:
     with open(path, "rb") as f:
         h = f.read(20)
-    if h[:4] != b"\\x7fELF" or len(h) < 20:
+    if h[:4] != b"\x7fELF" or len(h) < 20:
         raise SystemExit(f"not an ELF file: {path}")
     elf_class = h[4]
     byte_order = "little" if h[5] == 1 else "big"
