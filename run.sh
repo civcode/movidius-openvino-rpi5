@@ -14,6 +14,8 @@
 #   IR=fp32 ./run.sh mobilenet             # use the FP32 weights instead of FP16
 #   ./run.sh ssd --image /models/images/dog_ssd.ppm
 #                                            # SSDLite detection (prepare-ssdlite.sh)
+#   ./run.sh seg [--image /models/images/dog_ssd.ppm]
+#                                            # DeepLabV3 segmentation (prepare-deeplabv3.sh)
 #
 # USB access (measured on this Pi 5 - see README "USB access" section):
 #   --network=host        libusb, which OpenVINO's MYRIAD plugin uses through
@@ -54,7 +56,7 @@ platform_load "${_req}"
 IMAGE="${IMAGE:-${DEFAULT_IMAGE}}"
 MODE="${1:-demo}"
 case "${MODE}" in
-    demo|--demo|list|demo-list|shell|bench|custom|mobilenet|ssd)
+    demo|--demo|list|demo-list|shell|bench|custom|mobilenet|ssd|seg)
         if [[ $# -gt 0 ]]; then shift; fi
         ;;
     *) MODE="demo" ;;   # extra hello_myriad flags with the default demo mode
@@ -129,6 +131,22 @@ case "${MODE}" in
                "--model" "/models/ssdlite_mobilenet_v2/openvino/ssdlite_mobilenet_v2.xml"
                "--weights" "/models/ssdlite_mobilenet_v2/openvino/ssdlite_mobilenet_v2.bin"
                "--labels" "/models/labels/coco.txt" "$@")
+        ;;
+    seg)
+        # the corpus prepared by ./scripts/prepare-deeplabv3.sh stays on the host
+        MODEL_DIR="${ROOT}/vendor/models/deeplabv3"
+        if [[ ! -f "${MODEL_DIR}/openvino/deeplabv3.xml" ]]; then
+            echo "no IR in ${MODEL_DIR} - run ./scripts/prepare-deeplabv3.sh first" >&2
+            exit 1
+        fi
+        DOCKER_ARGS+=(-v "${ROOT}/vendor/models:/models:ro")
+        if [[ $# -eq 0 ]]; then
+            set -- --image /models/images/dog_ssd.ppm
+        fi
+        ENTRY=("/opt/openvino/bin/seg_detect" "--device" "MYRIAD"
+               "--model" "/models/deeplabv3/openvino/deeplabv3.xml"
+               "--weights" "/models/deeplabv3/openvino/deeplabv3.bin"
+               "--labels" "/models/labels/pascal_voc.txt" "$@")
         ;;
 esac
 

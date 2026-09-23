@@ -209,3 +209,18 @@ else
     echo 'model or test image not present - run ./scripts/prepare-ssdlite.sh first'
 fi
 end
+
+sec '12. DeepLabV3 Pascal VOC segmentation on the stick (single image)'
+if [[ -f vendor/models/deeplabv3/openvino/deeplabv3.xml && -f vendor/models/images/dog_ssd.ppm ]]; then
+    if [[ "$WITH_DEVICE" == 1 ]]; then
+        echo 'run.sh seg on dog_ssd.ppm (expected: background majority, person/dog/car classes):'
+        timeout 600 ./run.sh seg --image /models/images/dog_ssd.ppm 2>&1 | \
+            grep -E 'model |input:|preprocess|inference |postprocess|total:|classes present|background|person|dog|car|bicycle' || true
+        echo
+    else
+        echo 'skipped: --no-device'
+    fi
+else
+    echo 'model or test image not present - run ./scripts/prepare-deeplabv3.sh first'
+fi
+end

@@ -237,6 +237,35 @@ frames over stdio, and `examples/ssd-detect/ssd_stream.py` (OpenCV, GUI or
 headless) drives it with labelled boxes - ~9 fps on a real webcam on the
 stick.  See `examples/ssd-detect/README.md`.
 
+### Semantic segmentation (DeepLabV3, Pascal VOC 21 classes)
+
+`examples/deeplab-seg/` runs the DeepLabV3 (MobileNetV2, 513×513) semantic
+segmenter (`deeplabv3_mnv2_pascal_train_aug_2018_01_29`, FP16 IR from
+`scripts/prepare-deeplabv3.sh`) on the stick: one photo in, a per-pixel
+class map out, resized back to the original size with nearest-neighbour
+sampling.
+
+```bash
+./run.sh seg --image /models/images/dog_ssd.ppm
+```
+
+Verified on the MA2450: compile 1726 ms, inference 674 ms (total 679 ms
+for a 768×576 photo); the dog_ssd.ppm mask comes out as background 77.8%,
+bicycle 11.2%, dog 7.5%, car 3.2%, cat 0.3% - matching a CPU cross-check
+on the same IR.  Webcam streaming runs at ~1.5 fps (the 513×513 mask is
+~5× the SSDLite cost).
+
+The IR contract (inspected, not assumed): input `ImageTensor` NCHW
+[1,3,513,513] FP16 BGR raw 0..255 - the BGR→RGB swap, the resize and the
+(x/127.5)−1 normalization are all baked into the graph; output `ArgMax`
+[1,513,513] per-pixel class ids 0..20, declared **I32** - the blob is
+decoded byte-wise (I32/FP32/I16/FP16) and values verified, because an
+int32 id re-read as a float is a denormal that silently rounds to class
+0.  `seg_test` (34 device-free checks) passes in the Docker build stage.  Streaming works the same way as the
+detector: `seg_detect --stdin` + `examples/deeplab-seg/seg_stream.py`
+(GUI overlay / `--headless` / `--file`).  See
+`examples/deeplab-seg/README.md`.
+
 ## Host-native execution without Docker at inference time
 
 Docker remains the primary and most deterministic runtime, but the built tree
@@ -328,6 +357,7 @@ smoke-test/                        tiny OpenVINO example
 mobilenet-test/                    MobileNet classifier example
 examples/webcam/                   live webcam classifier (Python + inference server)
 examples/ssd-detect/               SSDLite-MobileNetV2 COCO detector
+examples/deeplab-seg/              DeepLabV3 Pascal VOC segmenter
 toolchain/armv7-native.toolchain.cmake
 logs/                              historical Pi build/runtime evidence
 ```
