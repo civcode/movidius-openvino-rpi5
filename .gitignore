@@ -20,7 +20,23 @@ __pycache__/
 # Model Optimizer / conversion by-products (the IR itself lives in vendor/, ignored)
 *.mapping
 
+# New build/output logs (the tracked logs/*.log evidence files stay committed;
+# .gitignore does not untrack them)
+logs/*.log
+logs/*/*.log
+
 # Editor / OS noise
 *.swp
 *~
 .DS_Store
+
+# Host config files accidentally placed in the repo root
+.bash_profile
+.bashrc
+.env
+.gitconfig
+.mcp.json
+.profile
+.ripgreprc
+.zprofile
+.zshrc
