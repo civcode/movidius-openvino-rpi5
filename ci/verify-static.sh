@@ -49,11 +49,17 @@ grep -q 'usb-ma2450.mvcmd' Dockerfile || fail 'MA2450 firmware validation missin
 grep -q 'readelf -h "${IE_PLUGIN}"' Dockerfile || fail 'MYRIAD plugin ELF architecture validation missing'
 grep -q 'EXPECTED_ELF_MACHINE_ID' Dockerfile || fail 'runtime manifest lacks ELF machine metadata'
 
-# The CMake examples must discover lib/<arch> instead of pinning any one arch.
-for f in smoke-test/CMakeLists.txt mobilenet-test/CMakeLists.txt; do
-    grep -q 'lib/\*' "$f" || fail "$f does not discover architecture lib dirs"
+# OV linking is centralised in cmake/ov203-link.cmake.  The shared module
+# must discover lib/<arch> dynamically, every CMakeLists must use it, and
+# no CMake file may pin or re-implement an architecture lib dir.
+grep -q 'lib/\*' cmake/ov203-link.cmake || fail 'cmake/ov203-link.cmake does not discover architecture lib dirs'
+if grep -nE 'lib/(armv7l|aarch64|arm64|intel64|x86_64)' cmake/ov203-link.cmake; then
+    fail 'cmake/ov203-link.cmake hard-codes an architecture lib dir'
+fi
+while IFS= read -r f; do
+    grep -q 'ov203-link' "$f" || fail "$f does not include the shared OV link module"
     if grep -nE 'lib/(armv7l|aarch64|arm64|intel64|x86_64)' "$f"; then fail "$f hard-codes an architecture lib dir"; fi
-done
+done < <(find . -path './vendor' -prune -o -path './work' -prune -o -type f -name CMakeLists.txt -print | sort)
 
 # ARM64 must be treated as a native target, not as ARMv7 with a renamed image.
 grep -q 'arm64)' scripts/platform.sh || fail 'platform helper lacks arm64 target'
