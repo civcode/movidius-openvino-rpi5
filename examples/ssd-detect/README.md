@@ -65,9 +65,11 @@ is exercised by `ssd_test` without hardware.
 
 | file | role |
 |---|---|
-| `ssd_detect.cpp` | the detector app (PPM in, detections out) |
+| `ssd_detect.cpp` | the detector app; single-image mode and `--stdin` frame-stream mode |
 | `ssd_postprocess.hpp` | parse/filter/convert of the `DetectionOutput` rows |
 | `ssd_test.cpp` | device-free unit tests (run in the Docker build stage) |
+| `infer-ssd-server.sh` | starts `ssd_detect --stdin` (host-native or Docker backend) |
+| `ssd_stream.py` | webcam/video client (OpenCV -> stdio -> server), GUI + headless |
 | `CMakeLists.txt` | builds both binaries for the selected target |
 
 ## Building
@@ -93,6 +95,41 @@ extra to run.
 Options: `--min-conf` (default 0.5, detections kept at `score >= min-conf`),
 `--max-detections` (default 10, highest confidence first), `--iterations N`
 (latency loop over the same frame), `--debug`.
+
+## Live webcam / video stream (Milestone 2)
+
+`ssd_detect --stdin` keeps the compiled network warm and serves frames over
+stdio, driven by the OpenCV client `ssd_stream.py` (same hybrid pattern as
+the MobileNet webcam example; the server is started by
+`infer-ssd-server.sh`, host-native or Docker):
+
+```
+# GUI (default): window with labelled boxes, q/Esc to quit
+python3 examples/ssd-detect/ssd_stream.py
+
+# headless: one detection block per frame on stdout
+python3 examples/ssd-detect/ssd_stream.py --headless
+
+# no camera? loop an image file (works without OpenCV for .ppm):
+python3 examples/ssd-detect/ssd_stream.py --headless \
+    --file vendor/models/images/dog_ssd.ppm --frames 5
+```
+
+Protocol (binary frames, the server's stdout is otherwise protocol-only):
+
+```
+client -> server:  uint32 width + uint32 height (little endian) + width*height*3 RGB bytes
+server -> client:  "FRAME <w> <h> <infer_ms>"
+                   "DET <label> <score> <x1> <y1> <x2> <y2>"   (0..N lines)
+                   "END"
+```
+
+The client needs `numpy` + `opencv-python(-headless)` (pip; the runtime
+image deliberately ships no Python libraries).  Options mirror the single-
+image mode (`--min-conf`, `--backend`, `--device`) plus `--camera`,
+`--camera-width/-height`, `--file`, `--frames`, `--request-timeout`.
+
+## Verified results (MA2450, amd64 image)
 
 Output, one line per detection:
 
@@ -137,3 +174,15 @@ engine: `bicycle 0.96 (141,119,568,430)`, `car 0.88 (460,81,690,172)`,
 `dog 0.84` / `cat 0.70 (132,218,315,539)`.
 
 Unit tests: `ssd_test` 17/17 pass (locally and in the Docker build stage).
+
+Webcam stream (Milestone 2), run inside the runtime container with the
+camera and stick passed through (`-v /dev:/dev`), 640x480 capture:
+
+```
+[t=  44.90s fps=  9.2 infer=  91.3ms] bed 0.87 (230,171,631,431)
+45 s run ended at t=44.9 s: steady-state ~9.2 fps, inference 91 ms/frame,
+detection stable (score 0.86-0.88, box jitter < 10 px over the run)
+```
+
+File-loop mode (no camera) on `dog_ssd.ppm`: same detections as the
+single-image run, 92 ms/frame, clean EOF shutdown.

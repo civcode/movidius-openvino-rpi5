@@ -232,7 +232,10 @@ car 0.87, cat 0.63), inference 92 ms (~11 fps), matching a CPU reference run
 of the same IR (boxes within a couple of pixels, scores within fp16 noise).
 `ssd_test` (17 device-free checks) passes in the Docker build stage.
 
-See `examples/ssd-detect/README.md`.
+Live streaming is also supported: `ssd_detect --stdin` serves binary RGB
+frames over stdio, and `examples/ssd-detect/ssd_stream.py` (OpenCV, GUI or
+headless) drives it with labelled boxes - ~9 fps on a real webcam on the
+stick.  See `examples/ssd-detect/README.md`.
 
 ## Host-native execution without Docker at inference time
 
