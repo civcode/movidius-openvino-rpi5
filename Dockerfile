@@ -297,6 +297,7 @@ RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
         -DOV_ROOT=/work/stage/deployment_tools/inference_engine \
         -DOV_RUNTIME_PREFIX=/opt/openvino/inference_engine; \
     cmake --build /work/webcam-build -- -j"${OV_BUILD_JOBS}"; \
+    /work/webcam-build/test_half; \
     readelf -h /work/webcam-build/mobilenet_server | tee /tmp/webcam.elf; \
     grep -q "Class:.*${EXPECTED_ELF_CLASS}" /tmp/webcam.elf; \
     grep -Eq "Machine:.*(${EXPECTED_ELF_MACHINE_REGEX})" /tmp/webcam.elf; \

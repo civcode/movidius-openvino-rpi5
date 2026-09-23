@@ -72,6 +72,10 @@ else()
     set(ov_rpath_use "${ov_rpath_build}")
 endif()
 
+# unit test for the float<->half conversion (half.hpp); no Inference Engine
+# or device needed, so it runs in the build stage before the server is linked
+add_executable(test_half test_half.cpp)
+
 add_executable(mobilenet_server mobilenet_server.cpp)
 target_include_directories(mobilenet_server PRIVATE "${OV_ROOT}/include")
 if(EXISTS "${NGRAPH_ROOT}/include")
