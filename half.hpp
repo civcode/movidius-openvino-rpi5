@@ -1,5 +1,6 @@
 // half.hpp - IEEE-754 binary16 <-> binary32 conversion, shared by
-// mobilenet_server.cpp and test_half.cpp.
+// examples/webcam/mobilenet_server.cpp, mobilenet-test/main.cpp,
+// smoke-test/main.cpp and examples/webcam/test_half.cpp.
 //
 // History: mobilenet_server.cpp originally carried its own copy of these
 // functions with the sign bit missing from two return paths, which silently

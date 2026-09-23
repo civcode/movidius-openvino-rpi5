@@ -51,6 +51,7 @@ DOCKER_ARGS=(--rm --platform linux/arm/v7 --name "ov203-refcheck-$$"
              -v "${REF_DIR}:/ov:ro"
              -v "${NGRAPH_DIR}:/ng:ro"
              -v "${ROOT}/smoke-test:/work/smoke:ro"
+             -v "${ROOT}/half.hpp:/work/half.hpp:ro"
              -v "${ROOT}/work/reference-check:/out")
 # USB requirements, measured on this Pi 5 (see README "USB access" section):
 #   --network=host            libusb refreshes its device list from kernel uevents;

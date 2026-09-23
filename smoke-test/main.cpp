@@ -26,44 +26,12 @@
 #include <string>
 #include <vector>
 
+#include "../half.hpp"  // shared IEEE-754 f16<->f32 conversion (unit-tested in examples/webcam/test_half.cpp)
+
 using namespace InferenceEngine;
 
 namespace {
 
-// IEEE-754 binary16 -> binary32. Kept local so the smoke test does not depend
-// on any half-precision helper type of the runtime it links against.
-float halfToFloat(uint16_t h) {
-    const uint32_t sign = static_cast<uint32_t>(h & 0x8000u) << 16;
-    const uint32_t exp = (h >> 10) & 0x1Fu;
-    const uint32_t frac = h & 0x3FFu;
-    uint32_t bits = 0;
-
-    if (exp == 0u) {
-        if (frac == 0u) {
-            bits = sign;  // +-0
-        } else {
-            // subnormal: value = frac * 2^-24, normalise the mantissa
-            uint32_t f = frac;
-            int shifts = 0;
-            while ((f & 0x400u) == 0u) {
-                f <<= 1;
-                ++shifts;
-            }
-            bits = sign | (static_cast<uint32_t>(113 - shifts) << 23) | ((f & 0x3FFu) << 13);
-        }
-    } else if (exp == 0x1Fu) {
-        bits = sign | 0x7F800000u | (frac << 13);  // inf / nan
-    } else {
-        bits = sign | ((exp + 112u) << 23) | (frac << 13);
-    }
-
-    float out = 0.0f;
-    std::memcpy(&out, &bits, sizeof(out));
-    return out;
-}
-
-// InferenceEngine::Layout is an `enum : uint8_t` in 2020.3 (ie_common.h), so it has
-// no name()/toString() - print it ourselves.
 const char* layoutToString(Layout l) {
     switch (l) {
         case Layout::ANY: return "ANY";
