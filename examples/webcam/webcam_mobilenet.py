@@ -10,8 +10,9 @@ by infer-server.sh (host-native or Docker).  The server keeps the compiled
 network warm, so steady-state latency is the device rate (~44 ms/frame)
 instead of the ~1.6 s stick boot per frame.
 
-In both modes the results are printed to stdout, one line per classified
-frame; diagnostics always go to stderr.
+In both modes the results are printed to stdout, one block per classified
+frame (a status line, then one line per top-k class); diagnostics always go
+to stderr.
 
 Modes:
   GUI (default): additionally opens an OpenCV window with the live frame and
@@ -145,13 +146,13 @@ def main():
             # ------------------------------------------------------- reporting
             t = time.monotonic() - t_start
             fps = frame_no / t if t > 0 else 0.0
-            top = "  |  ".join(
-                "%d. %7.4f %s %s" % (i + 1, p, cid, name)
+            top = "\n".join(
+                "  %d. %7.4f %s %s" % (i + 1, p, cid, name)
                 for i, (p, cid, name) in enumerate(probs))
 
             # results always go to the command line, on every classified frame
             if classified:
-                print("[t=%7.2fs fps=%5.1f infer=%6.1fms] %s" % (t, fps, last_infer_ms, top),
+                print("[t=%7.2fs fps=%5.1f infer=%6.1fms]\n%s" % (t, fps, last_infer_ms, top),
                       flush=True)
 
             if not args.headless:
