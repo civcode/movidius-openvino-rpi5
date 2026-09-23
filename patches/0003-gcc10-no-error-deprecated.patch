@@ -1,0 +1,17 @@
+diff --git a/cmake/os_flags.cmake b/cmake/os_flags.cmake
+index a91c4641ee9d5ebeab4a886408221ec20724058a..a1caaea7d529484d929d91278e7c5e891a3fca96 100644
+--- a/cmake/os_flags.cmake
++++ b/cmake/os_flags.cmake
+@@ -253,7 +253,11 @@
+ else()
+     # TODO: enable for C sources as well
+     # ie_add_compiler_flags(-Werror)
+     if(TREAT_WARNING_AS_ERROR)
+-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
++        # The 2020.3.2 inference-engine headers mark IShapeInferImpl / legacy
++        # extension APIs with __attribute__((deprecated)); GCC 10 + -Werror
++        # turns those self-references into hard errors on a clean x86_64
++        # build. Keep -Werror globally, downgrade only that warning class.
++        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-error=deprecated-declarations")
+     endif()
+ 
