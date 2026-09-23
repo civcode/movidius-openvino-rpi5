@@ -97,9 +97,9 @@ end
 sec '4. Runtime image contents'
 docker run --rm --platform "${DOCKER_PLATFORM}" --entrypoint bash "${IMAGE}" -c \
     "echo \"plugins shipped in plugins.xml:\"
-    grep -o \"plugin name=\\\"[A-Z]*\\\"\" /opt/openvino/inference_engine/lib/${TARGET_LIB_DIR}/plugins.xml
+    grep -o \"plugin name=\\\"[A-Z]*\\\"\" /opt/openvino/inference_engine/${TARGET_LIB_DIR}/plugins.xml
     echo \"firmware next to libmyriadPlugin.so (getFirmwarePath uses dladdr):\"
-    ls -1 /opt/openvino/inference_engine/lib/${TARGET_LIB_DIR}/*.mvcmd
+    ls -1 /opt/openvino/inference_engine/${TARGET_LIB_DIR}/*.mvcmd
     echo \"ngraph part of the install tree:\"
     ls -1 /opt/openvino/ngraph/lib" 2>&1
 end
@@ -125,9 +125,9 @@ if [[ ${WITH_DEVICE} == 1 ]]; then
         -v /dev:/dev --device-cgroup-rule='c 189:* rwm' --entrypoint bash \
         -v "${ROOT}/smoke-test/model:/model:ro" -v "${ROOT}/work:/out" "${IMAGE}" -c \
         "set -eu
-            export LD_LIBRARY_PATH=/opt/openvino/inference_engine/lib/${TARGET_LIB_DIR}:/opt/openvino/ngraph/lib
+            export LD_LIBRARY_PATH=/opt/openvino/inference_engine/${TARGET_LIB_DIR}:/opt/openvino/ngraph/lib
             rm -f /out/verify_blob.bin
-            /opt/openvino/inference_engine/lib/${TARGET_LIB_DIR}/compile_tool -m /model/model.xml -d MYRIAD -ip FP16 -o /out/verify_blob.bin 2>&1 | tail -3
+            /opt/openvino/inference_engine/${TARGET_LIB_DIR}/compile_tool -m /model/model.xml -d MYRIAD -ip FP16 -o /out/verify_blob.bin 2>&1 | tail -3
             md5sum /out/verify_blob.bin
             ls -l /out/verify_blob.bin" 2>&1 | tail -6
     if [[ -f work/reference-check/blob/blob.bin ]]; then

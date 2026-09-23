@@ -31,10 +31,14 @@ if [[ ! -f "${OV_LIB}/usb-ma2450.mvcmd" ]]; then
     exit 1
 fi
 
-echo "OV target     : ${OV_TARGET:-unknown}"
-echo "OV install    : ${OV_ROOT}"
-echo "OV libraries  : ${OV_LIB} (arch dir: $(basename "${OV_LIB}"))"
-echo "stick firmware: $(find "${OV_LIB}" -maxdepth 1 -type f -name '*.mvcmd' -printf '%f ' | sort)"
+# OV_QUIET=1 suppresses the banner (tools that speak a binary protocol on
+# stdout, e.g. examples/webcam/infer-server.sh, need a clean pipe).
+if [[ -z "${OV_QUIET:-}" ]]; then
+    echo "OV target     : ${OV_TARGET:-unknown}"
+    echo "OV install    : ${OV_ROOT}"
+    echo "OV libraries  : ${OV_LIB} (arch dir: $(basename "${OV_LIB}"))"
+    echo "stick firmware: $(find "${OV_LIB}" -maxdepth 1 -type f -name '*.mvcmd' -printf '%f ' | sort)"
+fi
 
 if [[ $# -eq 0 || "${1:-}" == "--demo" ]]; then
     [[ "${1:-}" == "--demo" ]] && shift

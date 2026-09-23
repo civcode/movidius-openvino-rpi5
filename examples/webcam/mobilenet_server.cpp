@@ -1,0 +1,243 @@
+// ---------------------------------------------------------------------------
+// mobilenet_server - long-running MYRIAD inference server for the webcam
+// example (examples/webcam/webcam_mobilenet.py).
+//
+// Protocol (fixed sizes, little-endian, no header):
+//   stdin : repeated 1x3x224x224 float32 tensors   = 602112 bytes each
+//   stdout: one float32 logits vector per request   = 1000 * 4 = 4000 bytes
+//   stderr: human-readable startup diagnostics; a "ready" line on success
+//
+// The network is loaded and compiled once (the stick boot takes ~1.6 s),
+// then the server loops until stdin reaches EOF and exits 0.  This is what
+// keeps per-frame latency at the device rate (~44 ms) instead of paying the
+// load/compile cost on every frame.
+//
+// Exit codes: 0 clean   2 no MYRIAD   3 model/IO failure   4 bad command line
+// ---------------------------------------------------------------------------
+
+#include <inference_engine.hpp>
+
+#include <cstddef>
+#include <cstdio>
+#include <cstring>
+#include <cstdlib>
+#include <string>
+#include <vector>
+
+using namespace InferenceEngine;
+
+namespace {
+
+// IEEE-754 binary32 -> binary16, round-to-nearest-even, inf on overflow.
+// Same implementation as mobilenet-test/main.cpp (the network input is FP16).
+uint16_t floatToHalf(float value) {
+    uint32_t f = 0;
+    std::memcpy(&f, &value, sizeof(f));
+
+    const uint32_t sign = (f >> 16) & 0x8000u;
+    const uint32_t fexp = (f >> 23) & 0xFFu;
+    uint32_t mant = f & 0x7FFFFFu;
+
+    if (fexp == 0u && mant == 0u) return static_cast<uint16_t>(sign);            // +-0
+    if (fexp == 0xFFu) return static_cast<uint16_t>(sign | 0x7C00u | (mant ? 0x200u : 0u));
+
+    int32_t exp = static_cast<int32_t>(fexp) - 127 + 15;                          // half biased
+    if (exp >= 31) return static_cast<uint16_t>(sign | 0x7C00u);                 // overflow
+
+    if (exp <= 0) {                                                               // subnormal half
+        if (exp < -10) return static_cast<uint16_t>(sign);                       // rounds to 0
+        mant |= 0x800000u;                                                        // implicit 1
+        const int shift = 14 - exp;
+        uint32_t halfMant = mant >> shift;
+        const uint32_t rest = mant & ((1u << shift) - 1u);
+        const uint32_t half = 1u << (shift - 1);
+        if (rest > half || (rest == half && (halfMant & 1u))) ++halfMant;
+        return static_cast<uint16_t>(halfMant);
+    }
+
+    uint32_t halfMant = mant >> 13;
+    const uint32_t rest = mant & 0x1FFFu;
+    if (rest > 0x1000u || (rest == 0x1000u && (halfMant & 1u))) {                 // tie: to even
+        ++halfMant;
+        if (halfMant == 0x400u) {
+            halfMant = 0;
+            ++exp;
+            if (exp >= 31) return static_cast<uint16_t>(sign | 0x7C00u);
+        }
+    }
+    return static_cast<uint16_t>((static_cast<uint32_t>(exp) << 10) | halfMant);
+}
+
+// IEEE-754 binary16 -> binary32.
+float halfToFloat(uint16_t h) {
+    const uint32_t sign = static_cast<uint32_t>(h & 0x8000u) << 16;
+    const uint32_t exp = (h >> 10) & 0x1Fu;
+    const uint32_t frac = h & 0x3FFu;
+    uint32_t bits = 0;
+
+    if (exp == 0u) {
+        if (frac == 0u) {
+            bits = sign;
+        } else {
+            uint32_t f = frac;
+            int shifts = 0;
+            while ((f & 0x400u) == 0u) {
+                f <<= 1;
+                ++shifts;
+            }
+            bits = sign | static_cast<uint32_t>(113 - shifts) << 23 | ((f & 0x3FFu) << 13);
+        }
+    } else if (exp == 0x1Fu) {
+        bits = sign | 0x7F800000u | (frac << 13);
+    } else {
+        bits = sign | ((exp + 112u) << 23) | (frac << 13);
+    }
+
+    float out = 0.0f;
+    std::memcpy(&out, &bits, sizeof(out));
+    return out;
+}
+
+std::string dimsToString(const SizeVector& dims) {
+    std::string out;
+    for (size_t i = 0; i < dims.size(); ++i) out += (i ? "," : "") + std::to_string(dims[i]);
+    return out;
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+    std::string modelXml, modelBin, device = "MYRIAD";
+
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg = argv[i];
+        auto next = [&](const char* opt) -> std::string {
+            if (i + 1 >= argc) { std::fprintf(stderr, "missing value for %s\n", opt); std::exit(4); }
+            return argv[++i];
+        };
+        if (arg == "--model") { modelXml = next("--model"); }
+        else if (arg == "--weights") { modelBin = next("--weights"); }
+        else if (arg == "--device") { device = next("--device"); }
+        else if (arg == "-h" || arg == "--help") {
+            std::printf("usage: mobilenet_server --model <IR.xml> [--weights <IR.bin>]"
+                        " [--device MYRIAD]\n"
+                        "stdin : 1x3x224x224 float32 tensors (602112 B each)\n"
+                        "stdout: float32 logits (1000 * 4 B) per request, until EOF\n");
+            return 0;
+        } else {
+            std::fprintf(stderr, "unknown argument: %s\n", arg.c_str());
+            return 4;
+        }
+    }
+
+    if (modelXml.empty()) { std::fprintf(stderr, "--model is required\n"); return 4; }
+
+    try {
+        Core ie;
+        const auto devices = ie.GetAvailableDevices();
+        if (std::find(devices.begin(), devices.end(), device) == devices.end()) {
+            std::fprintf(stderr, "device %s not available (have: ", device.c_str());
+            for (size_t i = 0; i < devices.size(); ++i) {
+                std::fprintf(stderr, "%s%s", i ? ", " : "", devices[i].c_str());
+            }
+            std::fprintf(stderr, ")\n");
+            return 2;
+        }
+
+        CNNNetwork network = ie.ReadNetwork(modelXml, modelBin);
+        std::fprintf(stderr, "mobilenet_server: model %s%s loaded as %s\n", modelXml.c_str(),
+                     modelBin.empty() ? "" : (" + " + modelBin).c_str(), network.getName().c_str());
+
+        InputsDataMap inputs = network.getInputsInfo();
+        if (inputs.size() != 1) { std::fprintf(stderr, "expected exactly one input\n"); return 3; }
+        const std::string inputName = inputs.begin()->first;
+        const SizeVector inputDims = inputs.begin()->second->getInputData()->getDims();
+        inputs.begin()->second->setPrecision(Precision::FP16);
+        inputs.begin()->second->setLayout(Layout::NCHW);
+        const size_t inElems = static_cast<size_t>(inputDims[1]) * inputDims[2] * inputDims[3];
+
+        OutputsDataMap outputs = network.getOutputsInfo();
+        if (outputs.size() != 1) { std::fprintf(stderr, "expected exactly one output\n"); return 3; }
+        const std::string outputName = outputs.begin()->first;
+        const size_t outElems = outputs.begin()->second->getDims().back();
+
+        ExecutableNetwork executable = ie.LoadNetwork(network, device);
+        InferRequest request = executable.CreateInferRequest();
+        Blob::Ptr inBlob = request.GetBlob(inputName);
+        uint16_t* inHalf = inBlob->buffer().as<uint16_t*>();
+
+        const size_t inBytes = inElems * 4;   // request tensor arrives as float32
+        const size_t outBytes = outElems * 4; // logits leave as float32
+        std::fprintf(stderr,
+                     "mobilenet_server: ready (device=%s input=%s FP16 NCHW %zu elems / %zu B per"
+                     " request, output %zu elems / %zu B per response)\n",
+                     device.c_str(), dimsToString(inputDims).c_str(), inElems, inBytes, outElems,
+                     outBytes);
+        std::fflush(stderr);
+
+        std::vector<float> requestTensor(inElems);
+        std::vector<float> logits(outElems);
+        bool eof = false;
+
+        while (!eof) {
+            // gather one full request tensor from stdin (pipe writes may arrive
+            // in pieces); a short read at 0 bytes is EOF
+            size_t got = 0;
+            while (got < inBytes) {
+                const size_t n = std::fread(requestTensor.data() + got / 4, 4,
+                                            (inBytes - got) / 4, stdin);
+                if (n == 0) {
+                    if (got == 0) { eof = true; break; }   // clean EOF between frames
+                    std::fprintf(stderr, "mobilenet_server: truncated request (%zu of %zu B), "
+                                         "closing\n", got, inBytes);
+                    return 3;
+                }
+                got += n * 4;
+            }
+            if (eof) break;
+
+            for (size_t i = 0; i < inElems; ++i) inHalf[i] = floatToHalf(requestTensor[i]);
+
+            request.Infer();
+
+            // the MYRIAD output TensorDesc can claim a precision that does not match
+            // the buffer handed back, so decide from the real bytes per element
+            Blob::Ptr outBlob = request.GetBlob(outputName);
+            const size_t n = outBlob->size();
+            const uint8_t* raw = outBlob->cbuffer().as<uint8_t*>();
+            const size_t bytesPerElem = n ? outBlob->byteSize() / n : 0;
+            if (bytesPerElem == 2) {
+                for (size_t i = 0; i < n; ++i) {
+                    uint16_t h;
+                    std::memcpy(&h, raw + 2 * i, sizeof(h));
+                    logits[i] = halfToFloat(h);
+                }
+            } else if (bytesPerElem == 4) {
+                std::memcpy(logits.data(), raw, n * 4);
+            } else {
+                std::fprintf(stderr, "unsupported output element size %zu\n", bytesPerElem);
+                return 3;
+            }
+            if (n != outElems) {
+                std::fprintf(stderr, "output has %zu values, expected %zu\n", n, outElems);
+                return 3;
+            }
+
+            size_t sent = 0;
+            while (sent < outBytes) {
+                const size_t w = std::fwrite(logits.data() + sent / 4, 4, (outBytes - sent) / 4,
+                                             stdout);
+                if (w == 0) { std::fprintf(stderr, "client gone (write failed), exiting\n");
+                             return 3; }
+                sent += w * 4;
+            }
+            std::fflush(stdout);
+        }
+
+        std::fprintf(stderr, "mobilenet_server: stdin closed, bye\n");
+        return 0;
+    } catch (const std::exception& ex) {
+        std::fprintf(stderr, "ERROR: %s\n", ex.what());
+        return 3;
+    }
+}

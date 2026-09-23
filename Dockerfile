@@ -275,6 +275,36 @@ RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
     ! LD_LIBRARY_PATH="${IE_LIB}:/work/stage/deployment_tools/ngraph/lib" ldd /work/mnb-build/mobilenet_classify | grep -q 'not found'
 
 # -----------------------------------------------------------------------------
+# Stage 5b: build the webcam example inference server for the selected target
+# -----------------------------------------------------------------------------
+FROM builder AS webcam
+
+ARG TARGET
+ARG USE_CMAKE_TOOLCHAIN=1
+ARG EXPECTED_ELF_CLASS=ELF32
+ARG EXPECTED_ELF_MACHINE_REGEX=ARM
+COPY examples/webcam /work/webcam
+
+RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
+    set -eux; \
+    set --; \
+    if [ "${USE_CMAKE_TOOLCHAIN}" = 1 ]; then \
+        set -- "$@" -DCMAKE_TOOLCHAIN_FILE=/work/toolchain-ro/armv7-native.toolchain.cmake; \
+    fi; \
+    cmake -S /work/webcam -B /work/webcam-build \
+        "$@" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DOV_ROOT=/work/stage/deployment_tools/inference_engine \
+        -DOV_RUNTIME_PREFIX=/opt/openvino/inference_engine; \
+    cmake --build /work/webcam-build -- -j"${OV_BUILD_JOBS}"; \
+    readelf -h /work/webcam-build/mobilenet_server | tee /tmp/webcam.elf; \
+    grep -q "Class:.*${EXPECTED_ELF_CLASS}" /tmp/webcam.elf; \
+    grep -Eq "Machine:.*(${EXPECTED_ELF_MACHINE_REGEX})" /tmp/webcam.elf; \
+    IE_LIB="$(dirname "$(find /work/stage/deployment_tools/inference_engine/lib -mindepth 2 -maxdepth 2 -name libinference_engine.so -print -quit)")"; \
+    LD_LIBRARY_PATH="${IE_LIB}:/work/stage/deployment_tools/ngraph/lib" ldd /work/webcam-build/mobilenet_server; \
+    ! LD_LIBRARY_PATH="${IE_LIB}:/work/stage/deployment_tools/ngraph/lib" ldd /work/webcam-build/mobilenet_server | grep -q 'not found'
+
+# -----------------------------------------------------------------------------
 # Stage 6: runtime image
 # -----------------------------------------------------------------------------
 FROM --platform=${DOCKER_PLATFORM} ${BASE_IMAGE} AS runtime
@@ -302,10 +332,11 @@ COPY --from=builder /work/stage/deployment_tools ${OV_ROOT}/
 COPY --from=smoke /work/smoke-build/hello_myriad ${OV_ROOT}/bin/hello_myriad
 COPY --from=smoke /work/smoke/model /opt/openvino-demo/model
 COPY --from=mobilenet /work/mnb-build/mobilenet_classify ${OV_ROOT}/bin/mobilenet_classify
+COPY --from=webcam /work/webcam-build/mobilenet_server ${OV_ROOT}/bin/mobilenet_server
 COPY container-entry.sh /opt/openvino-demo/run.sh
 
 RUN set -eux; \
-    chmod +x /opt/openvino-demo/run.sh ${OV_ROOT}/bin/hello_myriad ${OV_ROOT}/bin/mobilenet_classify; \
+    chmod +x /opt/openvino-demo/run.sh ${OV_ROOT}/bin/hello_myriad ${OV_ROOT}/bin/mobilenet_classify ${OV_ROOT}/bin/mobilenet_server; \
     IE_PLUGIN="$(find ${OV_ROOT}/inference_engine/lib -mindepth 2 -maxdepth 2 -type f -name libmyriadPlugin.so -print -quit)"; \
     test -n "${IE_PLUGIN}"; \
     IE_LIB="$(dirname "${IE_PLUGIN}")"; \
@@ -320,7 +351,9 @@ RUN set -eux; \
     LD_LIBRARY_PATH="${IE_LIB}:${OV_ROOT}/ngraph/lib" ${OV_ROOT}/bin/hello_myriad --help; \
     LD_LIBRARY_PATH="${IE_LIB}:${OV_ROOT}/ngraph/lib" ${OV_ROOT}/bin/mobilenet_classify --help; \
     ! LD_LIBRARY_PATH="${IE_LIB}:${OV_ROOT}/ngraph/lib" ldd ${OV_ROOT}/bin/hello_myriad | grep -q 'not found'; \
-    ! LD_LIBRARY_PATH="${IE_LIB}:${OV_ROOT}/ngraph/lib" ldd ${OV_ROOT}/bin/mobilenet_classify | grep -q 'not found'
+    ! LD_LIBRARY_PATH="${IE_LIB}:${OV_ROOT}/ngraph/lib" ldd ${OV_ROOT}/bin/mobilenet_classify | grep -q 'not found'; \
+    LD_LIBRARY_PATH="${IE_LIB}:${OV_ROOT}/ngraph/lib" ${OV_ROOT}/bin/mobilenet_server --help; \
+    ! LD_LIBRARY_PATH="${IE_LIB}:${OV_ROOT}/ngraph/lib" ldd ${OV_ROOT}/bin/mobilenet_server | grep -q 'not found'
 
 WORKDIR /opt/openvino-demo
 ENTRYPOINT ["/opt/openvino-demo/run.sh"]

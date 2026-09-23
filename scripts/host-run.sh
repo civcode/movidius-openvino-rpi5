@@ -30,7 +30,7 @@ platform_load "$(platform_default_request)"
 
 RT="${ROOT}/work/host-runtime"
 OV="${RT}/openvino"
-LIBDIR="${OV}/inference_engine/lib/${TARGET_LIB_DIR}"
+LIBDIR="${OV}/inference_engine/${TARGET_LIB_DIR}"
 IR="${IR:-fp16}"
 MODELS="${ROOT}/vendor/models"
 

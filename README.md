@@ -209,6 +209,13 @@ IR=fp32 ./run.sh --platform amd64 mobilenet
 
 See `HOWTO-MOBILENET.md` for details.
 
+### Live webcam classification
+
+`examples/webcam/` runs the same model from a webcam in real time: a Python
+frontend (OpenCV capture, GUI or `--headless` CLI output) drives a small
+long-running C++ inference server that keeps the stick's compiled network
+warm.  See `examples/webcam/README.md`.
+
 ## Host-native execution without Docker at inference time
 
 Docker remains the primary and most deterministic runtime, but the built tree
@@ -298,6 +305,7 @@ ci/verify-static.sh                no-hardware architecture regressions
 .github/workflows/static.yml       armv7/arm64/amd64 static matrix
 smoke-test/                        tiny OpenVINO example
 mobilenet-test/                    MobileNet classifier example
+examples/webcam/                   live webcam classifier (Python + inference server)
 toolchain/armv7-native.toolchain.cmake
 logs/                              historical Pi build/runtime evidence
 ```

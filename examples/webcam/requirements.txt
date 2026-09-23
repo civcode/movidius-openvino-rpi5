@@ -1,0 +1,9 @@
+# Host-side Python dependencies for examples/webcam/webcam_mobilenet.py
+# (install into your own environment; the project venv in the Docker image
+# is for the build and does not carry these).
+#
+# NOTE for 32-bit armhf hosts (e.g. legacy Raspberry Pi images): PyPI has no
+# armv7l wheels for numpy/opencv - use piwheels, e.g.
+#   pip install --index-url https://www.piwheels.org/simple numpy opencv-python
+numpy>=1.21
+opencv-python>=4.5
