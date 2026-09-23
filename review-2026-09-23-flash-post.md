@@ -385,3 +385,31 @@ a plain checkout; all three C++ apps rebuilt from a plain checkout with
 `--help` exit 0; `py_compile` clean on all five Python files; `bash -n` clean
 on both scripts; `--help` exit 0 on all four clients; live MA2450 runs above
 for the three critical fixes.
+
+---
+
+## Follow-up finding (user report, after the fix pass)
+
+### F1 - stream clients' fps ramps up (0.7 -> 4.2 -> jump to 10.8)
+
+`ssd_stream.py --headless` printed `fps` climbing step-by-step for the first
+~10 frames and then jumping to the steady rate.  Cause: `windowed_fps`
+averages the last 10 per-frame round-trips, and frame 1's round-trip
+contains the one-time MYRIAD compile (~1.65 s).  The displayed value is
+`k / (1.75 + (k-1)*0.092)` until the outlier falls out of the window at
+frame 11 - a window-average artifact, not device warm-up.  (The
+`windowed_fps` docstring even claimed it "excludes the one-time server
+compile", which was not true of the callers.)
+
+Fix (the "do not include the warmup time" option): all three stream
+clients now treat the first round-trip as warm-up - it is reported on an
+explicit `warmup: first ... N ms (includes device compile)` note, the fps
+column shows `warm` for that frame, and it is excluded from the window;
+`windowed_fps`'s docstring now states this caller contract.  README output
+samples updated.  `scripts/test-python-clients.sh` asserts the contract:
+fake-server frame 1 must show `fps= warm` and frame 2 a numeric fps.
+
+Verified live on the MA2450: ssd webcam run `warmup: 1520 ms` then
+`fps=10.8` from frame 2 onward (was 0.7 ramping to 10.8); seg file mode
+`warm` then 1.5 fps from frame 2; webcam_mobilenet `warmup: 1657 ms` then
+21.3 fps.  Device-free driver: PY_CLIENTS_RESULT=PASS with the new asserts.

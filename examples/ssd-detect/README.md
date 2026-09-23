@@ -182,10 +182,20 @@ Webcam stream (Milestone 2), run inside the runtime container with the
 camera and stick passed through (`-v /dev:/dev`), 640x480 capture:
 
 ```
+warmup: first inference 1520 ms (includes device compile); excluded from fps
+[t=   1.77s fps= warm infer=  91.2ms] (no detections at confidence >= 0.50)
+[t=   1.87s fps= 10.8 infer=  91.1ms] (no detections at confidence >= 0.50)
+...
 [t=  44.90s fps=  9.2 infer=  91.3ms] bed 0.87 (230,171,631,431)
 45 s run ended at t=44.9 s: steady-state ~9.2 fps, inference 91 ms/frame,
 detection stable (score 0.86-0.88, box jitter < 10 px over the run)
 ```
+
+The first frame is labelled `fps= warm`: the first request carries the
+one-time MYRIAD compile, so its wall time is reported on the `warmup:` line
+and kept out of the fps average.  From the second frame on, `fps` is the
+mean rate over the last 10 request round-trips, so it reads the steady rate
+immediately instead of ramping up out of a compile-dominated first sample.
 
 File-loop mode (no camera) on `dog_ssd.ppm`: same detections as the
 single-image run, 92 ms/frame, clean EOF shutdown.

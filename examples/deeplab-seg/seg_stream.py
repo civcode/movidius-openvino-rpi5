@@ -282,6 +282,7 @@ def main():
     signal.signal(signal.SIGINT, on_sigint)
 
     frame_times = []
+    warmup_s = None
     try:
         if args.file:
             if args.file.lower().endswith(".ppm"):
@@ -298,11 +299,19 @@ def main():
                     break
                 t0 = time.monotonic()
                 classes, mask, total_ms, infer_ms = client.segment(rgb, w, h)
-                frame_times.append(time.monotonic() - t0)
+                elapsed = time.monotonic() - t0
+                if warmup_s is None:
+                    # first round-trip carries the one-time device compile:
+                    # report it as warm-up, keep it out of the fps window
+                    warmup_s = elapsed
+                    note("warmup: first segmentation %.0f ms (includes device "
+                         "compile); excluded from fps" % (warmup_s * 1000))
+                else:
+                    frame_times.append(elapsed)
                 n += 1
-                fps = windowed_fps(frame_times)
-                print("[frame %d] %dx%d %5.1f fps total %6.0f ms (infer %5.0f ms): "
-                      % (n, w, h, fps, total_ms, infer_ms)
+                fps_str = "%5.1f" % windowed_fps(frame_times) if frame_times else " warm"
+                print("[frame %d] %dx%d %5s fps total %6.0f ms (infer %5.0f ms): "
+                      % (n, w, h, fps_str, total_ms, infer_ms)
                       + ", ".join("%s %.1f%%" % (name, 100.0 * px / (w * h))
                                   for cid, name, px in classes),
                       flush=True)
@@ -338,13 +347,21 @@ def main():
                     rgb = frame[:, :, ::-1]
                     t0 = time.monotonic()
                     classes, mask, total_ms, infer_ms = client.segment(rgb, w, h)
-                    frame_times.append(time.monotonic() - t0)
-                    fps = windowed_fps(frame_times)
+                    elapsed = time.monotonic() - t0
+                    if warmup_s is None:
+                        warmup_s = elapsed
+                        note("warmup: first segmentation %.0f ms (includes "
+                             "device compile); excluded from fps"
+                             % (warmup_s * 1000))
+                    else:
+                        frame_times.append(elapsed)
+                    fps_str = ("%5.1f" % windowed_fps(frame_times)
+                               if frame_times else " warm")
                     last_mask = mask
                     last_dims = (w, h)
                     if args.headless:
-                        print("[t=%7.2fs fps=%5.1f total=%6.0f ms (infer %5.0f ms)] %s"
-                              % (time.monotonic() - t_start, fps, total_ms, infer_ms,
+                        print("[t=%7.2fs fps=%5s total=%6.0f ms (infer %5.0f ms)] %s"
+                              % (time.monotonic() - t_start, fps_str, total_ms, infer_ms,
                                  ", ".join("%s %.1f%%" % (name, 100.0 * px / (w * h))
                                            for cid, name, px in classes)),
                               flush=True)
@@ -352,7 +369,7 @@ def main():
                         overlaid = overlay(frame, mask, w, h)
                         txt = " ".join("%s %.0f%%" % (name, 100.0 * px / (w * h))
                                        for cid, name, px in classes[:5])
-                        cv2.putText(overlaid, "%.0f ms  fps %.1f  %s" % (total_ms, fps, txt),
+                        cv2.putText(overlaid, "%.0f ms  fps %s  %s" % (total_ms, fps_str.strip(), txt),
                                     (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                                     (0, 255, 0), 1, cv2.LINE_AA)
                         cv2.imshow("DeepLabV3 segmentation", overlaid)
@@ -377,8 +394,9 @@ def main():
             except Exception:
                 pass
         client.close()
+        frames_done = len(frame_times) + (1 if warmup_s is not None else 0)
         note("bye (%d frame%s read)"
-             % (len(frame_times), "s" if len(frame_times) != 1 else ""))
+             % (frames_done, "s" if frames_done != 1 else ""))
     return 0
 
 

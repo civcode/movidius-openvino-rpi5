@@ -252,7 +252,11 @@ nframes="$(grep -c '^\[t=' <<<"$out")"
 [[ "$nframes" == 2 ]] || fail "ssd_stream: expected 2 frame lines, got $nframes"
 grep -q 'fire hydrant 0.71' <<<"$out" || fail "ssd_stream: multi-word label not parsed"
 grep -q 'cat 0.63' <<<"$out" || fail "ssd_stream: label list incomplete"
-pass "ssd_stream fake-server end-to-end (multi-word labels, 2 frames)"
+# fps window must exclude the warm-up frame: frame 1 labeled `warm`,
+# frame 2 already carries a numeric steady-state fps (no ramp)
+grep -q 'fps= warm' <<<"$out" || fail "ssd_stream: first frame not labeled warm"
+sed -n '2p' <<<"$out" | grep -Eq 'fps= *[0-9]' || fail "ssd_stream: frame 2 fps not numeric: $(sed -n '2p' <<<"$out")"
+pass "ssd_stream fake-server end-to-end (multi-word labels, 2 frames, warm-up excluded)"
 
 # garbage protocol line -> clean inference failure, no traceback
 set +e
@@ -283,6 +287,8 @@ nframes="$(grep -c '^\[frame ' <<<"$out")"
 [[ "$nframes" == 2 ]] || fail "seg_stream: expected 2 frame lines, got $nframes"
 grep -q 'dog 50.0%' <<<"$out" || fail "seg_stream: CLASS line not parsed"
 grep -q 'dining table 25.0%' <<<"$out" || fail "seg_stream: multi-word CLASS name not parsed"
+grep -q ' warm fps' <<<"$out" || fail "seg_stream: first frame not labeled warm"
+sed -n '2p' <<<"$out" | grep -Eq '[0-9.]+ fps' || fail "seg_stream: frame 2 fps not numeric: $(sed -n '2p' <<<"$out")"
 "$PY" - "$WORK/mask.ppm" <<'PYEOF'
 import sys
 data = open(sys.argv[1], "rb").read()

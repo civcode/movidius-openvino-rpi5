@@ -173,8 +173,11 @@ class LinePipe:
 
 def windowed_fps(times, n=10):
     """Average fps over the last n frame intervals (the `times` list holds
-    per-frame elapsed seconds, most recent last).  Honest for short runs:
-    excludes the one-time server compile and settles at the steady rate."""
+    per-frame elapsed seconds, most recent last).  Callers must NOT append
+    the first (warm-up) round-trip here: it contains the one-time device
+    compile and would drag the average for n frames.  The stream clients
+    report that sample separately as `warm` and window only steady-state
+    frames, so the printed fps is the steady rate from frame 2 onward."""
     tail = list(times)[-n:]
     if not tail:
         return 0.0

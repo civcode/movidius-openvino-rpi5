@@ -128,7 +128,8 @@ def main():
     last_probs = []
     last_infer_ms = 0.0
     frame_times = []
-    fps = 0.0
+    warmup_s = None
+    fps_str = " warm"
     frame_no = 0
     classified_no = 0
     t_start = time.monotonic()
@@ -149,11 +150,20 @@ def main():
                 logits = client.infer(tensor)
                 last_infer_ms = (time.monotonic() - t0) * 1000.0
                 last_probs = topk_probs(logits, labels, args.topk)
-                # steady-state fps over the last 10 classified frames (excludes
-                # the one-time server compile, like the other clients);
+                # steady-state fps over the last 10 classified frames; the
+                # first (warm-up) round-trip carries the one-time device
+                # compile, so it is reported separately and excluded.
                 # windowed_fps expects per-frame DURATIONS, not stamps
-                frame_times.append(time.monotonic() - t_frame0)
-                fps = windowed_fps(frame_times)
+                elapsed = time.monotonic() - t_frame0
+                if warmup_s is None:
+                    warmup_s = elapsed
+                    note("warmup: first classification %.0f ms (includes "
+                         "device compile); excluded from fps"
+                         % (warmup_s * 1000))
+                else:
+                    frame_times.append(elapsed)
+                fps_str = ("%5.1f" % windowed_fps(frame_times)
+                           if frame_times else " warm")
             probs = last_probs
 
             # ------------------------------------------------------- reporting
@@ -164,7 +174,7 @@ def main():
 
             # results always go to the command line, on every classified frame
             if classified:
-                print("[t=%7.2fs fps=%5.1f infer=%6.1fms]\n%s" % (t, fps, last_infer_ms, top),
+                print("[t=%7.2fs fps=%5s infer=%6.1fms]\n%s" % (t, fps_str, last_infer_ms, top),
                       flush=True)
 
             if not args.headless:
@@ -176,7 +186,7 @@ def main():
                     cv2.rectangle(img, (4, y - th - 2), (8 + tw, y + 2), (0, 0, 0), -1)
                     cv2.putText(img, text, (8, y), cv2.FONT_HERSHEY_SIMPLEX, 0.55,
                                 (0, 255, 0), 1, cv2.LINE_AA)
-                status = "t=%.1fs  fps=%.1f  infer=%.1f ms" % (t, fps, last_infer_ms)
+                status = "t=%.1fs  fps=%s  infer=%.1f ms" % (t, fps_str.strip(), last_infer_ms)
                 cv2.putText(img, status, (8, img.shape[0] - 12),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
                 cv2.imshow(window, img)

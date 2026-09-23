@@ -274,6 +274,7 @@ def main():
     t_start = time.monotonic()
     frame_no = 0
     frame_times = []
+    warmup_s = None
     try:
         for rgb in frame_source(args):
             if stopping["flag"]:
@@ -281,16 +282,24 @@ def main():
             t0 = time.monotonic()
             w, h, infer_ms, dets = client.detect(rgb)
             frame_no += 1
-            frame_times.append(time.monotonic() - t0)
+            elapsed = time.monotonic() - t0
+            if warmup_s is None:
+                # first round-trip carries the one-time device compile:
+                # report it as warm-up, keep it out of the fps window
+                warmup_s = elapsed
+                note("warmup: first inference %.0f ms (includes device "
+                     "compile); excluded from fps" % (warmup_s * 1000))
+            else:
+                frame_times.append(elapsed)
             t = time.monotonic() - t_start
-            fps = windowed_fps(frame_times)
+            fps_str = "%5.1f" % windowed_fps(frame_times) if frame_times else " warm"
 
             # results always go to the command line
             if dets:
                 listing = ", ".join("%s %.2f (%d,%d,%d,%d)" % d for d in dets)
             else:
                 listing = "(no detections at confidence >= %.2f)" % args.min_conf
-            print("[t=%7.2fs fps=%5.1f infer=%6.1fms] %s" % (t, fps, infer_ms, listing),
+            print("[t=%7.2fs fps=%5s infer=%6.1fms] %s" % (t, fps_str, infer_ms, listing),
                   flush=True)
 
             if not args.headless:
@@ -302,7 +311,7 @@ def main():
                     cv2.rectangle(img, (x1, y1 - th - 4), (x1 + tw + 4, y1), (0, 255, 0), -1)
                     cv2.putText(img, text, (x1 + 2, y1 - 3), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                                 (0, 0, 0), 1, cv2.LINE_AA)
-                status = "t=%.1fs  fps=%.1f  infer=%.1f ms" % (t, fps, infer_ms)
+                status = "t=%.1fs  fps=%s  infer=%.1f ms" % (t, fps_str.strip(), infer_ms)
                 cv2.putText(img, status, (8, img.shape[0] - 12),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
                 cv2.imshow(window, img)

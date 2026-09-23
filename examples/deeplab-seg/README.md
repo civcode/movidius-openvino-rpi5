@@ -139,7 +139,9 @@ classes, same ordering, consistent with the MYRIAD run.
 
 Streaming (webcam 640×480, `seg_stream.py --headless`):
 ~1.5 fps, server 676-679 ms/frame (infer ~674 ms); live classes
-(background/dog/cat) track the camera scene sensibly.
+(background/dog/cat) track the camera scene sensibly.  As in `ssd_stream.py`,
+the first frame prints `fps= warm` and the compile-inflated round-trip goes
+to the `warmup:` line instead of the fps average.
 
 The 513×513 DeepLabV3 mask is ~5× the SSDLite 300×300 cost, so ~1.5 fps
 on the MA2450 is the expected regime (SSDLite: ~10 fps).

@@ -66,6 +66,11 @@ python3 examples/webcam/webcam_mobilenet.py --camera 1 --topk 3 --max-fps 10 --e
 python3 examples/webcam/webcam_mobilenet.py --ir fp32 --backend docker
 ```
 
+The `fps` column is the steady-state rate over the last 10 classified
+frames; the first classified frame prints `fps= warm` because its
+round-trip includes the one-time MYRIAD compile (reported on a separate
+`warmup:` line and excluded from the average).
+
 Main options (see `--help`); the optional first positional argument replaces
 the launcher script (invoked as `<script> <backend> <ir> <device>`;
 default `examples/webcam/infer-server.sh`):
