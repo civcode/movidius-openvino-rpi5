@@ -66,7 +66,9 @@ python3 examples/webcam/webcam_mobilenet.py --camera 1 --topk 3 --max-fps 10 --e
 python3 examples/webcam/webcam_mobilenet.py --ir fp32 --backend docker
 ```
 
-Main options (see `--help`):
+Main options (see `--help`); the optional first positional argument replaces
+the launcher script (invoked as `<script> <backend> <ir> <device>`;
+default `examples/webcam/infer-server.sh`):
 
 | option | default | meaning |
 |---|---|---|

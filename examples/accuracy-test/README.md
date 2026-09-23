@@ -32,6 +32,10 @@ python3 examples/accuracy-test/accuracy_test.py --limit 100 --ir fp32 --backend 
 python3 examples/accuracy-test/accuracy_test.py --fail-under 65
 ```
 
+The optional first positional argument replaces the launcher script
+(invoked as `<script> <backend> <ir> <device>`; default
+`examples/webcam/infer-server.sh`).
+
 ## What to expect
 
 Verified on a MA2450 stick with the converted 2020.3 IR (both precisions):

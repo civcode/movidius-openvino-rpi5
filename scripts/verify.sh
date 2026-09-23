@@ -129,6 +129,12 @@ export LD_LIBRARY_PATH="$IE_LIB:/opt/openvino/ngraph/lib"
 '
 end
 
+sec '5b. Python client protocol tests (fake servers, no device)'
+# Host-side, deterministic: LinePipe semantics, resize bounds, default
+# launchers, and end-to-end client runs against fake protocol servers.
+./scripts/test-python-clients.sh
+end
+
 sec '6. Device enumeration and tiny inference'
 if (( WITH_DEVICE )); then
     timeout 300 ./run.sh --platform "${TARGET}" --image "${IMAGE}" list

@@ -50,7 +50,6 @@ from mobilenet_client import (            # noqa: E402
     DEFAULT_LABELS,
     MyriadClient,
     load_labels,
-    note,
     preprocess,
 )
 
@@ -68,6 +67,10 @@ def main():
         description="MobileNet v2 accuracy check with known-content images on "
                     "the Movidius MA2450",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    ap.add_argument("server_script", nargs="?", default=None,
+                    help="launcher script that starts mobilenet_server, invoked as "
+                         "'<script> <backend> <ir> <device>' (default: "
+                         "examples/webcam/infer-server.sh)")
     ap.add_argument("--images-dir", default=DEFAULT_IMAGES,
                     help="directory with '<synset>_<label>.JPEG' images")
     ap.add_argument("--labels", default=DEFAULT_LABELS, help="synset label file")
@@ -89,6 +92,12 @@ def main():
     if cv2 is None:
         die("OpenCV is required: pip install opencv-python numpy")
 
+    if not os.path.isdir(args.images_dir):
+        die("no images directory %s - run ./examples/accuracy-test/fetch-sample-images.sh"
+            % args.images_dir)
+    if args.server_script and not os.path.exists(args.server_script):
+        die("server launcher not found: %s" % args.server_script)
+
     # case-insensitive discovery (the dataset is .JPEG but users add others)
     files = sorted(
         os.path.join(args.images_dir, name)
@@ -107,11 +116,11 @@ def main():
     for idx, (cid, _name) in enumerate(labels):
         synset_to_idx[cid] = idx
 
-    client = MyriadClient(args.backend, args.ir, args.device, args.request_timeout)
+    client = MyriadClient(args.backend, args.ir, args.device, args.request_timeout,
+                          server_script=args.server_script)
     total = len(files)
     ok = skip = top1_hits = top5_hits = 0
     bad_rows = []   # every top-1 miss (up to args.show_errors)
-    top5_misses = 0
     t0 = time.monotonic()
     t_first = None
     try:
@@ -140,8 +149,6 @@ def main():
                                      float(logits[top1]), truth in top5))
             if truth in top5:
                 top5_hits += 1
-            else:
-                top5_misses += 1
             if t_first is None:
                 t_first = time.monotonic() - t0
     except RuntimeError as ex:

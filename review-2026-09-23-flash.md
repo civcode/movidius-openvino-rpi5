@@ -579,3 +579,16 @@ the 2020.3 headers, `ssd_test`/`seg_test`/`test_half` rebuilt and passing
 from a plain checkout, and shell scripts by `bash -n` + `--help` runs.
 Final hardware confirmation (Docker image rebuild + `scripts/verify.sh`
 against the MA2450) is the remaining gate before commit.
+
+> **Correction (post-review 2026-09-23, commit `8bbddac`):** the Python
+> fake-server verification above was weaker than claimed - it always passed
+> an explicit fake `server_cmd` and never exercised the clients' *default*
+> invocation paths.  The post-review (`review-2026-09-23-flash-post.md`)
+> found three functional regressions that slipped through: the broken
+> `seg_stream.py` default launcher command, a `LinePipe.read_exact`
+> over-read swallowing the following protocol line, and `webcam_mobilenet.py`
+> feeding absolute timestamps to `windowed_fps`.  All were fixed and are now
+> pinned by the device-free test driver `scripts/test-python-clients.sh`
+> (wired into `verify.sh` as section 5b), which covers default launchers,
+> text/binary pipe interleave, malformed-protocol robustness, resize bounds,
+> and the `windowed_fps` durations contract.

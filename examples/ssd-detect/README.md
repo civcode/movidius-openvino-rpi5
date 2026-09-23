@@ -101,7 +101,10 @@ Options: `--min-conf` (default 0.5, detections kept at `score >= min-conf`),
 `ssd_detect --stdin` keeps the compiled network warm and serves frames over
 stdio, driven by the OpenCV client `ssd_stream.py` (same hybrid pattern as
 the MobileNet webcam example; the server is started by
-`infer-ssd-server.sh`, host-native or Docker):
+`infer-ssd-server.sh`, host-native or Docker).  A different launcher can be
+passed as the optional first positional argument; it is invoked as
+`<launcher> <backend> <device> <min-conf>` (all clients share this
+positional-launcher convention):
 
 ```
 # GUI (default): window with labelled boxes, q/Esc to quit

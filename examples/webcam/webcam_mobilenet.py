@@ -32,8 +32,6 @@ import signal
 import sys
 import time
 
-import numpy as np
-
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from mobilenet_client import (            # noqa: E402
     DEFAULT_LABELS,
@@ -62,6 +60,10 @@ def main():
         description="live webcam MobileNet v2 classification on the Movidius "
                     "MA2450 (OpenVINO 2020.3 MYRIAD)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    ap.add_argument("server_script", nargs="?", default=None,
+                    help="launcher script that starts mobilenet_server, invoked as "
+                         "'<script> <backend> <ir> <device>' (default: "
+                         "examples/webcam/infer-server.sh)")
     ap.add_argument("--camera", type=int, default=0, help="webcam index (/dev/videoN)")
     ap.add_argument("--camera-width", type=int, default=0, help="request capture width (0 = device default)")
     ap.add_argument("--camera-height", type=int, default=0, help="request capture height (0 = device default)")
@@ -106,7 +108,10 @@ def main():
     note("camera %d: %dx%d" % (args.camera, w, h))
 
     # ------------------------------------------------------------- inference
-    client = MyriadClient(args.backend, args.ir, args.device, args.request_timeout)
+    if args.server_script and not os.path.exists(args.server_script):
+        die("server launcher not found: %s" % args.server_script)
+    client = MyriadClient(args.backend, args.ir, args.device, args.request_timeout,
+                          server_script=args.server_script)
 
     stopping = {"flag": False}
 
@@ -145,10 +150,10 @@ def main():
                 last_infer_ms = (time.monotonic() - t0) * 1000.0
                 last_probs = topk_probs(logits, labels, args.topk)
                 # steady-state fps over the last 10 classified frames (excludes
-                # the one-time server compile, like the other clients)
-                frame_times.append(time.monotonic())
-                if len(frame_times) >= 2:
-                    fps = windowed_fps(frame_times)
+                # the one-time server compile, like the other clients);
+                # windowed_fps expects per-frame DURATIONS, not stamps
+                frame_times.append(time.monotonic() - t_frame0)
+                fps = windowed_fps(frame_times)
             probs = last_probs
 
             # ------------------------------------------------------- reporting

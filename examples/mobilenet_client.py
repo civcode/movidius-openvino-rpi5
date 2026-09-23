@@ -68,9 +68,13 @@ class LinePipe:
     Keeps a per-instance remainder buffer so a chunk read can end in the
     middle of a line or a binary payload.  `readline(timeout)` returns text
     lines (raising TimeoutError if the server is silent past `timeout`),
-    and `read_exact(n)` returns exactly n bytes (for binary payloads such
-    as the seg MASK body).  When a subprocess is attached, an exited server
-    is detected and the pipe drained before the failure is reported.
+    and `read_exact(n, timeout)` returns exactly n bytes (for binary
+    payloads such as the seg MASK body); any bytes that arrive past the
+    payload stay in the internal buffer for the next readline/read_exact.
+    When a subprocess is attached, an exited server is detected and the
+    pipe drained before the failure is reported (one drain fill per
+    readline is enough here because each server flushes a complete response
+    per frame).
 
     Shared by the ssd/seg stream clients so the line/binary buffering has
     one tested implementation.
@@ -90,7 +94,11 @@ class LinePipe:
         return chunk
 
     def readline(self, timeout=None):
-        """Return the next line (no newline) as text, or None on clean EOF."""
+        """Return the next line (no newline) as text, or None on clean EOF.
+
+        Note: with an attached `proc` (all real uses), a server that has
+        exited raises RuntimeError instead of returning None; the None-EOF
+        return applies to a plain fd with no process to report."""
         deadline = None if timeout is None else time.monotonic() + timeout
         while True:
             pos = self.buf.find(b"\n")
@@ -119,16 +127,44 @@ class LinePipe:
                 if not ready:
                     continue
             if not self._fill():
-                # EOF: return the trailing partial line, else None
+                # EOF.  With an attached process, give it a moment to be
+                # reaped so the exit code (a far better diagnostic than a
+                # bare EOF) can be reported deterministically.
+                if self.proc is not None:
+                    if self.proc.poll() is None:
+                        try:
+                            self.proc.wait(timeout=1)
+                        except subprocess.TimeoutExpired:
+                            pass
+                    if self.proc.returncode is not None:
+                        raise RuntimeError(
+                            "inference server exited with code %s before the "
+                            "response was complete (see its diagnostics above)"
+                            % self.proc.returncode)
                 line, self.buf = bytes(self.buf), bytearray()
                 return line.decode("utf-8", "replace") if line else None
 
-    def read_exact(self, n):
-        """Return exactly n bytes, drawing on any buffered remainder first."""
-        out = bytes(self.buf[:n])
+    def read_exact(self, n, timeout=None):
+        """Return exactly n bytes, drawing on any buffered remainder first.
+
+        Never reads more than the remaining payload count, so protocol
+        lines that follow the payload in the same pipe write stay in the
+        buffer (or in the pipe) for the next readline.  Optional timeout
+        like readline's, so a server that announces a MASK and then hangs
+        fails with TimeoutError instead of blocking forever."""
+        out = bytearray(self.buf[:n])
         self.buf = self.buf[n:]
+        deadline = None if timeout is None else time.monotonic() + timeout
         while len(out) < n:
-            chunk = os.read(self.fd, max(n - len(out), 4096))
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0.0:
+                    raise TimeoutError("no server payload within %.0f s" % timeout)
+                ready, _, _ = select.select([self.fd], [], [],
+                                            max(0.001, remaining))
+                if not ready:
+                    continue
+            chunk = os.read(self.fd, n - len(out))
             if not chunk:
                 raise RuntimeError("server closed while reading a binary payload")
             out += chunk
@@ -198,10 +234,10 @@ def topk_probs(logits, labels, k):
 class MyriadClient:
     """Drives the mobilenet_server child process over its stdin/stdout pipes."""
 
-    def __init__(self, backend, ir, device, request_timeout):
+    def __init__(self, backend, ir, device, request_timeout, server_script=None):
         self.request_timeout = request_timeout
         self.proc = subprocess.Popen(
-            [INFER_SERVER, backend, ir, device],
+            [server_script or INFER_SERVER, backend, ir, device],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=None,            # server diagnostics stream to our terminal
@@ -209,6 +245,14 @@ class MyriadClient:
         )
         note("inference backend: %s ir=%s device=%s (server pid %d)"
              % (backend, ir, device, self.proc.pid))
+
+    def _stdin_closed_message(self):
+        code = self.proc.poll()
+        if code is None:
+            return ("server closed its stdin pipe but has not exited yet "
+                    "(see its diagnostics above)")
+        return ("server closed its stdin pipe (exit code %s: %s)"
+                % (code, server_exit_meaning(code)))
 
     def _read_exact(self, n):
         buf = bytearray()
@@ -238,10 +282,7 @@ class MyriadClient:
             self.proc.stdin.write(data)
             self.proc.stdin.flush()
         except (BrokenPipeError, OSError) as e:
-            code = self.proc.poll()
-            raise RuntimeError(
-                "server closed its stdin pipe before the first response"
-                " (exit code %s: %s)" % (code, server_exit_meaning(code))) from e
+            raise RuntimeError(self._stdin_closed_message()) from e
         raw = self._read_exact(OUTPUT_BYTES)
         return np.frombuffer(raw, dtype="<f4")
 

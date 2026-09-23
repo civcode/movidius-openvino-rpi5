@@ -10,7 +10,11 @@ Usage:
   python3 examples/deeplab-seg/seg_stream.py --headless       # CLI output only
   python3 examples/deeplab-seg/seg_stream.py --file dog_ssd.ppm --frames 1
   python3 examples/deeplab-seg/seg_stream.py --backend docker --mask-out mask.ppm
-  python3 examples/deeplab-seg/seg_stream.py my-server.sh host MYRIAD
+  python3 examples/deeplab-seg/seg_stream.py path/to/my-launcher.sh --backend host
+
+The first (optional) positional argument replaces the default launcher
+(examples/deeplab-seg/infer-seg-server.sh); a custom launcher is invoked as
+`<launcher> <backend> <device>` and must speak the protocol below.
 
 The server protocol (see seg_detect.cpp):
 
@@ -37,7 +41,9 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_SERVER_CMD = "bash %s/infer-seg-server.sh" % os.path.join(HERE, "infer-seg-server.sh")
+# single executable path, invoked as [DEFAULT_SERVER_CMD, backend, device]
+# (the script must be mode 755, like the other launchers)
+DEFAULT_SERVER_CMD = os.path.join(HERE, "infer-seg-server.sh")
 
 sys.path.insert(0, os.path.dirname(HERE))  # examples/ (shared client helpers)
 from mobilenet_client import LinePipe, server_exit_meaning, windowed_fps
@@ -115,6 +121,8 @@ class SegClient:
 
     def __init__(self, server_cmd, backend, device, request_timeout):
         self.request_timeout = request_timeout
+        # single executable path convention (same as ssd_stream.py): the
+        # launcher must be an executable script, invoked as <path> <backend> <device>
         self.proc = subprocess.Popen(
             [server_cmd, backend, device],
             stdin=subprocess.PIPE,
@@ -135,9 +143,13 @@ class SegClient:
             self.proc.stdin.flush()
         except (BrokenPipeError, OSError) as e:
             code = self.proc.poll()
+            if code is None:
+                raise RuntimeError(
+                    "server closed its stdin pipe but has not exited yet "
+                    "(see its diagnostics above)") from e
             raise RuntimeError(
-                "server closed its stdin pipe before the first response"
-                " (exit code %s: %s)" % (code, server_exit_meaning(code))) from e
+                "server closed its stdin pipe (exit code %s: %s)"
+                % (code, server_exit_meaning(code))) from e
 
         classes = []
         mask_bytes = None
@@ -152,8 +164,13 @@ class SegClient:
             if not tok:
                 continue
             if tok[0] == "FRAME":
-                total_ms = float(tok[3])
-                infer_ms = float(tok[4])
+                if len(tok) != 5:
+                    raise RuntimeError("unexpected server line: %r" % line)
+                try:
+                    total_ms = float(tok[3])
+                    infer_ms = float(tok[4])
+                except ValueError:
+                    raise RuntimeError("unexpected server line: %r" % line) from None
             elif tok[0] == "CLASSES":
                 for _ in range(int(tok[1])):
                     l = self._readline()
@@ -166,8 +183,16 @@ class SegClient:
                         raise RuntimeError("unexpected server line: %r" % l)
                     classes.append((int(t[1]), " ".join(t[2:-1]), int(t[-1])))
             elif tok[0] == "MASK":
+                if len(tok) != 3:
+                    raise RuntimeError("unexpected server line: %r" % line)
                 fw, fh = int(tok[1]), int(tok[2])
-                mask_bytes = self.pipe.read_exact(fw * fh * 2)
+                if fw <= 0 or fh <= 0:
+                    raise RuntimeError("bad MASK dimensions: %r" % line)
+                try:
+                    mask_bytes = self.pipe.read_exact(fw * fh * 2,
+                                                      timeout=self.request_timeout)
+                except TimeoutError as ex:
+                    raise RuntimeError(str(ex)) from ex
             elif tok[0] == "END":
                 return classes, mask_bytes, total_ms, infer_ms
         # unreachable
@@ -212,22 +237,14 @@ def write_class_map(path, mask_u16, w, h):
         f.write(m.tobytes())
 
 
-def print_classes(classes, total_ms, infer_ms, w, h):
-    total = w * h
-    parts = []
-    for cid, name, px in classes:
-        parts.append(f"{name} {100.0 * px / total:.1f}%")
-    print(f"[frame {w}x{h}] total {total_ms:.0f} ms (infer {infer_ms:.0f} ms): "
-          + ", ".join(parts))
-
-
 def main():
     ap = argparse.ArgumentParser(
         description="live webcam DeepLabV3 (Pascal VOC) segmentation on the "
                     "Movidius MA2450 (OpenVINO 2020.3 MYRIAD)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     ap.add_argument("server_cmd", nargs="?", default=DEFAULT_SERVER_CMD,
-                    help="server script to run for inference (see examples/deeplab-seg/README.md)")
+                    help="server launcher script, invoked as '<script> <backend> "
+                         "<device>' (default: examples/deeplab-seg/infer-seg-server.sh)")
     ap.add_argument("--backend", choices=["auto", "host", "docker"], default="auto",
                     help="where seg_detect runs (passed to the server script)")
     ap.add_argument("--device", default="MYRIAD", help="OpenVINO device name")
@@ -253,9 +270,12 @@ def main():
                             and args.file.lower().endswith(".ppm")):
         die("OpenCV is required: pip install opencv-python numpy")
 
+    if not os.path.exists(args.server_cmd):
+        die("server launcher not found: %s" % args.server_cmd)
     client = SegClient(args.server_cmd, args.backend, args.device, args.request_timeout)
 
     stopping = {"flag": False}
+    t_start = time.monotonic()
     def on_sigint(_signum, _frame):
         note("\ninterrupt - shutting down")
         stopping["flag"] = True
@@ -324,7 +344,7 @@ def main():
                     last_dims = (w, h)
                     if args.headless:
                         print("[t=%7.2fs fps=%5.1f total=%6.0f ms (infer %5.0f ms)] %s"
-                              % (sum(frame_times), fps, total_ms, infer_ms,
+                              % (time.monotonic() - t_start, fps, total_ms, infer_ms,
                                  ", ".join("%s %.1f%%" % (name, 100.0 * px / (w * h))
                                            for cid, name, px in classes)),
                               flush=True)

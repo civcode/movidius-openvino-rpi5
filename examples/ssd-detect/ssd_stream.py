@@ -31,7 +31,6 @@ Usage:
 
 import argparse
 import os
-import select
 import signal
 import struct
 import subprocess
@@ -99,18 +98,25 @@ class SsdClient:
             self.proc.stdin.flush()
         except (BrokenPipeError, OSError) as e:
             code = self.proc.poll()
+            if code is None:
+                raise RuntimeError(
+                    "server closed its stdin pipe but has not exited yet "
+                    "(see its diagnostics above)") from e
             raise RuntimeError(
-                "server closed its stdin pipe before the first response"
-                " (exit code %s: %s)" % (code, server_exit_meaning(code))) from e
+                "server closed its stdin pipe (exit code %s: %s)"
+                % (code, server_exit_meaning(code))) from e
         line = self._readline()
         if line is None:
             raise RuntimeError("server closed the response pipe")
         parts = line.split()
         if parts[0] == "ERROR":
             raise RuntimeError("server reported: " + line[5:].strip())
-        if parts[0] != "FRAME":
+        if parts[0] != "FRAME" or len(parts) != 4:
             raise RuntimeError("unexpected server line: %r" % line)
-        infer_ms = float(parts[3])
+        try:
+            infer_ms = float(parts[3])
+        except ValueError:
+            raise RuntimeError("unexpected server line: %r" % line) from None
         dets = []
         while True:
             line = self._readline()
@@ -122,12 +128,20 @@ class SsdClient:
                 raise RuntimeError("server reported: " + line[5:].strip())
             # The label may contain spaces (COCO has multi-word classes, e.g.
             # 'fire hydrant'), so split off the five trailing numeric fields
-            # and treat everything between DET and them as the label.
+            # and treat everything between DET and them as the label.  The
+            # leading-token check keeps malformed lines a clean error instead
+            # of an IndexError.
+            if line.split(" ", 1)[0] != "DET":
+                raise RuntimeError("unexpected server line: %r" % line)
             p = line.split("DET", 1)[1].rsplit(" ", 5)
             if len(p) != 6:
                 raise RuntimeError("unexpected server line: %r" % line)
-            dets.append((p[0].strip(), float(p[1]), int(p[2]), int(p[3]),
-                        int(p[4]), int(p[5])))
+            try:
+                det = (p[0].strip(), float(p[1]), int(p[2]), int(p[3]),
+                       int(p[4]), int(p[5]))
+            except ValueError:
+                raise RuntimeError("unexpected server line: %r" % line) from None
+            dets.append(det)
         return w, h, infer_ms, dets
 
     def close(self):
@@ -173,7 +187,7 @@ def read_ppm(path):
 
 
 def frame_source(args):
-    """Yields BGR uint8 frames from the webcam or a looping image file."""
+    """Yields RGB uint8 frames from the webcam or a looping image file."""
     if args.file:
         if args.file.lower().endswith(".ppm"):
             # read_ppm returns RGB directly (PIL writes PPM in RGB order);

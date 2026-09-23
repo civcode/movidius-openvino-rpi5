@@ -69,12 +69,16 @@ inline Ppm readPpm(const std::string& path) {
 }
 
 // Bilinear resize of an interleaved RGB buffer to dw x dh.
-// Half-pixel sampling (matches OpenCV INTER_LINEAR, the reference for the
-// model's in-graph resize).  When upscaling (dst larger than src in a
-// dimension) the first/last rows sample partly outside the source, so
+// Half-pixel sampling.  For downsampling this reproduces OpenCV
+// INTER_LINEAR exactly (the reference for the models' in-graph resize, and
+// every verified pipeline path downsamples).  For upsampling the first/last
+// rows/cols sample partly outside the source: this implementation clamps the
+// source index pair instead (OpenCV duplicates the border row/col), so
 // individual weights can exceed 1 and the result can overshoot 255 on
-// saturated pixels; the value is clamped before the uint8 conversion so the
-// cast cannot wrap.
+// saturated pixels - hence the value clamp before the uint8 cast.  Sources
+// with a 1-pixel-wide or 1-pixel-tall dimension are handled by duplicating
+// the single row/col (min(sh-1, y0+1)), which also keeps every index in
+// range.
 inline void bilinearResize(const uint8_t* src, int sw, int sh,
                            std::vector<uint8_t>& dst, int dw, int dh) {
     dst.assign(static_cast<std::size_t>(dw) * dh * 3, 0);
@@ -82,14 +86,18 @@ inline void bilinearResize(const uint8_t* src, int sw, int sh,
     const float yRatio = static_cast<float>(sh) / dh;
     for (int y = 0; y < dh; ++y) {
         const float fy = (y + 0.5f) * yRatio - 0.5f;
-        const int y0 = std::max(0, std::min(sh - 2, static_cast<int>(std::floor(fy))));
+        const int y0 = std::max(0, std::min(sh > 1 ? sh - 2 : 0,
+                                            static_cast<int>(std::floor(fy))));
         const float wy = fy - y0;
-        const int y1 = y0 + 1;
+        // sh == 1: y1 == y0, i.e. the single row is duplicated; the weights
+        // ((1 - w) + w = 1) still sum to 1, so the result is well-defined.
+        const int y1 = std::min(sh - 1, y0 + 1);
         for (int x = 0; x < dw; ++x) {
             const float fx = (x + 0.5f) * xRatio - 0.5f;
-            const int x0 = std::max(0, std::min(sw - 2, static_cast<int>(std::floor(fx))));
+            const int x0 = std::max(0, std::min(sw > 1 ? sw - 2 : 0,
+                                                 static_cast<int>(std::floor(fx))));
             const float wx = fx - x0;
-            const int x1 = x0 + 1;
+            const int x1 = std::min(sw - 1, x0 + 1);
             for (int c = 0; c < 3; ++c) {
                 const float v00 = src[static_cast<std::size_t>(y0) * sw * 3 + x0 * 3 + c];
                 const float v01 = src[static_cast<std::size_t>(y0) * sw * 3 + x1 * 3 + c];
