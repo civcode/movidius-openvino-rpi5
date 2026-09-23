@@ -11,6 +11,7 @@ vendor/
 # Scratch: reference-check images/outputs, staged Model Optimizer tree, the
 # extracted host runtime (regenerate with scripts/pull-runtime.sh), test blobs
 work/
+examples/accuracy-test/images/
 
 # Python bytecode
 __pycache__/
