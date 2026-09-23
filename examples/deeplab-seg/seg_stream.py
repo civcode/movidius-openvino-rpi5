@@ -226,7 +226,11 @@ def overlay(frame_bgr, mask_u16, w, h, alpha=0.4):
     colored = pal[m]              # (h, w, 3) RGB from palette
     rgb_frame = frame_bgr[:, :, ::-1]
     out = (alpha * colored + (1 - alpha) * rgb_frame).astype("uint8")
-    return out[:, :, ::-1]        # back to BGR for cv2
+    # Back to BGR for cv2.  The channel reversal is a negative-stride view;
+    # cv2's in-place functions (putText, imshow) reject non-contiguous
+    # arrays ("Layout of the output array img is incompatible with cv::Mat"),
+    # so materialise a contiguous copy here.
+    return np.ascontiguousarray(out[:, :, ::-1])
 
 
 def write_class_map(path, mask_u16, w, h):

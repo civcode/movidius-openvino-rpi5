@@ -413,3 +413,19 @@ Verified live on the MA2450: ssd webcam run `warmup: 1520 ms` then
 `fps=10.8` from frame 2 onward (was 0.7 ramping to 10.8); seg file mode
 `warm` then 1.5 fps from frame 2; webcam_mobilenet `warmup: 1657 ms` then
 21.3 fps.  Device-free driver: PY_CLIENTS_RESULT=PASS with the new asserts.
+
+### F2 - GUI mode crashed: cv2.putText on the overlay image (field report)
+
+`python3 seg_stream.py` (GUI, no `--headless`) died with
+`error: (-5:Bad argument) ... Layout of the output array img is
+incompatible with cv::Mat`.  Cause: `overlay()` returned `out[:, :, ::-1]`
+- a negative-stride view - and `putText` mutates its image in place, which
+OpenCV only allows on standard-layout (contiguous) arrays.  The headless
+paths never exercised `putText`, so all earlier verification missed it.
+
+Fix: `overlay()` now returns `np.ascontiguousarray(out[:, :, ::-1])`.
+Regression check added to `scripts/test-python-clients.sh` (display-free):
+overlay output must be `C_CONTIGUOUS`, the blend must equal
+`alpha*palette[class] + (1-alpha)*frame` stored BGR, and `putText` on it
+must not raise.  Also exercised live: GUI webcam loop with a fake server
+on display `:1` for 8 s, zero client errors.

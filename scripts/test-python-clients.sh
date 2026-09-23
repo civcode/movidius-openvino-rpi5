@@ -297,6 +297,35 @@ assert len(data) == 11 + 4 and data[11:] == b"\x01\x02\x03\x04", data[11:]
 PYEOF
 pass "seg_stream fake-server end-to-end (interleaved MASK/END, 2 frames, mask-out)"
 
+# GUI overlay: putText/imshow mutate the image in place and reject
+# negative-stride (channel-reversed) views.  Display-free regression for
+# the overlay() contiguity guarantee.
+"$PY" - <<'PYEOF'
+import sys
+import numpy as np
+import cv2
+sys.path.insert(0, "examples/deeplab-seg")
+import seg_stream
+
+frame = np.full((48, 64, 3), 120, np.uint8)          # BGR
+mask = np.arange(48 * 64, dtype="uint16").reshape(48, 64) % 21
+out = seg_stream.overlay(frame, mask.tobytes(), 64, 48)
+assert out.shape == (48, 64, 3) and out.dtype == np.uint8
+assert out.flags["C_CONTIGUOUS"], "overlay() must return a contiguous array"
+# pixel (0,0) is class mask[0,0]: alpha*palette[class] (RGB) blended with
+# grey 120, stored BGR
+top_class = int(mask[0, 0])
+expected_rgb = (0.4 * np.array(seg_stream.PALETTE[top_class], np.float64)
+                + 0.6 * 120).astype(np.uint8)
+assert tuple(out[0, 0]) == tuple(expected_rgb[::-1]), (out[0, 0], expected_rgb)
+# putText is the call that failed in the field report; imshow itself needs
+# a display and is not exercised here (it accepts the same contiguous input).
+cv2.putText(out, "regression", (2, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+            (0, 255, 255), 1)
+print("overlay contiguity/blend/putText checks passed")
+PYEOF
+pass "seg_stream GUI overlay contiguity (putText regression)"
+
 # MASK announced, body never arrives -> request-timeout, not a hang
 set +e
 err="$("$PY" examples/deeplab-seg/seg_stream.py "$WORK/fake_seg_hang.py" \
