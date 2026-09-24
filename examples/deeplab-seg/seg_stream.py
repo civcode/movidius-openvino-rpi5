@@ -284,8 +284,7 @@ def show_window(name, image, size_spec):
         h, w = image.shape[:2]
     else:
         return  # no spec and no image yet: size comes with the first frame
-    cv2.setWindowProperty(name, cv2.WINDOW_WIDTH, w)
-    cv2.setWindowProperty(name, cv2.WINDOW_HEIGHT, h)
+    cv2.resizeWindow(name, w, h)  # works on WINDOW_NORMAL (not WINDOW_AUTOSIZE)
     st["sized"] = True
 
 
