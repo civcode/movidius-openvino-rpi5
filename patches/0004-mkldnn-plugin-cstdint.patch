@@ -1,0 +1,88 @@
+--- a/inference-engine/src/mkldnn_plugin/mkldnn_extension_utils.h
++++ b/inference-engine/src/mkldnn_plugin/mkldnn_extension_utils.h
+@@ -8,6 +8,7 @@
+  */
+ #pragma once
+ 
++#include <cstdint>
+ #include <string>
+ 
+ #include "mkldnn.hpp"
+--- a/inference-engine/src/mkldnn_plugin/mkldnn_memory_solver.hpp
++++ b/inference-engine/src/mkldnn_plugin/mkldnn_memory_solver.hpp
+@@ -8,6 +8,7 @@
+  */
+ #pragma once
+ 
++#include <cstdint>
+ #include "ie_api.h"
+ 
+ #include <vector>
+--- a/inference-engine/src/mkldnn_plugin/mkldnn_plugin.h
++++ b/inference-engine/src/mkldnn_plugin/mkldnn_plugin.h
+@@ -4,6 +4,7 @@
+ 
+ #pragma once
+ 
++#include <cstdint>
+ #include <cpp_interfaces/impl/ie_plugin_internal.hpp>
+ #include "mkldnn_exec_network.h"
+ 
+--- a/inference-engine/src/mkldnn_plugin/nodes/common/fp16_utils.h
++++ b/inference-engine/src/mkldnn_plugin/nodes/common/fp16_utils.h
+@@ -4,4 +4,5 @@
+ 
+ #pragma once
+ 
++#include <cstdint>
+ typedef short ie_fp16;
+--- a/inference-engine/src/mkldnn_plugin/nodes/common/simple_copy.h
++++ b/inference-engine/src/mkldnn_plugin/nodes/common/simple_copy.h
+@@ -4,6 +4,7 @@
+ 
+ #pragma once
+ 
++#include <cstdint>
+ #include <stdlib.h>
+ #include "ie_api.h"
+ 
+--- a/inference-engine/src/mkldnn_plugin/nodes/mkldnn_conv_node.h
++++ b/inference-engine/src/mkldnn_plugin/nodes/mkldnn_conv_node.h
+@@ -4,6 +4,7 @@
+ 
+ #pragma once
+ 
++#include <cstdint>
+ #include <ie_common.h>
+ #include <mkldnn_node.h>
+ #include <memory>
+--- a/inference-engine/src/mkldnn_plugin/nodes/mkldnn_permute_node.h
++++ b/inference-engine/src/mkldnn_plugin/nodes/mkldnn_permute_node.h
+@@ -4,6 +4,7 @@
+ 
+ #pragma once
+ 
++#include <cstdint>
+ #include <ie_common.h>
+ #include <mkldnn_node.h>
+ #include <string>
+--- a/inference-engine/src/mkldnn_plugin/nodes/mkldnn_quantize_node.h
++++ b/inference-engine/src/mkldnn_plugin/nodes/mkldnn_quantize_node.h
+@@ -4,6 +4,7 @@
+ 
+ #pragma once
+ 
++#include <cstdint>
+ #include <ie_common.h>
+ #include <mkldnn_node.h>
+ #include <string>
+--- a/inference-engine/src/mkldnn_plugin/perf_count.h
++++ b/inference-engine/src/mkldnn_plugin/perf_count.h
+@@ -4,6 +4,7 @@
+ 
+ #pragma once
+ 
++#include <cstdint>
+ #include <chrono>
+ 
+ namespace MKLDNNPlugin {

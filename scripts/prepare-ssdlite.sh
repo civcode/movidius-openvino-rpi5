@@ -23,7 +23,8 @@
 # Layout after running:
 #   vendor/models/ssdlite_mobilenet_v2/
 #   ├── source/            frozen_inference_graph.pb, pipeline.config, tarball
-#   └── openvino/          ssdlite_mobilenet_v2.{xml,bin,mapping}  (FP16)
+#   ├── openvino/          ssdlite_mobilenet_v2.{xml,bin,mapping}  (FP16, MYRIAD)
+#   └── openvino_fp32/     ssdlite_mobilenet_v2.{xml,bin,mapping}  (FP32, CPU)
 #   vendor/models/labels/coco.txt   "id<TAB>name" lines (0=background, 1..90)
 #
 # Usage:
@@ -148,6 +149,29 @@ docker run --rm --platform "$MO_PLATFORM" \
 		--model_name $MODEL_NAME > /tmp/mo.log 2>&1
 	 grep -E '\[ (SUCCESS|ERROR) \]|Elapsed time' /tmp/mo.log || true"
 ls -l "$OUT_DIR/${MODEL_NAME}.xml" "$OUT_DIR/${MODEL_NAME}.bin"
+
+# ------------------------------- 4b. convert the same graph to FP32 IR (CPU)
+# The amd64 runtime's CPU plugin (OpenVINO 2020.3) does not accept FP16 input
+# tensors ("Input image format FP16 is not supported yet"), so --device CPU
+# runs against this FP32 variant; the launchers select it automatically.
+echo
+echo "== converting to OpenVINO 2020.3.2 IR (FP32, for the CPU plugin) =="
+OUT_DIR_FP32="$MODEL_DIR/openvino_fp32"
+mkdir -p "$OUT_DIR_FP32"
+docker run --rm --platform "$MO_PLATFORM" \
+	-v "$PWD/$MO_STAGE:/mo:ro" -v "$PWD/$MODELS:/models" \
+	-e PYTHONDONTWRITEBYTECODE=1 "$MO_IMAGE" bash -lc \
+	"set -e
+	 pip install --no-cache-dir -q $TF_PIP_PINS
+	 python /mo/mo_tf.py \
+		--input_model /models/$MODEL_NAME/source/frozen_inference_graph.pb \
+		--tensorflow_object_detection_api_pipeline_config /models/$MODEL_NAME/source/pipeline.config \
+		--tensorflow_use_custom_operations_config /mo/extensions/front/tf/ssd_v2_support.json \
+		--data_type FP32 \
+		--output_dir /models/$MODEL_NAME/openvino_fp32 \
+		--model_name $MODEL_NAME > /tmp/mo.log 2>&1
+	 grep -E '\[ (SUCCESS|ERROR) \]|Elapsed time' /tmp/mo.log || true"
+ls -l "$OUT_DIR_FP32/${MODEL_NAME}.xml" "$OUT_DIR_FP32/${MODEL_NAME}.bin"
 
 # ------------------------------------ 5. report the IR's input/output contract
 echo

@@ -8,7 +8,8 @@
 #               host  - native host binaries from work/host-runtime/<target> (no Docker)
 #               docker- inside the runtime image built by ./build.sh
 #               auto  - host if the runtime was pulled, otherwise docker
-#     device  : MYRIAD                 (default: MYRIAD)
+#     device  : MYRIAD                 (default: MYRIAD; CPU selects the FP32 IRs,
+#                                       amd64 images only)
 #     min-conf: 0.5                    (default: 0.5)
 #
 # The server inherits this script's stdin/stdout (the frame protocol of
@@ -37,7 +38,8 @@ Arguments (all optional, positional):
                host   - native binaries from work/host-runtime/<target> (no Docker)
                docker - inside the runtime image built by ./build.sh
                auto   - host if pulled, else docker, else in-image fallback
-  device     MYRIAD                    default: MYRIAD
+  device     MYRIAD | CPU              default: MYRIAD (CPU runs the FP32 IRs;
+                                            available in amd64 images)
   min-conf   float                     default: 0.5
                keep detections with score >= min-conf
 
@@ -73,8 +75,15 @@ BACKEND="${1:-auto}"
 DEVICE="${2:-MYRIAD}"
 MINCONF="${3:-0.5}"
 
-MODEL_XML="${ROOT}/vendor/models/ssdlite_mobilenet_v2/openvino/ssdlite_mobilenet_v2.xml"
-MODEL_BIN="${ROOT}/vendor/models/ssdlite_mobilenet_v2/openvino/ssdlite_mobilenet_v2.bin"
+# The CPU plugin of the amd64 runtime (OpenVINO 2020.3) does not accept FP16
+# input tensors, so --device CPU runs against the FP32 IR instead.
+if [[ "${DEVICE}" == "CPU" ]]; then
+	MODEL_IR_DIR="openvino_fp32"
+else
+	MODEL_IR_DIR="openvino"
+fi
+MODEL_XML="${ROOT}/vendor/models/ssdlite_mobilenet_v2/${MODEL_IR_DIR}/ssdlite_mobilenet_v2.xml"
+MODEL_BIN="${ROOT}/vendor/models/ssdlite_mobilenet_v2/${MODEL_IR_DIR}/ssdlite_mobilenet_v2.bin"
 LABELS="${ROOT}/vendor/models/labels/coco.txt"
 
 RT="${ROOT}/work/host-runtime/${TARGET}"
@@ -167,8 +176,8 @@ docker_backend() {
         -e OV_QUIET=1 \
         "${IMAGE}" \
         /opt/openvino/bin/ssd_detect \
-            --model "/models/ssdlite_mobilenet_v2/openvino/ssdlite_mobilenet_v2.xml" \
-            --weights "/models/ssdlite_mobilenet_v2/openvino/ssdlite_mobilenet_v2.bin" \
+            --model "/models/ssdlite_mobilenet_v2/${MODEL_IR_DIR}/ssdlite_mobilenet_v2.xml" \
+            --weights "/models/ssdlite_mobilenet_v2/${MODEL_IR_DIR}/ssdlite_mobilenet_v2.bin" \
             --labels "/models/labels/coco.txt" \
             --device "${DEVICE}" --min-conf "${MINCONF}" --stdin
 }

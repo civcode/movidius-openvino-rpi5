@@ -275,7 +275,8 @@ def main():
                          "(0 = loop the image forever / whole video)")
     ap.add_argument("--backend", choices=["auto", "host", "docker"], default="auto",
                     help="where ssd_detect runs")
-    ap.add_argument("--device", default="MYRIAD", help="OpenVINO device name")
+    ap.add_argument("--device", default="MYRIAD",
+                   help="OpenVINO device: MYRIAD, HETERO:MYRIAD, or CPU (CPU in amd64 images)")
     ap.add_argument("--min-conf", type=float, default=0.5,
                     help="detections are kept at score >= this")
     ap.add_argument("--request-timeout", type=float, default=60.0,

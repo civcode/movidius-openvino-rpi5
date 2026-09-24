@@ -86,7 +86,12 @@ int main(int argc, char** argv) {
         if (inputs.size() != 1) { std::fprintf(stderr, "expected exactly one input\n"); return 3; }
         const std::string inputName = inputs.begin()->first;
         const SizeVector inputDims = inputs.begin()->second->getInputData()->getDims();
-        inputs.begin()->second->setPrecision(Precision::FP16);
+        // The MYRIAD VPU only accepts FP16 inputs; the CPU plugin of this
+        // OpenVINO release rejects FP16 ("Input image format FP16 is not
+        // supported yet"), so keep the IR's native precision elsewhere - the
+        // client selects the fp32 IRs when the device is CPU.
+        if (device == "MYRIAD")
+            inputs.begin()->second->setPrecision(Precision::FP16);
         inputs.begin()->second->setLayout(Layout::NCHW);
         const size_t inElems = static_cast<size_t>(inputDims[1]) * inputDims[2] * inputDims[3];
 
@@ -98,23 +103,26 @@ int main(int argc, char** argv) {
         ExecutableNetwork executable = ie.LoadNetwork(network, device);
         InferRequest request = executable.CreateInferRequest();
         Blob::Ptr inBlob = request.GetBlob(inputName);
-        // verify the input blob really is FP16 before casting: the TensorDesc
+        // verify the input blob element width before casting: the TensorDesc
         // and the handed-back buffer can disagree, and writing uint16_t into a
-        // float32 blob would be undefined behaviour
+        // float32 blob would be undefined behaviour.  FP16 (MYRIAD) or FP32
+        // (CPU) are the supported widths.
         const size_t inElemBytes = inElems ? inBlob->byteSize() / inElems : 0;
-        if (inElemBytes != 2) {
-            std::fprintf(stderr, "expected a FP16 input blob (2 B/elem), got %zu B/elem\n",
+        if (inElemBytes != 2 && inElemBytes != 4) {
+            std::fprintf(stderr, "expected a FP16/FP32 input blob (2 or 4 B/elem), got %zu B/elem\n",
                          inElemBytes);
             return 3;
         }
         uint16_t* inHalf = inBlob->buffer().as<uint16_t*>();
+        float* inFloat = inBlob->buffer().as<float*>();
 
         const size_t inBytes = inElems * 4;   // request tensor arrives as float32
         const size_t outBytes = outElems * 4; // logits leave as float32
         std::fprintf(stderr,
-                     "mobilenet_server: ready (device=%s input=%s FP16 NCHW %zu elems / %zu B per"
+                     "mobilenet_server: ready (device=%s input=%s %s NCHW %zu elems / %zu B per"
                      " request, output %zu elems / %zu B per response)\n",
-                     device.c_str(), dimsToString(inputDims).c_str(), inElems, inBytes, outElems,
+                     device.c_str(), dimsToString(inputDims).c_str(),
+                     inElemBytes == 2 ? "FP16" : "FP32", inElems, inBytes, outElems,
                      outBytes);
         std::fflush(stderr);
 
@@ -139,7 +147,10 @@ int main(int argc, char** argv) {
             }
             if (eof) break;
 
-            for (size_t i = 0; i < inElems; ++i) inHalf[i] = floatToHalf(requestTensor[i]);
+            if (inElemBytes == 2)
+                for (size_t i = 0; i < inElems; ++i) inHalf[i] = floatToHalf(requestTensor[i]);
+            else
+                for (size_t i = 0; i < inElems; ++i) inFloat[i] = requestTensor[i];
 
             request.Infer();
 

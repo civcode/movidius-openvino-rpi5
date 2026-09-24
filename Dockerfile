@@ -110,6 +110,16 @@ RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
     if [ "${USE_CMAKE_TOOLCHAIN}" = 1 ]; then \
         set -- "$@" -DCMAKE_TOOLCHAIN_FILE=/work/toolchain-ro/armv7-native.toolchain.cmake; \
     fi; \
+    # CPU plugin (mkldnn_plugin) availability per target:
+    #   amd64 -> ON  (pinned mkl-dnn 0.21.3 has full x86 SSE4.2/AVX2/AVX-512 kernels)
+    #   arm64 -> OFF (mkl-dnn 0.21.3 predates AArch64/NEON support; would only use the
+    #                  slow generic C++ path - not a useful CPU fallback)
+    #   armv7 -> OFF (mkl-dnn 0.21.3 FATAL_ERRORs on 32-bit: "supports 64 bit
+    #                  platforms only"; Intel's official 2020.3.355 raspbian
+    #                  runtime also ships without a CPU plugin)
+    MKL_DNN_FLAG=OFF; \
+    if [ "${TARGET}" = amd64 ]; then MKL_DNN_FLAG=ON; fi; \
+    echo "ENABLE_MKL_DNN=${MKL_DNN_FLAG} (target=${TARGET})"; \
     cmake -S /work/src -B /work/build \
         "$@" \
         -DCMAKE_BUILD_TYPE=Release \
@@ -123,7 +133,7 @@ RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
         -DENABLE_INTEL_MYRIAD_COMMON_ENABLE=ON \
         -DENABLE_IR_READER=ON \
         -DENABLE_GNA=OFF \
-        -DENABLE_MKL_DNN=OFF \
+        -DENABLE_MKL_DNN=${MKL_DNN_FLAG} \
         -DENABLE_CLDNN=OFF \
         -DENABLE_OPENCV=OFF \
         -DENABLE_SAMPLES=OFF \
@@ -187,6 +197,17 @@ RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
     test -n "${IE_PLUGIN}"; \
     IE_LIB="$(dirname "${IE_PLUGIN}")"; \
     echo "installed MYRIAD plugin: ${IE_PLUGIN}"; \
+    CPU_PLUGIN="$(find /work/stage/deployment_tools/inference_engine/lib -mindepth 2 -maxdepth 2 -type f -name libMKLDNNPlugin.so -print -quit)"; \
+    if [ "${TARGET}" = amd64 ]; then \
+        test -n "${CPU_PLUGIN}"; \
+        echo "installed CPU plugin: ${CPU_PLUGIN}"; \
+        readelf -h "${CPU_PLUGIN}" | tee /tmp/cpu-plugin.elf; \
+        grep -q "Class:.*${EXPECTED_ELF_CLASS}" /tmp/cpu-plugin.elf; \
+        grep -Eq "Machine:.*(${EXPECTED_ELF_MACHINE_REGEX})" /tmp/cpu-plugin.elf; \
+        grep -q 'name="CPU"' "${IE_LIB}/plugins.xml"; \
+    else \
+        test -z "${CPU_PLUGIN}"; \
+    fi; \
     readelf -h "${IE_PLUGIN}" | tee /tmp/myriad-plugin.elf; \
     grep -q "Class:.*${EXPECTED_ELF_CLASS}" /tmp/myriad-plugin.elf; \
     grep -Eq "Machine:.*(${EXPECTED_ELF_MACHINE_REGEX})" /tmp/myriad-plugin.elf; \
@@ -422,6 +443,7 @@ RUN set -eux; \
     IE_LIB="$(dirname "${IE_PLUGIN}")"; \
     test -f "${IE_LIB}/usb-ma2450.mvcmd"; \
     test -f "${IE_LIB}/plugins.xml"; \
+    if [ "${TARGET}" = amd64 ]; then grep -q 'name="CPU"' "${IE_LIB}/plugins.xml"; fi; \
     printf 'PROJECT_REVISION=%s\nTARGET=%s\nDOCKER_PLATFORM=%s\nBASE_IMAGE=%s\nOPENVINO_COMMIT=%s\nIE_LIB_BASENAME=%s\nEXPECTED_ELF_CLASS=%s\nEXPECTED_ELF_MACHINE_ID=%s\n' \
         "${PROJECT_REVISION}" "${TARGET}" "${DOCKER_PLATFORM}" "${BASE_IMAGE}" "${OPENVINO_COMMIT}" "$(basename "${IE_LIB}")" "${EXPECTED_ELF_CLASS}" "${EXPECTED_ELF_MACHINE_ID}" \
         > ${OV_ROOT}/runtime-manifest.env; \

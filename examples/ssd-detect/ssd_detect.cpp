@@ -147,7 +147,12 @@ int main(int argc, char** argv) {
         const std::string inputName = inputs.begin()->first;
         const SizeVector inputDims = inputs.begin()->second->getInputData()->getDims();
         const auto inPrec = inputs.begin()->second->getPrecision();
-        inputs.begin()->second->setPrecision(Precision::FP16);
+        // The MYRIAD VPU only accepts FP16 inputs; the CPU plugin of this
+        // OpenVINO release rejects FP16 ("Input image format FP16 is not
+        // supported yet"), so keep the IR's native precision elsewhere - the
+        // launchers feed the FP32 IRs when the device is CPU.
+        if (opt.device == "MYRIAD")
+            inputs.begin()->second->setPrecision(Precision::FP16);
         inputs.begin()->second->setLayout(Layout::NCHW);
         const char* inPrecStr = inPrec == Precision::FP16 ? "FP16" : inPrec == Precision::FP32 ? "FP32" : "other";
         info << "model input     : " << inputName << " [" << dimsToString(inputDims)

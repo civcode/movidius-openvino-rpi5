@@ -45,6 +45,12 @@ the same pinned firmware payload sourced from Intel's 2020.3.2 Raspbian runtime
 package, while `libmyriadPlugin.so` and the applications are built natively for
 the selected host target.
 
+Every target also ships the Hetero and Multi-Device plugins; **the CPU plugin
+is built for amd64 only** (the pinned mkl-dnn 0.21.3 has full x86 kernels but
+refuses 32-bit targets and has no AArch64/NEON kernels, so armv7 cannot build
+it and arm64 omits it).  amd64 images therefore support `--device CPU` in the
+examples as a CPU-only fallback when no MA2450 is attached.
+
 ## Quick start
 
 Platform selection is centralized in `scripts/platform.sh`. If `--platform` is omitted, `x86_64` maps to `amd64`, `aarch64`/`arm64` maps to native `arm64`, and `armv7l` maps to `armv7`.

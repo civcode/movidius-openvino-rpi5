@@ -123,6 +123,25 @@ python3 examples/ssd-detect/ssd_stream.py --headless \
     --video vendor/models/images/sample_640x360.mp4 --frames 30
 ```
 
+Same pipeline on the host CPU instead of the MA2450 (amd64 images only,
+see below):
+
+```
+python3 examples/ssd-detect/ssd_stream.py --headless --device CPU \
+    --video vendor/models/images/sample_640x360.mp4 --frames 30
+```
+
+> `--device` is passed straight to the inference server.  The runtime ships
+> the MYRIAD, Hetero and Multi-Device plugins on every target, plus a **CPU
+> plugin on amd64 images only**: `--device CPU` works there; on armv7 it
+> cannot be built (the pinned mkl-dnn 0.21.3 refuses 32-bit targets) and on
+> arm64 it is omitted because mkl-dnn 0.21.3 has no AArch64/NEON kernels (the
+> plugin would only use a slow generic path).  `ssd_detect --list-devices`
+> (no IR) prints the devices actually visible in the selected runtime.
+> The 2020.3 CPU plugin cannot accept FP16 input tensors, so the launcher
+> automatically switches to the FP32 IRs (`openvino_fp32/`, produced by
+> `scripts/prepare-ssdlite.sh`) when the device is `CPU`.
+
 `--video` takes any file OpenCV can decode (.mp4/.avi/.mkv/.mov, h264 etc.); frames are
 read in order at their native size and the run stops at the end of the video
 (`--frames N` cuts the pass short).  A short sample clip is vendored at

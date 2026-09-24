@@ -79,7 +79,8 @@ def main():
                     help="where mobilenet_server runs")
     ap.add_argument("--ir", choices=["fp16", "fp32"], default="fp16",
                     help="model precision (vendor/models/mobilenet-v2-ov203/<ir>)")
-    ap.add_argument("--device", default="MYRIAD", help="OpenVINO device name")
+    ap.add_argument("--device", default="MYRIAD",
+                   help="OpenVINO device: MYRIAD (default) or CPU (CPU in amd64 images)")
     ap.add_argument("--labels", default=DEFAULT_LABELS, help="synset label file")
     ap.add_argument("--topk", type=int, default=5, help="classes to report")
     ap.add_argument("--every", type=int, default=1,

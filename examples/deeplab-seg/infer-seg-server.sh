@@ -9,7 +9,8 @@
 #               docker- inside the runtime image built by ./build.sh
 #               auto  - host if the runtime was pulled, else docker, else
 #                       in-image fallback (running inside the runtime image)
-#     device  : MYRIAD                 (default: MYRIAD)
+#     device  : MYRIAD                 (default: MYRIAD; CPU selects the FP32 IRs,
+#                                       amd64 images only)
 #
 # The server inherits this script's stdin/stdout (the frame protocol of
 # seg_detect --stdin) and prints startup diagnostics on stderr.  Target
@@ -37,7 +38,8 @@ Arguments (all optional, positional):
                host   - native binaries from work/host-runtime/<target> (no Docker)
                docker - inside the runtime image built by ./build.sh
                auto   - host if pulled, else docker, else in-image fallback
-  device     MYRIAD                    default: MYRIAD
+  device     MYRIAD | CPU              default: MYRIAD (CPU runs the FP32 IRs;
+                                            available in amd64 images)
 
 Environment overrides:
   IMAGE=<name>              Docker image (default: ${DEFAULT_IMAGE})
@@ -72,8 +74,15 @@ done
 BACKEND="${1:-auto}"
 DEVICE="${2:-MYRIAD}"
 
-MODEL_XML="${ROOT}/vendor/models/deeplabv3/openvino/deeplabv3.xml"
-MODEL_BIN="${ROOT}/vendor/models/deeplabv3/openvino/deeplabv3.bin"
+# The CPU plugin of the amd64 runtime (OpenVINO 2020.3) does not accept FP16
+# input tensors, so --device CPU runs against the FP32 IR instead.
+if [[ "${DEVICE}" == "CPU" ]]; then
+	MODEL_IR_DIR="openvino_fp32"
+else
+	MODEL_IR_DIR="openvino"
+fi
+MODEL_XML="${ROOT}/vendor/models/deeplabv3/${MODEL_IR_DIR}/deeplabv3.xml"
+MODEL_BIN="${ROOT}/vendor/models/deeplabv3/${MODEL_IR_DIR}/deeplabv3.bin"
 LABELS="${ROOT}/vendor/models/labels/pascal_voc.txt"
 
 RT="${ROOT}/work/host-runtime/${TARGET}"
@@ -166,8 +175,8 @@ docker_backend() {
         -e OV_QUIET=1 \
         "${IMAGE}" \
         /opt/openvino/bin/seg_detect \
-            --model "/models/deeplabv3/openvino/deeplabv3.xml" \
-            --weights "/models/deeplabv3/openvino/deeplabv3.bin" \
+            --model "/models/deeplabv3/${MODEL_IR_DIR}/deeplabv3.xml" \
+            --weights "/models/deeplabv3/${MODEL_IR_DIR}/deeplabv3.bin" \
             --labels "/models/labels/pascal_voc.txt" \
             --device "${DEVICE}" --stdin
 }

@@ -62,6 +62,10 @@ python3 examples/deeplab-seg/seg_stream.py                     # GUI overlay
 python3 examples/deeplab-seg/seg_stream.py --file img.ppm      # single image, no camera
 python3 examples/deeplab-seg/seg_stream.py --video vendor/models/images/sample_640x360.mp4
 python3 examples/deeplab-seg/seg_stream.py --mask-out mask.ppm # also save the class map
+
+# same pipeline on the host CPU (amd64 images only):
+python3 examples/deeplab-seg/seg_stream.py --headless --device CPU \
+    --video vendor/models/images/sample_640x360.mp4 --frames 10
 ```
 
 `--video` processes a video file (any container/codec OpenCV can decode) instead
@@ -74,6 +78,14 @@ sample clip is vendored at `vendor/models/images/sample_640x360.mp4`
 internally).  `seg_stream.py` starts the server via `infer-seg-server.sh`
 (host/docker/auto backend, same pattern as the SSDLite launcher);
 pass a different launcher as the first positional argument.
+
+`--device` is passed straight to the server: **`CPU` works in amd64 images**
+(the runtime there ships the CPU plugin built from mkl-dnn 0.21.3); armv7
+images cannot build it (mkl-dnn refuses 32-bit targets) and arm64 images
+omit it (mkl-dnn 0.21.3 has no AArch64/NEON kernels).  The 2020.3 CPU plugin
+cannot accept FP16 input tensors, so the launcher automatically switches to
+the FP32 IRs (`openvino_fp32/`, produced by `scripts/prepare-deeplabv3.sh`)
+when the device is `CPU`.
 
 ## Streaming protocol (`seg_detect --stdin`)
 
