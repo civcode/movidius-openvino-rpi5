@@ -88,7 +88,7 @@ default `examples/webcam/infer-server.sh`):
 |---|---|---|
 | `--camera N` | 0 | webcam index | `--video PATH` | off | classify frames of a video file instead of the webcam (single pass) |
 | `--backend auto\|host\|docker` | auto | where `mobilenet_server` runs |
-| `--ir fp16\|fp32` | fp16 | model precision (use `fp32` with `--device CPU`: the 2020.3 CPU plugin cannot take FP16 inputs) |
+| `--ir fp16\|fp32` | auto (fp32 with `--device CPU`, else fp16) | model precision; auto because the 2020.3 CPU plugin cannot take FP16 inputs |
 | `--device NAME` | MYRIAD | OpenVINO device; `CPU` works in amd64 images (CPU plugin there; armv7 can't build it, arm64 omits it) |
 | `--topk N` | 5 | classes to report / draw |
 | `--every N` | 1 | classify every Nth frame |

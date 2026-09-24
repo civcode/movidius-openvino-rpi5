@@ -77,8 +77,10 @@ def main():
     ap.add_argument("--camera-height", type=int, default=0, help="request capture height (0 = device default)")
     ap.add_argument("--backend", choices=["auto", "host", "docker"], default="auto",
                     help="where mobilenet_server runs")
-    ap.add_argument("--ir", choices=["fp16", "fp32"], default="fp16",
-                    help="model precision (vendor/models/mobilenet-v2-ov203/<ir>)")
+    ap.add_argument("--ir", choices=["fp16", "fp32"], default=None,
+                    help="model precision (vendor/models/mobilenet-v2-ov203/<ir>); "
+                         "default: fp32 for --device CPU (the 2020.3 CPU plugin "
+                         "cannot take FP16 inputs), fp16 otherwise")
     ap.add_argument("--device", default="MYRIAD",
                    help="OpenVINO device: MYRIAD (default) or CPU (CPU in amd64 images)")
     ap.add_argument("--labels", default=DEFAULT_LABELS, help="synset label file")
@@ -127,7 +129,8 @@ def main():
     # ------------------------------------------------------------- inference
     if args.server_script and not os.path.exists(args.server_script):
         die("server launcher not found: %s" % args.server_script)
-    client = MyriadClient(args.backend, args.ir, args.device, args.request_timeout,
+    ir = args.ir or ("fp32" if args.device.upper() == "CPU" else "fp16")
+    client = MyriadClient(args.backend, ir, args.device, args.request_timeout,
                           server_script=args.server_script)
 
     stopping = {"flag": False}
