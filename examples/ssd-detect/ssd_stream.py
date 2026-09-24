@@ -276,7 +276,8 @@ def main():
     ap.add_argument("--backend", choices=["auto", "host", "docker"], default="auto",
                     help="where ssd_detect runs")
     ap.add_argument("--device", default="MYRIAD",
-                   help="OpenVINO device: MYRIAD, HETERO:MYRIAD, or CPU (CPU in amd64/arm64 images)")
+                   help="MYRIAD, HETERO:MYRIAD, or CPU (amd64: OpenVINO CPU, FP32 IR; "
+                        "arm64: Python full-TensorFlow server; see docs/CPU-BACKENDS.md)")
     ap.add_argument("--min-conf", type=float, default=0.5,
                     help="detections are kept at score >= this")
     ap.add_argument("--request-timeout", type=float, default=60.0,

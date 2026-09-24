@@ -8,8 +8,8 @@
 #               host  - native host binaries from work/host-runtime/<target> (no Docker)
 #               docker- inside the runtime image built by ./build.sh
 #               auto  - host if the runtime was pulled, otherwise docker
-#     device  : MYRIAD                 (default: MYRIAD; CPU selects the FP32 IRs,
-#                                       amd64/arm64 images)
+#     device  : MYRIAD | CPU           (default: MYRIAD; CPU on amd64 selects the
+#                                       FP32 IRs; CPU on arm64 = Python full-TF server)
 #     min-conf: 0.5                    (default: 0.5)
 #
 # The server inherits this script's stdin/stdout (the frame protocol of
@@ -38,8 +38,11 @@ Arguments (all optional, positional):
                host   - native binaries from work/host-runtime/<target> (no Docker)
                docker - inside the runtime image built by ./build.sh
                auto   - host if pulled, else docker, else in-image fallback
-  device     MYRIAD | CPU              default: MYRIAD (CPU runs the FP32 IRs;
-                                            available in amd64/arm64 images)
+  device     MYRIAD | CPU              default: MYRIAD.  CPU per target:
+                                            amd64 = OV server + FP32 IR;
+                                            arm64 = Python full-TensorFlow server
+                                            (host backend); armv7 = error.  See
+                                            docs/CPU-BACKENDS.md.
   min-conf   float                     default: 0.5
                keep detections with score >= min-conf
 
@@ -85,6 +88,49 @@ fi
 MODEL_XML="${ROOT}/vendor/models/ssdlite_mobilenet_v2/${MODEL_IR_DIR}/ssdlite_mobilenet_v2.xml"
 MODEL_BIN="${ROOT}/vendor/models/ssdlite_mobilenet_v2/${MODEL_IR_DIR}/ssdlite_mobilenet_v2.bin"
 LABELS="${ROOT}/vendor/models/labels/coco.txt"
+
+# --device CPU: per-target CPU backend (docs/CPU-BACKENDS.md).
+#   amd64: the OV C++ server below with the FP32 IR (unchanged path).
+#   arm64: the Python full-TensorFlow server (host backend only for now).
+#   armv7: not available - no 32-bit inference wheels (MYRIAD only).
+cpu_python_server() {
+    local pb="${ROOT}/vendor/models/ssdlite_mobilenet_v2/source/frozen_inference_graph.pb"
+    if [[ ! -f "${pb}" ]]; then
+        echo "frozen graph missing: ${pb}" >&2
+        echo "run ./scripts/prepare-ssdlite.sh first" >&2
+        exit 1
+    fi
+    if ! command -v python3 >/dev/null 2>&1; then
+        echo "python3 not found - install Python 3 to use --device CPU on arm64" >&2
+        exit 1
+    fi
+    if ! python3 -c 'import tensorflow' >/dev/null 2>&1; then
+        echo "tensorflow is not installed - run:  pip install tensorflow" >&2
+        exit 1
+    fi
+    echo "infer-ssd-server: backend=host target=${TARGET} python-tensorflow" >&2
+    exec python3 "${ROOT}/examples/ssd-detect/ssd_cpu_server.py" \
+        --model "${pb}" --labels "${LABELS}" --min-conf "${MINCONF}"
+}
+
+if [[ "${DEVICE}" == CPU ]]; then
+    case "${TARGET}" in
+        arm64)
+            if [[ "${BACKEND}" == docker ]]; then
+                echo "--device CPU on arm64 uses the Python TensorFlow server;" >&2
+                echo "the docker backend does not include it yet - use backend 'host'" >&2
+                exit 1
+            fi
+            cpu_python_server
+            ;;
+        amd64) ;;   # fall through to the OV server with the FP32 IR
+        *)
+            echo "--device CPU is not available on target '${TARGET}' (no 32-bit CPU" >&2
+            echo "runtime for armv7) - use MYRIAD" >&2
+            exit 1
+            ;;
+    esac
+fi
 
 RT="${ROOT}/work/host-runtime/${TARGET}"
 OV="${RT}/openvino"

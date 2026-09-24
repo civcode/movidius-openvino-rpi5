@@ -131,17 +131,19 @@ python3 examples/ssd-detect/ssd_stream.py --headless --device CPU \
     --video vendor/models/images/sample_640x360.mp4 --frames 30
 ```
 
-> `--device` is passed straight to the inference server.  The runtime ships
-> the MYRIAD, Hetero and Multi-Device plugins on every target, plus a **CPU
-> plugin on amd64 and arm64 images**: `--device CPU` works there (on arm64
-> it is the slow generic C++ path - mkl-dnn 0.21.3 predates AArch64/NEON
-> kernels - useful as a CPU baseline, e.g. against the MYRIAD stick); on
-> armv7 it cannot be built (the pinned mkl-dnn 0.21.3 refuses 32-bit
-> targets).  `ssd_detect --list-devices`
-> (no IR) prints the devices actually visible in the selected runtime.
-> The 2020.3 CPU plugin cannot accept FP16 input tensors, so the launcher
-> automatically switches to the FP32 IRs (`openvino_fp32/`, produced by
-> `scripts/prepare-ssdlite.sh`) when the device is `CPU`.
+> `--device` is passed straight to the inference server.  CPU per target
+> (see `docs/CPU-BACKENDS.md`):
+> * **amd64** - the OV C++ server with the FP32 IRs (`openvino_fp32/`, the
+>   2020.3 CPU plugin cannot take FP16 inputs); fast (JIT kernels).
+> * **arm64** - the Python **full-TensorFlow** server
+>   (`ssd_cpu_server.py`, runs the frozen graph directly; the detection NMS
+>   is inlined TF `While`/`TensorArray` control flow that cannot be ONNX-
+>   converted, so no model conversion is needed).  Host backend; needs
+>   `pip install tensorflow`.
+> * **armv7** - not available (no 32-bit CPU runtime); MYRIAD only.
+>
+> `ssd_detect --list-devices` (no IR) prints the devices actually visible in
+> the selected runtime.
 
 `--video` takes any file OpenCV can decode (.mp4/.avi/.mkv/.mov, h264 etc.); frames are
 read in order at their native size and the run stops at the end of the video
