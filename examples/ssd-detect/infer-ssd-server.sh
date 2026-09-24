@@ -9,7 +9,7 @@
 #               docker- inside the runtime image built by ./build.sh
 #               auto  - host if the runtime was pulled, otherwise docker
 #     device  : MYRIAD                 (default: MYRIAD; CPU selects the FP32 IRs,
-#                                       amd64 images only)
+#                                       amd64/arm64 images)
 #     min-conf: 0.5                    (default: 0.5)
 #
 # The server inherits this script's stdin/stdout (the frame protocol of
@@ -39,7 +39,7 @@ Arguments (all optional, positional):
                docker - inside the runtime image built by ./build.sh
                auto   - host if pulled, else docker, else in-image fallback
   device     MYRIAD | CPU              default: MYRIAD (CPU runs the FP32 IRs;
-                                            available in amd64 images)
+                                            available in amd64/arm64 images)
   min-conf   float                     default: 0.5
                keep detections with score >= min-conf
 

@@ -45,11 +45,13 @@ the same pinned firmware payload sourced from Intel's 2020.3.2 Raspbian runtime
 package, while `libmyriadPlugin.so` and the applications are built natively for
 the selected host target.
 
-Every target also ships the Hetero and Multi-Device plugins; **the CPU plugin
-is built for amd64 only** (the pinned mkl-dnn 0.21.3 has full x86 kernels but
-refuses 32-bit targets and has no AArch64/NEON kernels, so armv7 cannot build
-it and arm64 omits it).  amd64 images therefore support `--device CPU` in the
-examples as a CPU-only fallback when no MA2450 is attached.
+Every target also ships the Hetero and Multi-Device plugins, plus the CPU
+plugin on **amd64 and arm64** (the pinned mkl-dnn 0.21.3 has full x86
+kernels; on AArch64 it predates NEON kernels, so arm64 uses the slow generic
+C++ path - fine as a CPU baseline, e.g. to benchmark against the MYRIAD
+stick, but not a fast inference engine; armv7 cannot build it at all,
+mkl-dnn 0.21.3 refuses 32-bit targets).  amd64/arm64 images therefore
+support `--device CPU` in the examples.
 
 ## Quick start
 

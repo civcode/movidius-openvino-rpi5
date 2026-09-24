@@ -10,7 +10,7 @@
 #               auto  - host if the runtime was pulled, else docker, else
 #                       in-image fallback (running inside the runtime image)
 #     device  : MYRIAD                 (default: MYRIAD; CPU selects the FP32 IRs,
-#                                       amd64 images only)
+#                                       amd64/arm64 images)
 #
 # The server inherits this script's stdin/stdout (the frame protocol of
 # seg_detect --stdin) and prints startup diagnostics on stderr.  Target
@@ -39,7 +39,7 @@ Arguments (all optional, positional):
                docker - inside the runtime image built by ./build.sh
                auto   - host if pulled, else docker, else in-image fallback
   device     MYRIAD | CPU              default: MYRIAD (CPU runs the FP32 IRs;
-                                            available in amd64 images)
+                                            available in amd64/arm64 images)
 
 Environment overrides:
   IMAGE=<name>              Docker image (default: ${DEFAULT_IMAGE})

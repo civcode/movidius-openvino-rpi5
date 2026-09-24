@@ -32,6 +32,11 @@ RUN set -eux; \
     printf 'deb http://snapshot.debian.org/archive/debian/%s bullseye main\ndeb http://snapshot.debian.org/archive/debian-security/%s bullseye-security main\ndeb http://snapshot.debian.org/archive/debian/%s bullseye-updates main\n' \
         "${SNAPSHOT_DATE}" "${SNAPSHOT_DATE}" "${SNAPSHOT_DATE}" > /etc/apt/sources.list; \
     apt -o Acquire::Retries=5 -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false update; \
+    # arm64 only: the CPU plugin on AARCH64 uses GEMM=OPENBLAS (mkl-dnn's AARCH64
+    # default), which needs cblas.h + libopenblas at build and run time; amd64
+    # uses GEMM=JIT and armv7 builds no CPU plugin at all.
+    BLAS_PKG=""; \
+    if [ "${TARGET}" = arm64 ]; then BLAS_PKG=libopenblas-dev; fi; \
     apt-get -o Acquire::Retries=5 install -y --no-install-recommends \
         build-essential \
         cmake \
@@ -42,7 +47,8 @@ RUN set -eux; \
         libusb-1.0-0-dev \
         zlib1g-dev \
         python3 \
-        python3-venv; \
+        python3-venv \
+        ${BLAS_PKG}; \
     rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m venv /opt/venv
@@ -112,13 +118,14 @@ RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
     fi; \
     # CPU plugin (mkldnn_plugin) availability per target:
     #   amd64 -> ON  (pinned mkl-dnn 0.21.3 has full x86 SSE4.2/AVX2/AVX-512 kernels)
-    #   arm64 -> OFF (mkl-dnn 0.21.3 predates AArch64/NEON support; would only use the
-    #                  slow generic C++ path - not a useful CPU fallback)
+    #   arm64 -> ON  (mkl-dnn 0.21.3 predates AArch64/NEON kernels, so this is the
+    #                  generic C++ path - slow, but a valid on-Pi CPU baseline for
+    #                  benchmarking against the MYRIAD stick)
     #   armv7 -> OFF (mkl-dnn 0.21.3 FATAL_ERRORs on 32-bit: "supports 64 bit
     #                  platforms only"; Intel's official 2020.3.355 raspbian
     #                  runtime also ships without a CPU plugin)
     MKL_DNN_FLAG=OFF; \
-    if [ "${TARGET}" = amd64 ]; then MKL_DNN_FLAG=ON; fi; \
+    case "${TARGET}" in amd64|arm64) MKL_DNN_FLAG=ON ;; esac; \
     echo "ENABLE_MKL_DNN=${MKL_DNN_FLAG} (target=${TARGET})"; \
     cmake -S /work/src -B /work/build \
         "$@" \
@@ -198,7 +205,8 @@ RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
     IE_LIB="$(dirname "${IE_PLUGIN}")"; \
     echo "installed MYRIAD plugin: ${IE_PLUGIN}"; \
     CPU_PLUGIN="$(find /work/stage/deployment_tools/inference_engine/lib -mindepth 2 -maxdepth 2 -type f -name libMKLDNNPlugin.so -print -quit)"; \
-    if [ "${TARGET}" = amd64 ]; then \
+    case "${TARGET}" in amd64|arm64) CPU_EXPECTED=1 ;; *) CPU_EXPECTED=0 ;; esac; \
+    if [ "${CPU_EXPECTED}" = 1 ]; then \
         test -n "${CPU_PLUGIN}"; \
         echo "installed CPU plugin: ${CPU_PLUGIN}"; \
         readelf -h "${CPU_PLUGIN}" | tee /tmp/cpu-plugin.elf; \
@@ -423,8 +431,11 @@ RUN set -eux; \
     printf 'deb http://snapshot.debian.org/archive/debian/%s bullseye main\ndeb http://snapshot.debian.org/archive/debian-security/%s bullseye-security main\ndeb http://snapshot.debian.org/archive/debian/%s bullseye-updates main\n' \
         "${SNAPSHOT_DATE}" "${SNAPSHOT_DATE}" "${SNAPSHOT_DATE}" > /etc/apt/sources.list; \
     apt -o Acquire::Retries=5 -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false update; \
+    BLAS_PKG=""; \
+    if [ "${TARGET}" = arm64 ]; then BLAS_PKG=libopenblas0-pthread; fi; \
     apt-get -o Acquire::Retries=5 install -y --no-install-recommends \
-        libusb-1.0-0 ca-certificates python3; \
+        libusb-1.0-0 ca-certificates python3 \
+        ${BLAS_PKG}; \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /work/stage/deployment_tools ${OV_ROOT}/
@@ -443,7 +454,7 @@ RUN set -eux; \
     IE_LIB="$(dirname "${IE_PLUGIN}")"; \
     test -f "${IE_LIB}/usb-ma2450.mvcmd"; \
     test -f "${IE_LIB}/plugins.xml"; \
-    if [ "${TARGET}" = amd64 ]; then grep -q 'name="CPU"' "${IE_LIB}/plugins.xml"; fi; \
+    case "${TARGET}" in amd64|arm64) grep -q 'name="CPU"' "${IE_LIB}/plugins.xml" ;; esac; \
     printf 'PROJECT_REVISION=%s\nTARGET=%s\nDOCKER_PLATFORM=%s\nBASE_IMAGE=%s\nOPENVINO_COMMIT=%s\nIE_LIB_BASENAME=%s\nEXPECTED_ELF_CLASS=%s\nEXPECTED_ELF_MACHINE_ID=%s\n' \
         "${PROJECT_REVISION}" "${TARGET}" "${DOCKER_PLATFORM}" "${BASE_IMAGE}" "${OPENVINO_COMMIT}" "$(basename "${IE_LIB}")" "${EXPECTED_ELF_CLASS}" "${EXPECTED_ELF_MACHINE_ID}" \
         > ${OV_ROOT}/runtime-manifest.env; \

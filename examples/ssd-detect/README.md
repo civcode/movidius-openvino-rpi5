@@ -123,7 +123,7 @@ python3 examples/ssd-detect/ssd_stream.py --headless \
     --video vendor/models/images/sample_640x360.mp4 --frames 30
 ```
 
-Same pipeline on the host CPU instead of the MA2450 (amd64 images only,
+Same pipeline on the host CPU instead of the MA2450 (amd64/arm64 images,
 see below):
 
 ```
@@ -133,10 +133,11 @@ python3 examples/ssd-detect/ssd_stream.py --headless --device CPU \
 
 > `--device` is passed straight to the inference server.  The runtime ships
 > the MYRIAD, Hetero and Multi-Device plugins on every target, plus a **CPU
-> plugin on amd64 images only**: `--device CPU` works there; on armv7 it
-> cannot be built (the pinned mkl-dnn 0.21.3 refuses 32-bit targets) and on
-> arm64 it is omitted because mkl-dnn 0.21.3 has no AArch64/NEON kernels (the
-> plugin would only use a slow generic path).  `ssd_detect --list-devices`
+> plugin on amd64 and arm64 images**: `--device CPU` works there (on arm64
+> it is the slow generic C++ path - mkl-dnn 0.21.3 predates AArch64/NEON
+> kernels - useful as a CPU baseline, e.g. against the MYRIAD stick); on
+> armv7 it cannot be built (the pinned mkl-dnn 0.21.3 refuses 32-bit
+> targets).  `ssd_detect --list-devices`
 > (no IR) prints the devices actually visible in the selected runtime.
 > The 2020.3 CPU plugin cannot accept FP16 input tensors, so the launcher
 > automatically switches to the FP32 IRs (`openvino_fp32/`, produced by
