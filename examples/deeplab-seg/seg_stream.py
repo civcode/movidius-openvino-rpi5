@@ -11,6 +11,7 @@ Usage:
   python3 examples/deeplab-seg/seg_stream.py --file dog_ssd.ppm --frames 1
   python3 examples/deeplab-seg/seg_stream.py --video vendor/models/images/sample_640x360.mp4
   python3 examples/deeplab-seg/seg_stream.py --backend docker --mask-out mask.ppm
+  python3 examples/deeplab-seg/seg_stream.py --window-size 960x540   # initial GUI window size
   python3 examples/deeplab-seg/seg_stream.py path/to/my-launcher.sh --backend host
 
 The first (optional) positional argument replaces the default launcher
@@ -242,6 +243,52 @@ def write_class_map(path, mask_u16, w, h):
         f.write(m.tobytes())
 
 
+def parse_window_size(spec):
+    """'WxH' -> (W, H) or None for the default (frame size)."""
+    if not spec:
+        return None
+    try:
+        w, h = spec.lower().split("x")
+        w, h = int(w), int(h)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            "window size must be WxH, e.g. 960x540 (got %r)" % spec)
+    if w < 1 or h < 1:
+        raise argparse.ArgumentTypeError("window size W and H must be >= 1")
+    return w, h
+
+
+_WIN_STATE = {}  # window name -> {"sized": bool}
+
+
+def show_window(name, image, size_spec):
+    """Show <image> in a user-resizable <name> window.
+
+    The window is created with WINDOW_NORMAL (not the default WINDOW_AUTOSIZE)
+    so the user can drag it to any size; cv2 scales the image to fit.  The
+    initial size is set once - from <size_spec> ((W, H)) or, if unset, from the
+    first image's dimensions - and is never touched again, so a user resize
+    is never overwritten by the per-frame updates.
+    """
+    if name not in _WIN_STATE:
+        cv2.namedWindow(name, cv2.WINDOW_NORMAL)
+        _WIN_STATE[name] = {"sized": False}
+    if image is not None:
+        cv2.imshow(name, image)
+    st = _WIN_STATE[name]
+    if st["sized"]:
+        return
+    if size_spec is not None:
+        w, h = size_spec
+    elif image is not None:
+        h, w = image.shape[:2]
+    else:
+        return  # no spec and no image yet: size comes with the first frame
+    cv2.setWindowProperty(name, cv2.WINDOW_WIDTH, w)
+    cv2.setWindowProperty(name, cv2.WINDOW_HEIGHT, h)
+    st["sized"] = True
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="live webcam DeepLabV3 (Pascal VOC) segmentation on the "
@@ -271,9 +318,19 @@ def main():
                          "(0 = loop the image forever / whole video)")
     ap.add_argument("--headless", action="store_true",
                     help="no GUI window; results are printed to stdout")
+    ap.add_argument("--window-size", default=None, metavar="WxH",
+                    help="initial GUI window size in pixels, e.g. 960x540 "
+                         "(the window is resizable either way; with this unset it "
+                         "opens at the frame size)")
     ap.add_argument("--mask-out", default=None,
                     help="write the class map of the last frame as a 1-byte/pixel P6 PPM")
     args = ap.parse_args()
+    win = "DeepLabV3 segmentation"
+    try:
+        win_size = parse_window_size(args.window_size)
+    except argparse.ArgumentTypeError as ex:
+        ap.error(str(ex))
+    args.window_size = win_size
 
     # GUI, webcam capture and --video need OpenCV; headless --file .ppm only
     # needs numpy
@@ -331,7 +388,7 @@ def main():
                     note("wrote class map to %s" % args.mask_out)
             if not args.headless and n:
                 overlaid = overlay(rgb[:, :, ::-1], mask, w, h)
-                cv2.imshow("DeepLabV3 segmentation", overlaid)
+                show_window(win, overlaid, args.window_size)
                 cv2.waitKey(0)
                 cv2.destroyAllWindows()
         else:
@@ -359,6 +416,8 @@ def main():
             last_mask = None
             last_dims = None
             video_frames = 0
+            if not args.headless:
+                show_window(win, None, args.window_size)  # resizable from frame one
             try:
                 while True:
                     if stopping["flag"]:
@@ -400,12 +459,11 @@ def main():
                         cv2.putText(overlaid, "%.0f ms  fps %s  %s" % (total_ms, fps_str.strip(), txt),
                                     (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                                     (0, 255, 0), 1, cv2.LINE_AA)
-                        cv2.imshow("DeepLabV3 segmentation", overlaid)
+                        show_window(win, overlaid, args.window_size)
                         key = cv2.waitKey(1) & 0xFF
                         if key == ord("q") or key == 27:
                             break
-                        if cv2.getWindowProperty("DeepLabV3 segmentation",
-                                                 cv2.WND_PROP_VISIBLE) < 1:
+                        if cv2.getWindowProperty(win, cv2.WND_PROP_VISIBLE) < 1:
                             break
             finally:
                 cap.release()

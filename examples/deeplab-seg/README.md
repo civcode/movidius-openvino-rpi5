@@ -126,7 +126,11 @@ Startup diagnostics go to stderr; stdout carries only the protocol.
 Class-map PPM (`--mask-out`): single-channel P6 (maxval 255), 1 byte/pixel,
 value = class id 0..20.
 The GUI client draws a fixed 21-colour Pascal VOC palette over the frame
-(alpha 0.4); class statistics go to stderr/overlay text.  The mask file
+(alpha 0.4); class statistics go to stderr/overlay text.  The window is
+created as `WINDOW_NORMAL`, so it can be dragged to any size (the overlay is
+scaled to fit); `--window-size WxH` (e.g. `960x540`) sets the initial size
+- without it the window opens at the frame's dimensions.  `q`/Esc or
+closing the window stops the run.  The mask file
 and the overlay are separate artifacts — the mask is never drawn through
 the palette.
 
