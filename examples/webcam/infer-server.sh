@@ -10,7 +10,10 @@
 #               auto  - host if the runtime was pulled, else docker, else
 #                       in-image fallback (running inside the runtime image)
 #     ir      : fp16 | fp32            (default: fp16, override with IR=...)
-#     device  : MYRIAD                 (default: MYRIAD)
+#     device  : MYRIAD | CPU           (default: MYRIAD)
+#               MYRIAD - OV server (all targets)
+#               CPU    - amd64: OV server + FP32 IR;  arm64: Python ONNX
+#                        Runtime server (host backend only);  armv7: error
 #
 # The server inherits this script's stdin/stdout (the binary tensor protocol
 # of mobilenet_server) and prints startup diagnostics on stderr.  Target
@@ -39,7 +42,10 @@ Arguments (all optional, positional):
                docker - inside the runtime image built by ./build.sh
                auto   - host if pulled, else docker, else in-image fallback
   ir         fp16 | fp32               default: fp16
-  device     MYRIAD                    default: MYRIAD
+  device     MYRIAD | CPU              default: MYRIAD
+               CPU on arm64 uses the Python ONNX Runtime server
+               (examples/webcam/mobilenet_cpu_server.py, host backend); see
+               docs/CPU-BACKENDS.md.
 
 Environment overrides:
   IR=<fp16|fp32>            inference precision
@@ -53,6 +59,10 @@ Examples:
 
   # drive the server directly with the reference fp32 input tensor:
   examples/webcam/infer-server.sh docker fp16 MYRIAD \\
+      < vendor/models/test_data/input_0.f32
+
+  # CPU on arm64 (Python ONNX Runtime server):
+  examples/webcam/infer-server.sh host fp32 CPU \\
       < vendor/models/test_data/input_0.f32
 EOF
 }
@@ -71,6 +81,52 @@ case "${IR}" in
     fp16|fp32) ;;
     *) echo "ir must be fp16 or fp32 (got '${IR}')" >&2; exit 2 ;;
 esac
+case "${DEVICE}" in
+    MYRIAD|CPU) ;;
+    *) echo "device must be MYRIAD or CPU (got '${DEVICE}')" >&2; exit 2 ;;
+esac
+
+# --device CPU: per-target CPU backend (docs/CPU-BACKENDS.md).
+#   amd64: the OV C++ server below with the FP32 IR (unchanged path).
+#   arm64: the Python ONNX Runtime server (host backend only for now).
+#   armv7: not available - no 32-bit inference wheels (MYRIAD only).
+cpu_python_server() {
+    local onnx="${ROOT}/vendor/models/onnx/mobilenetv2-7.onnx"
+    if [[ ! -f "${onnx}" ]]; then
+        echo "ONNX model missing: ${onnx}" >&2
+        echo "run ./scripts/prepare-mobilenet.sh first" >&2
+        exit 1
+    fi
+    if ! command -v python3 >/dev/null 2>&1; then
+        echo "python3 not found - install Python 3 to use --device CPU on arm64" >&2
+        exit 1
+    fi
+    if ! python3 -c 'import onnxruntime' >/dev/null 2>&1; then
+        echo "onnxruntime is not installed - run:  pip install onnxruntime" >&2
+        exit 1
+    fi
+    echo "infer-server: backend=host target=${TARGET} python-onnxruntime" >&2
+    exec python3 "${ROOT}/examples/webcam/mobilenet_cpu_server.py" --model "${onnx}"
+}
+
+if [[ "${DEVICE}" == CPU ]]; then
+    case "${TARGET}" in
+        arm64)
+            if [[ "${BACKEND}" == docker ]]; then
+                echo "--device CPU on arm64 uses the Python ONNX Runtime server;" >&2
+                echo "the docker backend does not include it yet - use backend 'host'" >&2
+                exit 1
+            fi
+            cpu_python_server
+            ;;
+        amd64) ;;   # fall through to the OV server with the FP32 IR
+        *)
+            echo "--device CPU is not available on target '${TARGET}' (no 32-bit CPU" >&2
+            echo "runtime for armv7) - use MYRIAD" >&2
+            exit 1
+            ;;
+    esac
+fi
 
 RT="${ROOT}/work/host-runtime/${TARGET}"
 OV="${RT}/openvino"

@@ -37,6 +37,8 @@ used by `mobilenet-test/main.cpp`: resize to 224x224 (area), BGR -> RGB,
 * Host Python 3 with `numpy` and `opencv-python`
   (`pip install -r examples/webcam/requirements.txt`).  Headless mode still
   needs OpenCV for the capture.
+* For `--device CPU` on arm64 only: `pip install onnxruntime` (the CPU
+  backend is then `mobilenet_cpu_server.py`, see `docs/CPU-BACKENDS.md`).
 * One of the inference backends, selected automatically by
   `infer-server.sh` (override with `--backend`):
   * **host** (preferred, no Docker): `./scripts/pull-runtime.sh --platform <t>`
@@ -89,7 +91,7 @@ default `examples/webcam/infer-server.sh`):
 | `--camera N` | 0 | webcam index | `--video PATH` | off | classify frames of a video file instead of the webcam (single pass) |
 | `--backend auto\|host\|docker` | auto | where `mobilenet_server` runs |
 | `--ir fp16\|fp32` | auto (fp32 with `--device CPU`, else fp16) | model precision; auto because the 2020.3 CPU plugin cannot take FP16 inputs |
-| `--device NAME` | MYRIAD | OpenVINO device; `CPU` works in amd64 images (CPU plugin there; armv7 can't build it, arm64 omits it) |
+| `--device NAME` | MYRIAD | `MYRIAD` (default) or `CPU`.  CPU per target: amd64 = OpenVINO CPU (FP32 IR); arm64 = Python ONNX Runtime server `mobilenet_cpu_server.py` (host backend, needs `pip install onnxruntime`); armv7 = not supported (error).  See `docs/CPU-BACKENDS.md` |
 | `--topk N` | 5 | classes to report / draw |
 | `--every N` | 1 | classify every Nth frame |
 | `--max-fps F` | 0 (off) | throttle the loop |

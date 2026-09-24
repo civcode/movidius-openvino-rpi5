@@ -82,7 +82,8 @@ def main():
                          "default: fp32 for --device CPU (the 2020.3 CPU plugin "
                          "cannot take FP16 inputs), fp16 otherwise")
     ap.add_argument("--device", default="MYRIAD",
-                   help="OpenVINO device: MYRIAD (default) or CPU (CPU in amd64 images)")
+                   help="MYRIAD (default) or CPU (amd64: OpenVINO CPU, FP32 IR; "
+                        "arm64: Python ONNX Runtime server; see docs/CPU-BACKENDS.md)")
     ap.add_argument("--labels", default=DEFAULT_LABELS, help="synset label file")
     ap.add_argument("--topk", type=int, default=5, help="classes to report")
     ap.add_argument("--every", type=int, default=1,
