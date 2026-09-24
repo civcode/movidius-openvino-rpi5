@@ -41,7 +41,7 @@ Arguments (all optional, positional):
   device     MYRIAD | CPU              default: MYRIAD.  CPU per target:
                                             amd64 = OV server + FP32 IR;
                                             arm64 = Python full-TensorFlow server
-                                            (host backend); armv7 = error.  See
+                                            (host or docker); armv7 = error.  See
                                             docs/CPU-BACKENDS.md.
   min-conf   float                     default: 0.5
                keep detections with score >= min-conf
@@ -91,7 +91,7 @@ LABELS="${ROOT}/vendor/models/labels/coco.txt"
 
 # --device CPU: per-target CPU backend (docs/CPU-BACKENDS.md).
 #   amd64: the OV C++ server below with the FP32 IR (unchanged path).
-#   arm64: the Python full-TensorFlow server (host backend only for now).
+#   arm64: the Python full-TensorFlow server (host, or in-image copy under docker).
 #   armv7: not available - no 32-bit inference wheels (MYRIAD only).
 cpu_python_server() {
     local pb="${ROOT}/vendor/models/ssdlite_mobilenet_v2/source/frozen_inference_graph.pb"
@@ -116,12 +116,9 @@ cpu_python_server() {
 if [[ "${DEVICE}" == CPU ]]; then
     case "${TARGET}" in
         arm64)
-            if [[ "${BACKEND}" == docker ]]; then
-                echo "--device CPU on arm64 uses the Python TensorFlow server;" >&2
-                echo "the docker backend does not include it yet - use backend 'host'" >&2
-                exit 1
-            fi
-            cpu_python_server
+            # host: the local Python server; docker: the in-image copy
+            # (handled in docker_backend)
+            [[ "${BACKEND}" == docker ]] || cpu_python_server
             ;;
         amd64) ;;   # fall through to the OV server with the FP32 IR
         *)
@@ -212,6 +209,19 @@ docker_backend() {
     docker image inspect "${IMAGE}" >/dev/null 2>&1 || {
         echo "image ${IMAGE} not built yet - run ./build.sh --platform ${TARGET}" >&2; exit 1; }
     echo "infer-ssd-server: backend=docker target=${TARGET} image=${IMAGE}" >&2
+    if [[ "${DEVICE}" == CPU && "${TARGET}" == arm64 ]]; then
+        # Python full-TensorFlow server from the runtime image (the image
+        # must have been built with the cpu-servers step, see Dockerfile).
+        exec docker run --rm -i \
+            --platform "${DOCKER_PLATFORM}" \
+            --name "ov203-ssd-cpu-$$" \
+            -v "${ROOT}/vendor/models:/models:ro" \
+            "${IMAGE}" \
+            python3 /opt/openvino-demo/cpu-servers/ssd_cpu_server.py \
+                --model /models/ssdlite_mobilenet_v2/source/frozen_inference_graph.pb \
+                --labels /models/labels/coco.txt \
+                --min-conf "${MINCONF}"
+    fi
     exec docker run --rm -i \
         --platform "${DOCKER_PLATFORM}" \
         --name "ov203-ssd-$$" \

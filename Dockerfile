@@ -447,6 +447,26 @@ COPY --from=ssd /work/ssd-build/ssd_detect ${OV_ROOT}/bin/ssd_detect
 COPY --from=seg /work/seg-build/seg_detect ${OV_ROOT}/bin/seg_detect
 COPY container-entry.sh /opt/openvino-demo/run.sh
 
+# Python CPU inference servers for --device CPU (docs/CPU-BACKENDS.md).
+# On arm64 the OV CPU plugin is only the slow generic C++ path (mkl-dnn
+# 0.21.3 predates AArch64 kernels), so the launchers select Python
+# runtimes there instead: onnxruntime for the webcam classifier, full
+# TensorFlow for the SSDLite and DeepLabV3 frozen graphs.  Only the
+# arm64 image installs the (large) interpreter dependencies; amd64 keeps
+# the C++ OV server, armv7 has no CPU path.
+COPY examples/webcam/mobilenet_cpu_server.py /opt/openvino-demo/cpu-servers/mobilenet_cpu_server.py
+COPY examples/ssd-detect/ssd_cpu_server.py /opt/openvino-demo/cpu-servers/ssd_cpu_server.py
+COPY examples/deeplab-seg/seg_cpu_server.py /opt/openvino-demo/cpu-servers/seg_cpu_server.py
+RUN set -eux; \
+    if [ "${TARGET}" = arm64 ]; then \
+        apt-get -o Acquire::Retries=5 install -y --no-install-recommends python3-pip; \
+        python3 -m pip install --no-cache-dir \
+            tensorflow onnxruntime opencv-python-headless; \
+        python3 -c 'import numpy, cv2, tensorflow, onnxruntime; \
+            print("cpu-servers deps: numpy", numpy.__version__, "| cv2", cv2.__version__, "| tf", tensorflow.__version__, "| ort", onnxruntime.__version__)'; \
+        rm -rf /var/lib/apt/lists/*; \
+    fi
+
 RUN set -eux; \
     chmod +x /opt/openvino-demo/run.sh ${OV_ROOT}/bin/hello_myriad ${OV_ROOT}/bin/mobilenet_classify ${OV_ROOT}/bin/mobilenet_server ${OV_ROOT}/bin/ssd_detect ${OV_ROOT}/bin/seg_detect; \
     IE_PLUGIN="$(find ${OV_ROOT}/inference_engine/lib -mindepth 2 -maxdepth 2 -type f -name libmyriadPlugin.so -print -quit)"; \
@@ -455,6 +475,7 @@ RUN set -eux; \
     test -f "${IE_LIB}/usb-ma2450.mvcmd"; \
     test -f "${IE_LIB}/plugins.xml"; \
     case "${TARGET}" in amd64|arm64) grep -q 'name="CPU"' "${IE_LIB}/plugins.xml" ;; esac; \
+    case "${TARGET}" in arm64) test -f /opt/openvino-demo/cpu-servers/seg_cpu_server.py; esac; \
     printf 'PROJECT_REVISION=%s\nTARGET=%s\nDOCKER_PLATFORM=%s\nBASE_IMAGE=%s\nOPENVINO_COMMIT=%s\nIE_LIB_BASENAME=%s\nEXPECTED_ELF_CLASS=%s\nEXPECTED_ELF_MACHINE_ID=%s\n' \
         "${PROJECT_REVISION}" "${TARGET}" "${DOCKER_PLATFORM}" "${BASE_IMAGE}" "${OPENVINO_COMMIT}" "$(basename "${IE_LIB}")" "${EXPECTED_ELF_CLASS}" "${EXPECTED_ELF_MACHINE_ID}" \
         > ${OV_ROOT}/runtime-manifest.env; \

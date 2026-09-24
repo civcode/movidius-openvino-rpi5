@@ -1,7 +1,7 @@
 # CPU inference backends across targets (concept)
 
-Status: **Phase 1a (webcam, ORT) and 1b (ssd, full TF) implemented and
-committed (2026-09-24); 1c (seg) in progress; 1d (packaging) pending.**
+Status: **Phases 1a-1d implemented (2026-09-24); on-Pi validation +
+MYRIAD-vs-CPU benchmark pending (needs the RPi5).**
 Scope: run every example (ssd-detect, deeplab-seg, webcam) on the host **CPU**
 on `amd64`, `arm64`, and (if feasible) `armv7`, in addition to the existing
 MYRIAD path.
@@ -228,17 +228,24 @@ docker image predates it until 1d); armv7 → hard error
 2. `infer-ssd-server.sh` branch as in 1a
 3. `scripts/cpu-parity-ssd.sh` (PASS: 4/4 detections, boxes ≤1 px, scores ≤0.02)
 
-**Phase 1c — deeplab-seg (spike done; implementing)**
+**Phase 1c — deeplab-seg (DONE, commit `9219df7`)**
 1. spike: full TF on `deeplabv3/source/frozen_inference_graph.pb` vs C++
    `seg_detect` (OV CPU) on dog_ssd.ppm — **done 2026-09-24, 99.75 % mask
    agreement** (see §12)
 2. `examples/deeplab-seg/seg_cpu_server.py` (full TF, `MASK` protocol) +
    launcher branch + `scripts/cpu-parity-seg.sh`
 
-**Phase 1d — packaging & validation (pending)**
-1. arm64 Dockerfile: `pip install onnxruntime tensorflow` + COPY scripts
-   (docker backend only; host backend is the primary Pi path)
-2. On-Pi validation: accuracy diff vs C++ server; benchmark MYRIAD vs CPU
+**Phase 1d — packaging (DONE) & validation (on-Pi, pending)**
+1. arm64 Dockerfile: the runtime stage installs `python3-pip` +
+   `tensorflow onnxruntime opencv-python-headless` (arm64 only) and copies
+   the three Python servers to `/opt/openvino-demo/cpu-servers/`; the three
+   launchers gained a docker branch for `CPU` + arm64 that runs the
+   in-image copy. QEMU-verified 2026-09-24: the pinned bullseye snapshot
+   supplies the deps (tf 2.20, ort 1.19.2, cv2 5.0, numpy 2.0) and all three
+   servers produce valid protocol output under aarch64 emulation.
+2. On-Pi validation (pending): rebuild with `./build.sh --platform arm64`,
+   then (a) `scripts/cpu-parity-*.sh`-style accuracy diff of the Python
+   servers vs the C++ server, (b) benchmark MYRIAD vs CPU per example.
 
 **Phase 2 (optional)** — ONNX-backbone SSD detector (5–10× faster than
 full-TF NMS), INT8, armv7 CPU from source (TFLite), HETERO:MYRIAD,CPU.

@@ -50,8 +50,14 @@ plugin on **amd64 and arm64** (the pinned mkl-dnn 0.21.3 has full x86
 kernels; on AArch64 it predates NEON kernels, so arm64 uses the slow generic
 C++ path - fine as a CPU baseline, e.g. to benchmark against the MYRIAD
 stick, but not a fast inference engine; armv7 cannot build it at all,
-mkl-dnn 0.21.3 refuses 32-bit targets).  amd64/arm64 images therefore
-support `--device CPU` in the examples.
+mkl-dnn 0.21.3 refuses 32-bit targets).
+
+`--device CPU` works in the examples on **amd64** (the C++ OV server with
+FP32 IRs) and **arm64**.  On arm64 the launchers instead run per-example
+Python CPU servers from the image - ONNX Runtime for the webcam classifier,
+full TensorFlow for the SSDLite and DeepLabV3 frozen graphs - because the
+generic C++ path is much slower than those; armv7 remains MYRIAD-only. See
+`docs/CPU-BACKENDS.md` for the design and the parity test results.
 
 ## Quick start
 

@@ -94,7 +94,8 @@ pass a different launcher as the first positional argument.
   and same post-processing (nearest-neighbour mask resize, per-class
   histogram) as the C++ server.  `pip install tensorflow`
   (+ `opencv-python-headless` for the resize) is the only dependency.
-  On arm64 the docker backend does not include it yet - use the host backend.
+  The docker backend runs the in-image copy of the server (the image must
+  have been rebuilt with the cpu-servers step - see the Dockerfile).
 * **armv7**: not available (no 32-bit CPU runtime) - MYRIAD only.
 
 CPU parity against the C++ server is a tracked regression test:
