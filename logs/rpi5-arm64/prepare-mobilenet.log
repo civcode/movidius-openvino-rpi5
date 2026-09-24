@@ -1,0 +1,93 @@
+START 2026-09-24T12:42:02+02:00
+== ONNX model zoo: mobilenetv2-7 ==
+    fetching mobilenetv2-7.tar.gz -> vendor/models/onnx/mobilenetv2-7.tar.gz
+vendor/models/onnx/mobilenetv2-7.tar.gz: OK
+vendor/models/onnx/mobilenetv2-7.onnx: OK
+    14246826 bytes  vendor/models/onnx/mobilenetv2-7.onnx
+
+== labels ==
+    fetching synset.txt -> vendor/models/labels/synset.txt
+    1000 lines
+
+== Model Optimizer 2020.3.2 (vendored, staged without unit tests) ==
+    project target: arm64; MO host platform: linux/arm64
+    staged 897 python files (source tree has 1175)
+    converting --data_type FP32 -> vendor/models/mobilenet-v2-ov203/fp32
+[notice] To update, run: pip install --upgrade pip
+[ SUCCESS ] Generated IR version 10 model.
+[ SUCCESS ] XML file: /models/mobilenet-v2-ov203/fp32/mobilenet-v2-ov203.xml
+[ SUCCESS ] BIN file: /models/mobilenet-v2-ov203/fp32/mobilenet-v2-ov203.bin
+[ SUCCESS ] Total execution time: 14.29 seconds. 
+[ SUCCESS ] Memory consumed: 148 MB. 
+-rw-r--r-- 1 root root 13951520 Sep 24 12:42 vendor/models/mobilenet-v2-ov203/fp32/mobilenet-v2-ov203.bin
+-rw-r--r-- 1 root root   138033 Sep 24 12:42 vendor/models/mobilenet-v2-ov203/fp32/mobilenet-v2-ov203.xml
+    converting --data_type FP16 -> vendor/models/mobilenet-v2-ov203/fp16
+[notice] To update, run: pip install --upgrade pip
+[ SUCCESS ] Generated IR version 10 model.
+[ SUCCESS ] XML file: /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml
+[ SUCCESS ] BIN file: /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin
+[ SUCCESS ] Total execution time: 14.26 seconds. 
+[ SUCCESS ] Memory consumed: 148 MB. 
+-rw-r--r-- 1 root root 6975776 Sep 24 12:43 vendor/models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin
+-rw-r--r-- 1 root root  137973 Sep 24 12:43 vendor/models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml
+
+== reference tensors from the model zoo (test_data_set_0) ==
+[notice] To update, run: pip install --upgrade pip
+    input_0 data (1, 3, 224, 224) float32 min -42.191246 max 44.729996
+    output_0 mobilenetv20_output_flatten0_reshape0 (1, 1000) float32 min -13.341638 max 26.270195
+
+== test photos ==
+    fetching dog.jpg -> vendor/models/images/src/dog.jpg
+vendor/models/images/src/dog.jpg: OK
+    fetching cat.jpg -> vendor/models/images/src/cat.jpg
+vendor/models/images/src/cat.jpg: OK
+    fetching eagle.jpg -> vendor/models/images/src/eagle.jpg
+vendor/models/images/src/eagle.jpg: OK
+    fetching 330px-Bananavarieties.jpg -> vendor/models/images/src/banana.jpg
+vendor/models/images/src/banana.jpg: OK
+    fetching 330px-Coffee_at_Christmas_%28Unsplash%29.jpg -> vendor/models/images/src/cup.jpg
+vendor/models/images/src/cup.jpg: OK
+    preprocessing on the host (python3 + Pillow)
+    dog     768x576 -> centre crop at (58,16) and full-frame squash
+    cat     480x360 -> centre crop at (58,16) and full-frame squash
+    eagle   773x512 -> centre crop at (81,16) and full-frame squash
+    banana  329x188 -> centre crop at (112,16) and full-frame squash
+    cup     330x220 -> centre crop at (80,16) and full-frame squash
+
+== corpus ==
+    150543  images/banana.ppm
+    150543  images/cat.ppm
+    150543  images/cup.ppm
+    150543  images/dog.ppm
+    150543  images/eagle.ppm
+    150543  images/full/banana.ppm
+    150543  images/full/cat.ppm
+    150543  images/full/cup.ppm
+    150543  images/full/dog.ppm
+    150543  images/full/eagle.ppm
+     20948  images/src/banana.jpg
+    140391  images/src/cat.jpg
+     16809  images/src/cup.jpg
+    163759  images/src/dog.jpg
+    141886  images/src/eagle.jpg
+     31675  labels/synset.txt
+   6975776  mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin
+     53064  mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.mapping
+    137973  mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml
+  13951520  mobilenet-v2-ov203/fp32/mobilenet-v2-ov203.bin
+     53064  mobilenet-v2-ov203/fp32/mobilenet-v2-ov203.mapping
+    138033  mobilenet-v2-ov203/fp32/mobilenet-v2-ov203.xml
+  14246826  onnx/mobilenetv2-7.onnx
+  13682646  onnx/mobilenetv2-7.tar.gz
+    602112  test_data/input_0.f32
+      4000  test_data/output_0.f32
+    602134  test_data/test_data_set_0/input_0.pb
+      4049  test_data/test_data_set_0/output_0.pb
+
+next:
+  ./run.sh mobilenet                                   numerical check against the
+                                                       model zoo reference output
+  ./run.sh mobilenet --image /models/images/cat.ppm    classify a photo
+  IR=fp32 ./run.sh mobilenet                           the FP32 weights instead
+prepare-mobilenet rc=0 elapsed=114s
+END 2026-09-24T12:43:56+02:00

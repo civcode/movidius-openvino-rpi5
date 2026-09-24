@@ -1,0 +1,14 @@
+unit checks passed
+ok - LinePipe/read_exact/windowed_fps unit tests
+resize checks passed
+resize checks passed
+ok - frame_utils.hpp resize bounds (1px sources, clamped upscale)
+default launcher checks passed
+ok - default launcher scripts (single path, present, mode 755)
+ok - ssd_stream fake-server end-to-end (multi-word labels, 2 frames, warm-up excluded)
+ok - ssd_stream malformed-line handling (clean RuntimeError)
+ok - ssd_stream server-exit diagnostics
+ok - seg_stream fake-server end-to-end (interleaved MASK/END, 2 frames, mask-out)
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+ModuleNotFoundError: No module named 'cv2'

@@ -1,0 +1,15 @@
+START 2026-09-24T11:32:56+02:00
+downloading https://storage.openvinotoolkit.org/repositories/openvino/packages/2020.3.2/l_openvino_toolkit_runtime_raspbian_p_2020.3.355.tgz
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  1 22.4M    1  426k    0     0   906k      0  0:00:25 --:--:--  0:00:25  904k 84 22.4M   84 19.0M    0     0  12.9M      0  0:00:01  0:00:01 --:--:-- 12.9M100 22.4M  100 22.4M    0     0  13.5M      0  0:00:01  0:00:01 --:--:-- 13.5M
+tarball: /home/chris/workspace/movidius-openvino-rpi5/vendor/l_openvino_toolkit_runtime_raspbian_p_2020.3.355-runtime-raspbian.tgz (23M)
+pcie-ma248x.mvcmd: OK
+usb-ma2450.mvcmd: OK
+usb-ma2x8x.mvcmd: OK
+firmware copied to /home/chris/workspace/movidius-openvino-rpi5/vendor/firmware; it is device-side and shared by both host targets:
+094b1b3cb813752b067e2f953a4425f2e48f160076008b14b61175b76d04e7f4  pcie-ma248x.mvcmd
+0b068c61eaf25959b2e5b66f4ba8c4de4bf4215cdf02fce30ffdb6b9a7fe13d5  usb-ma2450.mvcmd
+11732cb05e547d08c7009bbdda56b53c0976180dee024ecc6a7116e2f613e567  usb-ma2x8x.mvcmd
+fetch rc=0 elapsed=4s
+END 2026-09-24T11:33:00+02:00

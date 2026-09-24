@@ -1,0 +1,39 @@
+START 2026-09-24T14:20:09+02:00
+inference backend: host ir=fp16 device=MYRIAD (server pid 74085)
+infer-server: backend=host target=arm64 native
+mobilenet_server: model /home/chris/workspace/movidius-openvino-rpi5/vendor/models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml + /home/chris/workspace/movidius-openvino-rpi5/vendor/models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin loaded as mobilenet-v2-ov203
+mobilenet_server: ready (device=MYRIAD input=1,3,224,224 FP16 NCHW 150528 elems / 602112 B per request, output 1000 elems / 4000 B per response)
+
+images          : 1000 (1000 classified, 0 skipped)
+top-1 accuracy  : 814/1000 = 81.40%
+top-5 accuracy  : 959/1000 = 95.90%
+throughput      : 18.73 img/s (server start 1.70 s, total 55.1 s)
+misclassified (top-1) - up to 25 of 186 shown:
+  n01494475_hammerhead.JPEG: expected hammerhead, hammerhead shark           got n04371430 (swimming trunks, bathing trunks) p=15.805  [also a top-5 miss]
+  n01498041_stingray.JPEG: expected stingray                               got n01496331 (electric ray, crampfish, numbfish, torpedo) p=19.250
+  n01534433_junco.JPEG: expected junco, snowbird                        got n01824575 (coucal) p=10.852
+  n01608432_kite.JPEG: expected kite                                   got n12620546 (hip, rose hip, rosehip) p=13.555  [also a top-5 miss]
+  n01616318_vulture.JPEG: expected vulture                                got n03028079 (church, church building) p=15.695
+  n01632777_axolotl.JPEG: expected axolotl, mud puppy, Ambystoma mexicanum got n01630670 (common newt, Triturus vulgaris) p=17.078  [also a top-5 miss]
+  n01644373_tree_frog.JPEG: expected tree frog, tree-frog                   got n01694178 (African chameleon, Chamaeleo chamaeleon) p=13.633
+  n01664065_loggerhead.JPEG: expected loggerhead, loggerhead turtle, Caretta caretta got n01491361 (tiger shark, Galeocerdo cuvieri) p=12.195
+  n01667114_mud_turtle.JPEG: expected mud turtle                             got n01667778 (terrapin) p=16.547
+  n01689811_alligator_lizard.JPEG: expected alligator lizard                       got n01630670 (common newt, Triturus vulgaris) p=12.359
+  n01695060_Komodo_dragon.JPEG: expected Komodo dragon, Komodo lizard, dragon lizard, giant lizard, Varanus komodoensis got n02397096 (warthog) p=13.523
+  n01698640_American_alligator.JPEG: expected American alligator, Alligator mississipiensis got n01697457 (African crocodile, Nile crocodile, Crocodylus niloticus) p=17.188
+  n01729977_green_snake.JPEG: expected green snake, grass snake               got n01749939 (green mamba) p=28.094
+  n01734418_king_snake.JPEG: expected king snake, kingsnake                  got n01697457 (African crocodile, Nile crocodile, Crocodylus niloticus) p=10.180  [also a top-5 miss]
+  n01737021_water_snake.JPEG: expected water snake                            got n01601694 (water ouzel, dipper) p=12.070  [also a top-5 miss]
+  n01740131_night_snake.JPEG: expected night snake, Hypsiglena torquata       got n01728572 (thunder snake, worm snake, Carphophis amoenus) p=16.312
+  n01749939_green_mamba.JPEG: expected green mamba                            got n03782006 (monitor) p=10.508
+  n01751748_sea_snake.JPEG: expected sea snake                              got n02526121 (eel) p=15.031
+  n01753488_horned_viper.JPEG: expected horned viper, cerastes, sand viper, horned asp, Cerastes cornutus got n01740131 (night snake, Hypsiglena torquata) p=9.469
+  n01756291_sidewinder.JPEG: expected sidewinder, horned rattlesnake, Crotalus cerastes got n01744401 (rock python, rock snake, Python sebae) p=12.094
+  n01773549_barn_spider.JPEG: expected barn spider, Araneus cavaticus         got n01582220 (magpie) p=10.125  [also a top-5 miss]
+  n01806567_quail.JPEG: expected quail                                  got n01855672 (goose) p=12.672  [also a top-5 miss]
+  n01855032_red-breasted_merganser.JPEG: expected red-breasted merganser, Mergus serrator got n02025239 (ruddy turnstone, Arenaria interpres) p=13.492
+  n01871265_tusker.JPEG: expected tusker                                 got n02105056 (groenendael) p=12.312  [also a top-5 miss]
+  n01910747_jellyfish.JPEG: expected jellyfish                              got n04525305 (vending machine) p=11.297  [also a top-5 miss]
+
+accuracy rc=0 elapsed=56s
+END 2026-09-24T14:21:05+02:00

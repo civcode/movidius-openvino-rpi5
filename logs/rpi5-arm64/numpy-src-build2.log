@@ -1,0 +1,17 @@
+START 2026-09-24T13:37:51+02:00
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+error: subprocess-exited-with-error
+
+× pip subprocess to install build dependencies did not run successfully.
+│ exit code: 1
+╰─> See above for output.
+
+note: This error originates from a subprocess, and is likely not a problem with pip.
+
+[notice] A new release of pip is available: 23.0.1 -> 24.0
+[notice] To update, run: pip install --upgrade pip
+numpy-src rc=0 elapsed=1267s
+    from numpy.linalg import lapack_lite, _umath_linalg
+ImportError: /usr/local/lib/python3.7/site-packages/numpy/linalg/_umath_linalg.cpython-37m-x86_64-linux-gnu.so: failed to map segment from shared object
+END 2026-09-24T13:59:02+02:00

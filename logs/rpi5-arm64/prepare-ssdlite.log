@@ -1,0 +1,42 @@
+START 2026-09-24T12:47:25+02:00
+== TF model zoo: ssdlite_mobilenet_v2_coco_2018_05_09 ==
+    fetching ssdlite_mobilenet_v2_coco_2018_05_09.tar.gz -> vendor/models/ssdlite_mobilenet_v2/source/ssdlite_mobilenet_v2_coco_2018_05_09.tar.gz
+vendor/models/ssdlite_mobilenet_v2/source/ssdlite_mobilenet_v2_coco_2018_05_09.tar.gz: OK
+    19911343  frozen_inference_graph.pb
+    4199  pipeline.config
+
+== COCO label map (mscoco, pinned revision) ==
+    fetching mscoco_label_map.pbtxt -> vendor/models/ssdlite_mobilenet_v2/source/mscoco_label_map.pbtxt
+vendor/models/ssdlite_mobilenet_v2/source/mscoco_label_map.pbtxt: OK
+    80 classes (+background) -> vendor/models/labels/coco.txt
+
+== Model Optimizer 2020.3.2 (vendored, staged without unit tests) ==
+    staged 897 python files
+
+== converting to OpenVINO 2020.3.2 IR (FP16, ssd_v2_support.json) ==
+Unable to find image 'python:3.7-slim' locally
+3.7-slim: Pulling from library/python
+e468929dc1a9: Pulling fs layer
+bc3b0687866d: Pulling fs layer
+f4e747346888: Pulling fs layer
+755c9c80f963: Pulling fs layer
+e886f0f47ef5: Pulling fs layer
+e468929dc1a9: Download complete
+755c9c80f963: Download complete
+bc3b0687866d: Download complete
+f4e747346888: Download complete
+e886f0f47ef5: Download complete
+e886f0f47ef5: Pull complete
+bc3b0687866d: Pull complete
+f4e747346888: Pull complete
+755c9c80f963: Pull complete
+e468929dc1a9: Pull complete
+Digest: sha256:b53f496ca43e5af6994f8e316cf03af31050bf7944e0e4a308ad86c001cf028b
+Status: Downloaded newer image for python:3.7-slim
+ERROR: Could not find a version that satisfies the requirement tensorflow==1.15.0 (from versions: 2.10.0rc0, 2.10.0rc1, 2.10.0rc2, 2.10.0rc3, 2.10.0, 2.10.1, 2.11.0rc0, 2.11.0rc1, 2.11.0rc2, 2.11.0)
+ERROR: No matching distribution found for tensorflow==1.15.0
+
+[notice] A new release of pip is available: 23.0.1 -> 24.0
+[notice] To update, run: pip install --upgrade pip
+prepare-ssdlite rc=1 elapsed=35s
+END 2026-09-24T12:48:00+02:00

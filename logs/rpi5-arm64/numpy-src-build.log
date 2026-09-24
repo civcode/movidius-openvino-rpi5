@@ -1,0 +1,10 @@
+START 2026-09-24T13:28:17+02:00
+debconf: delaying package configuration, since apt-utils is not installed
+DEPRECATION: --no-binary currently disables reading from the cache of locally built wheels. In the future --no-binary will not influence the wheel cache. pip 23.1 will enforce this behaviour change. A possible replacement is to use the --no-cache-dir option. You can use the flag --use-feature=no-binary-enable-wheel-cache to test the upcoming behaviour. Discussion can be found at https://github.com/pypa/pip/issues/11453
+Requirement already satisfied: numpy==1.18.5 in /usr/local/lib/python3.7/site-packages (1.18.5)
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 23.0.1 -> 24.0
+[notice] To update, run: pip install --upgrade pip
+numpy-src rc=0 elapsed=287s
+END 2026-09-24T13:33:04+02:00

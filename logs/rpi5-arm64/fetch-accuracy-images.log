@@ -1,0 +1,5 @@
+START 2026-09-24T14:18:41+02:00
+Cloning into '/home/chris/workspace/movidius-openvino-rpi5/examples/accuracy-test/images'...
+dataset ready: 1000 images in /home/chris/workspace/movidius-openvino-rpi5/examples/accuracy-test/images
+fetch rc=0 elapsed=14s
+END 2026-09-24T14:18:55+02:00

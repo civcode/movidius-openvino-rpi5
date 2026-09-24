@@ -1,0 +1,29 @@
+### host-run demo ###
+OpenVINO InferenceEngine smoke test
+available devices : MYRIAD
+  plugin MYRIAD   api 2.1 build custom__ (myriadPlugin)
+
+reading model   : /home/chris/workspace/movidius-openvino-rpi5/work/host-runtime/arm64/openvino-demo/model/model.xml + /home/chris/workspace/movidius-openvino-rpi5/work/host-runtime/arm64/openvino-demo/model/model.bin
+network         : tiny_conv_fp16
+  input  input dims 1,3,32,32 -> FP16 NCHW
+  output conv dims 1,8,32,32 FP32
+loading on      : MYRIAD (first load compiles the graph on the VPU)
+load+compile    : 1489.01 ms
+  inference 1 : 1.84 ms
+mean inference  : 1.84 ms (542.76 fps)
+  output conv (1,8,32,32, desc precision FP32, 4 B/elem) min -1.05859 max 2.64844 mean 1.02026
+RESULT: PASS
+
+### host-run mobilenet self-test ###
+
+against reference /home/chris/workspace/movidius-openvino-rpi5/vendor/models/test_data/output_0.f32:
+  max |diff|    : 0.0525  (reference logits up to 26.2702)
+  mean |diff|   : 0.0122
+  top-1         : device 556 vs reference 556
+  top-1        : device 556  reference 556  = match
+  top-2        : device 818  reference 818  = match
+  top-3        : device 811  reference 811  = match
+  top-4        : device 827  reference 827  = match
+  top-5        : device 918  reference 918  = match
+
+RESULT: PASS (top-1 matches, max |diff| 0.0525 vs tolerance 1.0000)

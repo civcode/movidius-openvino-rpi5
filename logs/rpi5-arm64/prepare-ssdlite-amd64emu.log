@@ -1,0 +1,41 @@
+START 2026-09-24T12:50:15+02:00
+MO_PLATFORM=linux/amd64 (qemu emulation on aarch64 host)
+== TF model zoo: ssdlite_mobilenet_v2_coco_2018_05_09 ==
+vendor/models/ssdlite_mobilenet_v2/source/ssdlite_mobilenet_v2_coco_2018_05_09.tar.gz: OK
+    19911343  frozen_inference_graph.pb
+    4199  pipeline.config
+
+== COCO label map (mscoco, pinned revision) ==
+vendor/models/ssdlite_mobilenet_v2/source/mscoco_label_map.pbtxt: OK
+    80 classes (+background) -> vendor/models/labels/coco.txt
+
+== Model Optimizer 2020.3.2 (vendored, staged without unit tests) ==
+    already staged (work/mo-2020.3)
+    staged 897 python files
+
+== converting to OpenVINO 2020.3.2 IR (FP16, ssd_v2_support.json) ==
+Unable to find image 'python:3.7-slim' locally
+3.7-slim: Pulling from library/python
+39312d8b4ab7: Pulling fs layer
+8973eb85275f: Pulling fs layer
+a803e7c4b030: Pulling fs layer
+bf3336e84c8e: Pulling fs layer
+f9afc3cc0135: Pulling fs layer
+39312d8b4ab7: Download complete
+8973eb85275f: Download complete
+f9afc3cc0135: Download complete
+bf3336e84c8e: Download complete
+a803e7c4b030: Download complete
+a803e7c4b030: Pull complete
+bf3336e84c8e: Pull complete
+8973eb85275f: Pull complete
+f9afc3cc0135: Pull complete
+39312d8b4ab7: Pull complete
+Digest: sha256:b53f496ca43e5af6994f8e316cf03af31050bf7944e0e4a308ad86c001cf028b
+Status: Image is up to date for python:3.7-slim
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 23.0.1 -> 24.0
+[notice] To update, run: pip install --upgrade pip
+prepare-ssdlite rc=1 elapsed=650s
+END 2026-09-24T13:01:05+02:00

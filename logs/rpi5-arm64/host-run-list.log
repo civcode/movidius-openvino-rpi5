@@ -1,0 +1,4 @@
+OpenVINO InferenceEngine smoke test
+available devices : MYRIAD
+  plugin MYRIAD   api 2.1 build custom__ (myriadPlugin)
+RESULT: MYRIAD present

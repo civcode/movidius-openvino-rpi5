@@ -1,0 +1,125 @@
+### mobilenet self-test (reference tensor) ###
+OV install    : /opt/openvino
+OV libraries  : /opt/openvino/inference_engine/lib/aarch64 (arch dir: aarch64)
+stick firmware: pcie-ma248x.mvcmd usb-ma2x8x.mvcmd usb-ma2450.mvcmd 
+model           : /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.xml + /models/mobilenet-v2-ov203/fp16/mobilenet-v2-ov203.bin
+network         : mobilenet-v2-ov203
+input           : data 1,3,224,224 FP16 NCHW
+output          : mobilenetv20_output_flatten0_reshape0 1,1000
+load+compile    : 1600.46 ms on MYRIAD
+input source    : /models/test_data/input_0.f32 (150528 float32)
+inference       : 44.62 ms mean over 1 run(s) (22.4 fps)
+logits          : 1000 values, 4 B/elem, desc precision FP32
+
+top 5:
+   1.    556   0.9999  n03347037  fire screen, fireguard  logit 26.219
+   2.    818   0.0000  n04286575  spotlight, spot  logit 15.211
+   3.    811   0.0000  n04265275  space heater  logit 14.969
+   4.    827   0.0000  n04330267  stove  logit 14.336
+   5.    918   0.0000  n06785654  crossword puzzle, crossword  logit 14.156
+
+against reference /models/test_data/output_0.f32:
+  max |diff|    : 0.0525  (reference logits up to 26.2702)
+  mean |diff|   : 0.0122
+  top-1         : device 556 vs reference 556
+  top-1        : device 556  reference 556  = match
+  top-2        : device 818  reference 818  = match
+  top-3        : device 811  reference 811  = match
+  top-4        : device 827  reference 827  = match
+  top-5        : device 918  reference 918  = match
+
+RESULT: PASS (top-1 matches, max |diff| 0.0525 vs tolerance 1.0000)
+
+### mobilenet photos ###
+--- cat.ppm ---
+output          : mobilenetv20_output_flatten0_reshape0 1,1000
+load+compile    : 1620.14 ms on MYRIAD
+input source    : /models/images/cat.ppm 224x224, mean 0.49,0.46,0.41 std 0.23,0.22,0.22
+inference       : 44.56 ms mean over 1 run(s) (22.4 fps)
+logits          : 1000 values, 4 B/elem, desc precision FP32
+
+top 5:
+   1.    281   0.2463  n02123045  tabby, tabby cat  logit 9.852
+   2.    282   0.1830  n02123159  tiger cat  logit 9.555
+   3.    277   0.1182  n02119022  red fox, Vulpes vulpes  logit 9.117
+   4.    285   0.1043  n02124075  Egyptian cat  logit 8.992
+   5.    278   0.0751  n02119789  kit fox, Vulpes macrotis  logit 8.664
+--- banana.ppm ---
+output          : mobilenetv20_output_flatten0_reshape0 1,1000
+load+compile    : 1616.81 ms on MYRIAD
+input source    : /models/images/banana.ppm 224x224, mean 0.49,0.46,0.41 std 0.23,0.22,0.22
+inference       : 44.57 ms mean over 1 run(s) (22.4 fps)
+logits          : 1000 values, 4 B/elem, desc precision FP32
+
+top 5:
+   1.    954   0.7170  n07753592  banana  logit 13.211
+   2.    923   0.0417  n07579787  plate  logit 10.367
+   3.    684   0.0317  n03840681  ocarina, sweet potato  logit 10.094
+   4.    641   0.0182  n03720891  maraca  logit 9.539
+   5.    666   0.0157  n03786901  mortar  logit 9.391
+--- cup.ppm ---
+output          : mobilenetv20_output_flatten0_reshape0 1,1000
+load+compile    : 1624.19 ms on MYRIAD
+input source    : /models/images/cup.ppm 224x224, mean 0.49,0.46,0.41 std 0.23,0.22,0.22
+inference       : 44.61 ms mean over 1 run(s) (22.4 fps)
+logits          : 1000 values, 4 B/elem, desc precision FP32
+
+top 5:
+   1.    968   0.9600  n07930864  cup  logit 16.109
+   2.    967   0.0110  n07920052  espresso  logit 11.641
+   3.    504   0.0090  n03063599  coffee mug  logit 11.438
+   4.    505   0.0034  n03063689  coffeepot  logit 10.453
+   5.    849   0.0028  n04398044  teapot  logit 10.266
+--- eagle.ppm ---
+output          : mobilenetv20_output_flatten0_reshape0 1,1000
+load+compile    : 1619.23 ms on MYRIAD
+input source    : /models/images/eagle.ppm 224x224, mean 0.49,0.46,0.41 std 0.23,0.22,0.22
+inference       : 44.56 ms mean over 1 run(s) (22.4 fps)
+logits          : 1000 values, 4 B/elem, desc precision FP32
+
+top 5:
+   1.     21   0.8785  n01608432  kite  logit 16.359
+   2.     22   0.0926  n01614925  bald eagle, American eagle, Haliaeetus leucocephalus  logit 14.109
+   3.     23   0.0157  n01616318  vulture  logit 12.336
+   4.    139   0.0054  n02025239  ruddy turnstone, Arenaria interpres  logit 11.273
+   5.     83   0.0009  n01798484  prairie chicken, prairie grouse, prairie fowl  logit 9.516
+--- dog.ppm ---
+output          : mobilenetv20_output_flatten0_reshape0 1,1000
+load+compile    : 1626.79 ms on MYRIAD
+input source    : /models/images/dog.ppm 224x224, mean 0.49,0.46,0.41 std 0.23,0.22,0.22
+inference       : 44.54 ms mean over 1 run(s) (22.5 fps)
+logits          : 1000 values, 4 B/elem, desc precision FP32
+
+top 5:
+   1.    444   0.5825  n02835271  bicycle-built-for-two, tandem bicycle, tandem  logit 12.141
+   2.    249   0.1044  n02110063  malamute, malemute, Alaskan malamute  logit 10.422
+   3.    671   0.0846  n03792782  mountain bike, all-terrain bike, off-roader  logit 10.211
+   4.    537   0.0372  n03218198  dogsled, dog sled, dog sleigh  logit 9.391
+   5.    169   0.0344  n02090622  borzoi, Russian wolfhound  logit 9.312
+OV target     : arm64
+OV install    : /opt/openvino
+OV libraries  : /opt/openvino/inference_engine/lib/aarch64 (arch dir: aarch64)
+stick firmware: pcie-ma248x.mvcmd usb-ma2x8x.mvcmd usb-ma2450.mvcmd 
+give exactly one of --tensor or --image
+   4.    827   0.0000  n04330267  stove  logit 14.336
+   5.    918   0.0000  n06785654  crossword puzzle, crossword  logit 14.156
+
+against reference /models/test_data/output_0.f32:
+  max |diff|    : 0.0525  (reference logits up to 26.2702)
+  mean |diff|   : 0.0122
+  top-1         : device 556 vs reference 556
+  top-1        : device 556  reference 556  = match
+  top-2        : device 818  reference 818  = match
+  top-3        : device 811  reference 811  = match
+  top-4        : device 827  reference 827  = match
+  top-5        : device 918  reference 918  = match
+
+RESULT: PASS (top-1 matches, max |diff| 0.0525 vs tolerance 1.0000)
+  top-1         : device 556 vs reference 556
+  top-1        : device 556  reference 556  = match
+  top-2        : device 818  reference 818  = match
+  top-3        : device 811  reference 811  = match
+  top-4        : device 827  reference 827  = match
+  top-5        : device 918  reference 918  = match
+
+RESULT: PASS (top-1 matches, max |diff| 0.0671 vs tolerance 1.0000)

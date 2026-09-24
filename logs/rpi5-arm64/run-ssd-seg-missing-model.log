@@ -1,0 +1,5 @@
+### run.sh ssd ###
+no IR in /home/chris/workspace/movidius-openvino-rpi5/vendor/models/ssdlite_mobilenet_v2 - run ./scripts/prepare-ssdlite.sh first
+
+### run.sh seg ###
+no IR in /home/chris/workspace/movidius-openvino-rpi5/vendor/models/deeplabv3 - run ./scripts/prepare-deeplabv3.sh first

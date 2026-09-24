@@ -1,0 +1,21 @@
+START 2026-09-24T14:25:27+02:00
+== TF model zoo: deeplabv3_mnv2_pascal_train_aug_2018_01_29 ==
+    fetching deeplabv3_mnv2_pascal_train_aug_2018_01_29.tar.gz -> vendor/models/deeplabv3/source/deeplabv3_mnv2_pascal_train_aug_2018_01_29.tar.gz
+vendor/models/deeplabv3/source/deeplabv3_mnv2_pascal_train_aug_2018_01_29.tar.gz: OK
+    8773281  frozen_inference_graph.pb
+
+== Pascal VOC 2012 label map (21 classes) ==
+    21 classes -> vendor/models/labels/pascal_voc.txt
+
+== Model Optimizer 2020.3.2 (vendored, staged without unit tests) ==
+    already staged (work/mo-2020.3)
+    staged 897 python files
+
+== converting to OpenVINO 2020.3.2 IR (FP16, per the OMZ model.yml) ==
+ERROR: Could not find a version that satisfies the requirement tensorflow==1.15.0 (from versions: 2.10.0rc0, 2.10.0rc1, 2.10.0rc2, 2.10.0rc3, 2.10.0, 2.10.1, 2.11.0rc0, 2.11.0rc1, 2.11.0rc2, 2.11.0)
+ERROR: No matching distribution found for tensorflow==1.15.0
+
+[notice] A new release of pip is available: 23.0.1 -> 24.0
+[notice] To update, run: pip install --upgrade pip
+deeplab rc=1 elapsed=8s
+END 2026-09-24T14:25:35+02:00

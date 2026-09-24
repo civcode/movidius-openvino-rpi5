@@ -5,6 +5,7 @@ The files already present at the root of `logs/` are historical Raspberry Pi / A
 New validation output should be placed by target:
 
 - `rpi5-armv7/` — Raspberry Pi 5 host running the ARMv7 OpenVINO runtime.
+- `rpi5-arm64/` — Raspberry Pi 5 host running the native arm64 (AArch64) OpenVINO runtime.
 - `ubuntu-amd64/` — Ubuntu x86_64 host running the native amd64 runtime.
 - `ci/` — CI build and hardware-free verification logs.
 
