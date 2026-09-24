@@ -49,9 +49,11 @@ BASE_IMAGE="${BASE_IMAGE_OVERRIDE:-${DEFAULT_BASE_IMAGE}}"
 IMAGE="${IMAGE_OVERRIDE:-${DEFAULT_IMAGE}}"
 if [[ -n "${BUILD_JOBS_OVERRIDE}" ]]; then
     BUILD_JOBS="${BUILD_JOBS_OVERRIDE}"
-elif [[ "${TARGET}" == armv7 || "${TARGET}" == arm64 ]]; then
+elif [[ "${TARGET}" == armv7 ]]; then
+    # ARMHF userspace: keep the 2 jobs the armv7 baseline was validated with.
     BUILD_JOBS=2
 else
+    # Native targets (arm64, amd64): use every host core, capped at 8.
     host_jobs="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)"
     (( host_jobs > 8 )) && host_jobs=8
     BUILD_JOBS="${host_jobs}"
