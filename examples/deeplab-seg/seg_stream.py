@@ -299,7 +299,8 @@ def main():
     ap.add_argument("--backend", choices=["auto", "host", "docker"], default="auto",
                     help="where seg_detect runs (passed to the server script)")
     ap.add_argument("--device", default="MYRIAD",
-                   help="OpenVINO device: MYRIAD, HETERO:MYRIAD, or CPU (CPU in amd64/arm64 images)")
+                   help="MYRIAD, HETERO:MYRIAD, or CPU (amd64: OpenVINO CPU, FP32 IR; "
+                        "arm64: Python full-TensorFlow server; see docs/CPU-BACKENDS.md)")
     ap.add_argument("--request-timeout", type=float, default=60.0,
                     help="max seconds to wait for one frame response (first frame "
                          "includes the ~1.7 s stick boot + 513x513 inference)")

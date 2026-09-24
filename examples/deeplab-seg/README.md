@@ -66,6 +66,8 @@ python3 examples/deeplab-seg/seg_stream.py --mask-out mask.ppm # also save the c
 # same pipeline on the host CPU (amd64/arm64 images; arm64 = generic C++ path):
 python3 examples/deeplab-seg/seg_stream.py --headless --device CPU \
     --video vendor/models/images/sample_640x360.mp4 --frames 10
+# drive the CPU server directly (per-target runtime, see above):
+examples/deeplab-seg/infer-seg-server.sh host CPU < /tmp/frame.bin
 ```
 
 `--video` processes a video file (any container/codec OpenCV can decode) instead
@@ -79,14 +81,26 @@ internally).  `seg_stream.py` starts the server via `infer-seg-server.sh`
 (host/docker/auto backend, same pattern as the SSDLite launcher);
 pass a different launcher as the first positional argument.
 
-`--device` is passed straight to the server: **`CPU` works in amd64 and
-arm64 images** (the runtimes there ship the CPU plugin built from mkl-dnn
-0.21.3; on arm64 it is the slow generic C++ path - mkl-dnn 0.21.3 predates
-AArch64/NEON kernels - i.e. a CPU baseline, e.g. for benchmarking against
-the stick); armv7 images cannot build it (mkl-dnn refuses 32-bit targets).  The 2020.3 CPU plugin
-cannot accept FP16 input tensors, so the launcher automatically switches to
-the FP32 IRs (`openvino_fp32/`, produced by `scripts/prepare-deeplabv3.sh`)
-when the device is `CPU`.
+`--device CPU` picks the best CPU path per target (see
+`docs/CPU-BACKENDS.md`):
+
+* **amd64**: the C++ OpenVINO server with the FP32 IRs
+  (`openvino_fp32/`, produced by `scripts/prepare-deeplabv3.sh`) - the 2020.3
+  CPU plugin rejects FP16 inputs.
+* **arm64**: `seg_cpu_server.py` - the TF 1.x frozen graph
+  (`source/frozen_inference_graph.pb`) run by full TensorFlow 2.x.  No model
+  conversion; the same `FRAME/CLASSES/CLASS/MASK/END` protocol, same
+  preprocessing (513×513 bilinear resize, raw 0..255, in-graph normalization)
+  and same post-processing (nearest-neighbour mask resize, per-class
+  histogram) as the C++ server.  `pip install tensorflow`
+  (+ `opencv-python-headless` for the resize) is the only dependency.
+  On arm64 the docker backend does not include it yet - use the host backend.
+* **armv7**: not available (no 32-bit CPU runtime) - MYRIAD only.
+
+CPU parity against the C++ server is a tracked regression test:
+`./scripts/cpu-parity-seg.sh` (same frame through both servers; on the
+dog_ssd.ppm reference frame it passes with 99.75 % mask agreement - the
+residual flips are ArgMax ties between the two FP32 backends).
 
 ## Streaming protocol (`seg_detect --stdin`)
 

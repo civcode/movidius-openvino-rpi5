@@ -1,6 +1,7 @@
 # CPU inference backends across targets (concept)
 
-Status: **proposal** — not yet implemented.
+Status: **Phase 1a (webcam, ORT) and 1b (ssd, full TF) implemented and
+committed (2026-09-24); 1c (seg) in progress; 1d (packaging) pending.**
 Scope: run every example (ssd-detect, deeplab-seg, webcam) on the host **CPU**
 on `amd64`, `arm64`, and (if feasible) `armv7`, in addition to the existing
 MYRIAD path.
@@ -71,7 +72,7 @@ graphs force this split, see spike log §12):
 |---------|-------------------|----------------|
 | webcam (mobilenet) | **ONNX Runtime** (python) | existing `mobilenetv2-7.onnx` (no conversion) |
 | ssd-detect | **full TensorFlow** (python) | existing frozen `frozen_inference_graph.pb` (no conversion) |
-| deeplab-seg | **full TensorFlow** (python) | existing frozen `frozen_inference_graph.pb` (no conversion; spike pending) |
+| deeplab-seg | **full TensorFlow** (python) | existing frozen `frozen_inference_graph.pb` (no conversion; 2026-09-24 spike: 99.75 % mask agreement vs C++) |
 
 Frozen for v1 (advisor-reviewed 2026-09-24): amd64 keeps the existing
 OpenVINO CPU path; arm64 gets python CPU servers (ORT for the classifier,
@@ -127,14 +128,18 @@ Each mirrors its C++ sibling's protocol exactly:
 |------|---------|-------------|----------------------|
 | `examples/webcam/mobilenet_cpu_server.py` | ONNX Runtime | client already sends fp32 224 tensor | none (raw logits out, as `mobilenet_server` does) |
 | `examples/ssd-detect/ssd_cpu_server.py` | full TF (frozen `.pb`) | RGB frame → bilinear resize 300×300, uint8 (the TF input is `uint8` `image_tensor`) | none — NMS is in the graph; scale normalized boxes to frame px |
-| `examples/deeplab-seg/seg_cpu_server.py` | full TF (frozen `.pb`) | RGB frame → resize 513×513 (BGR raw 0..255 as the IR expects) | downsample 513×513 label map to frame size |
+| `examples/deeplab-seg/seg_cpu_server.py` | full TF (frozen `.pb`) | RGB frame → bilinear resize 513×513, uint8 (the TF `ImageTensor` is NHWC **RGB** — verified: feeding BGR mis-segments ~5 % of pixels; the C++ IR path is BGR and its swap is in the IR) | downsample 513×513 label map to frame size (nearest neighbour) |
 
 Dependencies on the Pi: `pip install onnxruntime tensorflow numpy
 opencv-python` (aarch64 wheels exist for all; `tensorflow` is the big one).
 Correctness check per example: run C++ server (OV CPU, amd64) and Python
 server on the same frames and diff the `DET`/top-k output (labels + box
-tolerance). **Already done for webcam (exact) and ssd (±2 px, ±0.02 score);
-seg is the remaining spike.**
+tolerance). **Done for all three** — tracked as reproducible scripts:
+`scripts/cpu-parity-webcam.sh`, `scripts/cpu-parity-ssd.sh`,
+`scripts/cpu-parity-seg.sh`. Results: webcam exact (top-5 identical,
+max |Δlogit| = 2.2e-5); ssd boxes within 2 px, scores within ~0.02;
+seg 99.75 % mask agreement (residual = ArgMax tie flips between the two
+FP32 backends).
 
 ## 7. Backend contract (the seam that must not drift)
 
@@ -199,36 +204,38 @@ interchangeable behind the launcher:
   armv7 keeps MYRIAD only; revisit later if demand arises (TFLite from
   source is the likeliest candidate).
 
-## 10. Open decisions (need user input)
+## 10. Open decisions
 
-1. Keep arm64 OV generic CPU as the secondary backend (recommended: yes —
-   already in the working tree, free at runtime)?
-2. Confirm the per-example arm64 CPU split: **ORT for webcam, full TF for
-   ssd/seg** (recommended — it is exactly what the spikes prove; TF CPU is
-   slow but honest, and the fast ONNX-backbone detector is a v2 item)?
-3. INT8 / ONNX-backbone detector optimization later (good Pi5 fit;
-   separate work)?
+1. ~~Keep arm64 OV generic CPU as the secondary backend?~~ **Decided: yes**
+   (already in the tree; it is the benchmark baseline on the Pi and costs
+   nothing at runtime).
+2. ~~Confirm the per-example arm64 CPU split~~ **Decided (2026-09-24,
+   advisor-reviewed): ORT for webcam, full TF for ssd/seg.**
+3. Still open: INT8 / ONNX-backbone detector optimization (good Pi5 fit;
+   separate work - see Phase 2).
 
 ## 11. Implementation phases
 
-**Phase 1a — webcam (smallest real feature; parity already proven)**
+**Phase 1a — webcam (DONE, commit `7e5ddbc`)**
 1. `examples/webcam/mobilenet_cpu_server.py` (ORT, raw-logits protocol)
-2. `infer-server.sh`: `CPU` + arm64 → python server (host + docker branches);
-   armv7 → hard error
+2. `infer-server.sh`: `CPU` + arm64 → python server (host backend; the
+docker image predates it until 1d); armv7 → hard error
 3. README/help updates
+4. `scripts/cpu-parity-webcam.sh` (PASS: top-5 identical, max |Δlogit| 2.2e-5)
 
-**Phase 1b — ssd-detect (parity already proven)**
+**Phase 1b — ssd-detect (DONE, commit `845fdb6`)**
 1. `examples/ssd-detect/ssd_cpu_server.py` (full TF, `DET` protocol)
 2. `infer-ssd-server.sh` branch as in 1a
+3. `scripts/cpu-parity-ssd.sh` (PASS: 4/4 detections, boxes ≤1 px, scores ≤0.02)
 
-**Phase 1c — deeplab-seg (spike first, then implement)**
+**Phase 1c — deeplab-seg (spike done; implementing)**
 1. spike: full TF on `deeplabv3/source/frozen_inference_graph.pb` vs C++
-   `seg_detect` (OV CPU) on the same frame — expect clean parity (no control
-   flow in the graph)
+   `seg_detect` (OV CPU) on dog_ssd.ppm — **done 2026-09-24, 99.75 % mask
+   agreement** (see §12)
 2. `examples/deeplab-seg/seg_cpu_server.py` (full TF, `MASK` protocol) +
-   launcher branch
+   launcher branch + `scripts/cpu-parity-seg.sh`
 
-**Phase 1d — packaging & validation**
+**Phase 1d — packaging & validation (pending)**
 1. arm64 Dockerfile: `pip install onnxruntime tensorflow` + COPY scripts
    (docker backend only; host backend is the primary Pi path)
 2. On-Pi validation: accuracy diff vs C++ server; benchmark MYRIAD vs CPU
@@ -259,9 +266,22 @@ full-TF NMS), INT8, armv7 CPU from source (TFLite), HETERO:MYRIAD,CPU.
   same classes, boxes within 2 px, scores within ~0.02. TF CPU: ~0.8 s/frame
   (amd64, TF2 eager — a real cost; the ONNX-backbone v2 path fixes this).
 
-**Next spike (pending):** DeepLabV3 — full TF on the frozen `.pb` vs C++
-`seg_detect` (OV CPU) on the same frame; the graph has no control flow
-(ends in `ArgMax`), so clean parity is expected.
+**Done (2026-09-24, deeplab-seg detector spike):**
+- Graph probe: `deeplabv3/source/frozen_inference_graph.pb` has **970 nodes,
+  no control flow**; input `ImageTensor` is **uint8** NHWC [1,?, ?,3] (the
+  graph does the in-graph normalization); output `SemanticPredictions`
+  (argmax) [1,513,513].
+- **Full-TF parity** (dog_ssd.ppm 768×576, downsample to 513): 5 classes
+  present on both sides (background/bicycle/dog/car/cat); per-class pixel
+  deltas all ≤0.19 % of the frame; **mask agreement 99.75 %** (the flips are
+  ArgMax ties at class boundaries between TF-oneDNN and OV-mkldnn FP32).
+  TF CPU: ~172 ms/frame inference (amd64 docker; the 0.8 s SSDLite figure
+  above includes the Python NMS decode path).
+- **Channel-order gotcha**: the TF `ImageTensor` takes **RGB** — feeding BGR
+  (what the C++ IR path sends) mis-segments ~5 % of pixels (dog/cat
+  swap). The BGR expectation lives in the IR, where the swap op is baked in;
+  the TF server therefore feeds RGB to the graph and mirrors all other
+  preprocessing (bilinear 513 resize, raw 0..255, in-graph normalization).
 
 - **glibc**: manylinux wheels need glibc ≥ 2.17 — fine on bullseye (2.31)
   and 64-bit Raspberry Pi OS.
