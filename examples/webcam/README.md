@@ -64,7 +64,16 @@ python3 examples/webcam/webcam_mobilenet.py --camera 1 --topk 3 --max-fps 10 --e
 
 # FP32 model, force the container backend
 python3 examples/webcam/webcam_mobilenet.py --ir fp32 --backend docker
+
+# no camera? process a video file instead (single pass, ends at video end):
+python3 examples/webcam/webcam_mobilenet.py --headless \
+    --video vendor/models/images/sample_640x360.mp4 --every 10 --frames 60
 ```
+
+`--video` takes any file OpenCV can decode (.mp4/.avi/.mkv/.mov, h264 etc.); frames
+are classified in order and the run stops at the end of the video
+(`--frames N` cuts the pass short).  A short sample clip is vendored at
+`vendor/models/images/sample_640x360.mp4` (Big Buck Bunny, 640×360, ~13 s, 0.6 MB).
 
 The `fps` column is the steady-state rate over the last 10 classified
 frames; the first classified frame prints `fps= warm` because its
@@ -77,7 +86,7 @@ default `examples/webcam/infer-server.sh`):
 
 | option | default | meaning |
 |---|---|---|
-| `--camera N` | 0 | webcam index |
+| `--camera N` | 0 | webcam index | `--video PATH` | off | classify frames of a video file instead of the webcam (single pass) |
 | `--backend auto\|host\|docker` | auto | where `mobilenet_server` runs |
 | `--ir fp16\|fp32` | fp16 | model precision |
 | `--device NAME` | MYRIAD | OpenVINO device |

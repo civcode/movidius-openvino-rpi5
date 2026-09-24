@@ -24,6 +24,8 @@ Usage:
   python3 examples/webcam/webcam_mobilenet.py --headless       # CLI output only
   python3 examples/webcam/webcam_mobilenet.py --camera 1 --topk 3
   python3 examples/webcam/webcam_mobilenet.py --ir fp32 --backend docker
+  python3 examples/webcam/webcam_mobilenet.py --headless \
+      --video vendor/models/images/sample_640x360.mp4 --every 10
 """
 
 import argparse
@@ -65,6 +67,12 @@ def main():
                          "'<script> <backend> <ir> <device>' (default: "
                          "examples/webcam/infer-server.sh)")
     ap.add_argument("--camera", type=int, default=0, help="webcam index (/dev/videoN)")
+    ap.add_argument("--video", default=None,
+                    help="process this video file (.mp4/.avi/.mkv/.mov) instead of the webcam; "
+                         "single pass, ends at the end of the video (OpenCV must be able "
+                         "to decode the codec)")
+    ap.add_argument("--frames", type=int, default=0,
+                    help="in --video mode, stop after N frames (0 = whole video)")
     ap.add_argument("--camera-width", type=int, default=0, help="request capture width (0 = device default)")
     ap.add_argument("--camera-height", type=int, default=0, help="request capture height (0 = device default)")
     ap.add_argument("--backend", choices=["auto", "host", "docker"], default="auto",
@@ -94,18 +102,26 @@ def main():
         note("note: label file has %d lines but the model outputs %d classes"
              % (len(labels), OUTPUT_BYTES // 4))
 
-    # ------------------------------------------------------------------ camera
-    cap = cv2.VideoCapture(args.camera)
+    # ------------------------------------------------------------- source: video or camera
+    is_video = bool(args.video)
+    cap = cv2.VideoCapture(args.video if is_video else args.camera)
     if not cap.isOpened():
+        if is_video:
+            die("cannot open video %s (OpenCV %s)" % (args.video, cv2.__version__))
         die("cannot open camera %d (%s); try --camera <N> or v4l2-ctl --list-devices"
             % (args.camera, cv2.__version__))
-    if args.camera_width:
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.camera_width)
-    if args.camera_height:
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.camera_height)
     w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    note("camera %d: %dx%d" % (args.camera, w, h))
+    if is_video:
+        note("video %s: %dx%d %.0f fps, %d frames (single pass)"
+             % (args.video, w, h, cap.get(cv2.CAP_PROP_FPS),
+                int(cap.get(cv2.CAP_PROP_FRAME_COUNT))))
+    else:
+        if args.camera_width:
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.camera_width)
+        if args.camera_height:
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.camera_height)
+        note("camera %d: %dx%d" % (args.camera, w, h))
 
     # ------------------------------------------------------------- inference
     if args.server_script and not os.path.exists(args.server_script):
@@ -136,9 +152,13 @@ def main():
 
     try:
         while not stopping["flag"]:
+            if is_video and args.frames and frame_no >= args.frames:
+                break
             t_frame0 = time.monotonic()
             ok, frame = cap.read()
             if not ok:
+                if is_video:
+                    break  # end of video - clean stop
                 die("camera frame grab failed")
             frame_no += 1
 

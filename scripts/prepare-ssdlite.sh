@@ -210,6 +210,18 @@ PYEOF
 	fi
 fi
 
+# --------------------- 5c. known-content test video clip (Big Buck Bunny, ~13 s)
+# Used by the --video mode of ssd_stream.py / seg_stream.py / webcam_mobilenet.py.
+VIDEO_MP4="$MODELS/images/sample_640x360.mp4"
+VIDEO_URL='https://filesamples.com/samples/video/mp4/sample_640x360.mp4'
+VIDEO_SHA256='5e66e01296a4984841baaf0b9542aed07a5d5eb84958135a8d612b9ff1ec9419'
+if [[ -f "$VIDEO_MP4" ]]; then
+	echo "    $VIDEO_MP4 already present"
+else
+	mkdir -p "$MODELS/images/src"
+	fetch "$VIDEO_URL" "$VIDEO_MP4" "$VIDEO_SHA256"
+fi
+
 # ----------------------------------------------- 6. ownership + inventory
 if [[ -d "$OUT_DIR" && ! -O "$OUT_DIR" ]]; then
 	sudo chown -R "$(id -u):$(id -g)" "$MODEL_DIR" "$MODELS/labels"

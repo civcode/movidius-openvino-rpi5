@@ -21,11 +21,15 @@ Modes:
   --headless    : no window; one block of detections printed per frame.
   --file PATH   : read frames from an image file (.ppm/.jpg/.png) instead of
                  the webcam, looping it (deterministic test without a camera).
+  --video PATH  : read frames from a video file (.mp4/.avi/.mkv/.mov) instead
+                 of the webcam; single pass, the run ends at the end of the
+                 video (e.g. vendor/models/images/sample_640x360.mp4).
 
 Usage:
   python3 examples/ssd-detect/ssd_stream.py                # GUI, webcam 0
   python3 examples/ssd-detect/ssd_stream.py --headless     # CLI output only
   python3 examples/ssd-detect/ssd_stream.py --file vendor/models/images/dog_ssd.ppm --frames 5
+  python3 examples/ssd-detect/ssd_stream.py --video vendor/models/images/sample_640x360.mp4
   python3 examples/ssd-detect/ssd_stream.py --backend docker --min-conf 0.4
 """
 
@@ -187,7 +191,31 @@ def read_ppm(path):
 
 
 def frame_source(args):
-    """Yields RGB uint8 frames from the webcam or a looping image file."""
+    """Yields RGB uint8 frames from a video file (--video), a looping image
+    file (--file), or the webcam (priority: --video, --file, webcam)."""
+    if args.video:
+        if cv2 is None:
+            die("OpenCV is required for --video: pip install opencv-python")
+        cap = cv2.VideoCapture(args.video)
+        if not cap.isOpened():
+            die("cannot open video %s (OpenCV %s)" % (args.video, cv2.__version__))
+        note("video %s: %dx%d %.0f fps, %d frames (single pass)"
+             % (args.video,
+                int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                cap.get(cv2.CAP_PROP_FPS),
+                int(cap.get(cv2.CAP_PROP_FRAME_COUNT))))
+        n = 0
+        try:
+            while not (args.frames and n >= args.frames):
+                ok, frame = cap.read()
+                if not ok:
+                    break  # end of video
+                n += 1
+                yield cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        finally:
+            cap.release()
+        return
     if args.file:
         if args.file.lower().endswith(".ppm"):
             # read_ppm returns RGB directly (PIL writes PPM in RGB order);
@@ -238,8 +266,13 @@ def main():
                     help="server script to run for inference (see examples/ssd-detect/README.md)")
     ap.add_argument("--file", default=None,
                     help="read frames from this image file (.ppm/.jpg/.png) instead of the webcam")
+    ap.add_argument("--video", default=None,
+                    help="process this video file (.mp4/.avi/.mkv/.mov) instead of the webcam; "
+                         "single pass, ends at the end of the video (OpenCV must be able "
+                         "to decode the codec)")
     ap.add_argument("--frames", type=int, default=0,
-                    help="in --file mode, stop after N frames (0 = loop forever)")
+                    help="in --file/--video mode, stop after N frames "
+                         "(0 = loop the image forever / whole video)")
     ap.add_argument("--backend", choices=["auto", "host", "docker"], default="auto",
                     help="where ssd_detect runs")
     ap.add_argument("--device", default="MYRIAD", help="OpenVINO device name")
@@ -252,8 +285,9 @@ def main():
                     help="no GUI window; results are printed to stdout")
     args = ap.parse_args()
 
-    # GUI (and webcam capture) need OpenCV; headless --file mode only needs numpy
-    if cv2 is None and not (args.headless and args.file):
+    # GUI, webcam capture and --video need OpenCV; headless --file mode only
+    # needs numpy (for .ppm)
+    if cv2 is None and (args.video or not (args.headless and args.file)):
         die("OpenCV is required: pip install opencv-python numpy")
 
     client = SsdClient(args.infer_server, args.backend, args.device,

@@ -32,6 +32,7 @@ vendor/models/ssdlite_mobilenet_v2/
 └── openvino/          ssdlite_mobilenet_v2.{xml,bin}   (FP16)
 vendor/models/labels/coco.txt          "id<TAB>name" (0=background, sparse COCO ids 1..90)
 vendor/models/images/dog_ssd.ppm        known-content test photo (person + dog), P6 PPM
+vendor/models/images/sample_640x360.mp4 known-content test clip (Big Buck Bunny, 640x360, ~13 s)
 ```
 
 ## The IR's input/output contract (verified from the XML)
@@ -69,7 +70,7 @@ is exercised by `ssd_test` without hardware.
 | `ssd_postprocess.hpp` | parse/filter/convert of the `DetectionOutput` rows |
 | `ssd_test.cpp` | device-free unit tests (run in the Docker build stage) |
 | `infer-ssd-server.sh` | starts `ssd_detect --stdin` (host-native or Docker backend) |
-| `ssd_stream.py` | webcam/video client (OpenCV -> stdio -> server), GUI + headless |
+| `ssd_stream.py` | webcam/video-file/image client (OpenCV -> stdio -> server), GUI + headless |
 | `CMakeLists.txt` | builds both binaries for the selected target |
 
 ## Building
@@ -116,7 +117,16 @@ python3 examples/ssd-detect/ssd_stream.py --headless
 # no camera? loop an image file (works without OpenCV for .ppm):
 python3 examples/ssd-detect/ssd_stream.py --headless \
     --file vendor/models/images/dog_ssd.ppm --frames 5
+
+# or process a video file (single pass, ends at the end of the video):
+python3 examples/ssd-detect/ssd_stream.py --headless \
+    --video vendor/models/images/sample_640x360.mp4 --frames 30
 ```
+
+`--video` takes any file OpenCV can decode (.mp4/.avi/.mkv/.mov, h264 etc.); frames are
+read in order at their native size and the run stops at the end of the video
+(`--frames N` cuts the pass short).  A short sample clip is vendored at
+`vendor/models/images/sample_640x360.mp4` (Big Buck Bunny, 640×360, ~13 s, 0.6 MB).
 
 Protocol (binary frames, the server's stdout is otherwise protocol-only):
 
@@ -130,7 +140,7 @@ server -> client:  "FRAME <w> <h> <infer_ms>"
 The client needs `numpy` + `opencv-python(-headless)` (pip; the runtime
 image deliberately ships no Python libraries).  Options mirror the single-
 image mode (`--min-conf`, `--backend`, `--device`) plus `--camera`,
-`--camera-width/-height`, `--file`, `--frames`, `--request-timeout`.
+`--camera-width/-height`, `--file`, `--video`, `--frames`, `--request-timeout`.
 
 ## Verified results (MA2450, amd64 image)
 

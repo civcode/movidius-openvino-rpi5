@@ -11,7 +11,7 @@ Two pieces:
   Single-image mode prints a per-class pixel histogram; `--stdin` mode
   runs a binary frame protocol for streaming.
 * `seg_stream.py` — Python/OpenCV client (GUI or `--headless`), plus
-  `--file` single-image mode for deterministic tests.
+  `--file` single-image and `--video` video-file modes for deterministic tests.
 
 ## IR contract (verified, `scripts/prepare-deeplabv3.sh` step 5)
 
@@ -60,8 +60,15 @@ Streaming (webcam or video):
 python3 examples/deeplab-seg/seg_stream.py --headless          # terminal stats
 python3 examples/deeplab-seg/seg_stream.py                     # GUI overlay
 python3 examples/deeplab-seg/seg_stream.py --file img.ppm      # single image, no camera
+python3 examples/deeplab-seg/seg_stream.py --video vendor/models/images/sample_640x360.mp4
 python3 examples/deeplab-seg/seg_stream.py --mask-out mask.ppm # also save the class map
 ```
+
+`--video` processes a video file (any container/codec OpenCV can decode) instead
+of the webcam: frames are read in order at their native size, in a single pass,
+ending at the end of the video (`--frames N` cuts the pass short).  A short
+sample clip is vendored at `vendor/models/images/sample_640x360.mp4`
+(Big Buck Bunny, 640×360, ~13 s, 0.6 MB).
 
 `--file` keeps the image at its native resolution (the C++ server resizes
 internally).  `seg_stream.py` starts the server via `infer-seg-server.sh`

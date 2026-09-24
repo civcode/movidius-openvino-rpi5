@@ -9,6 +9,7 @@ Usage:
   python3 examples/deeplab-seg/seg_stream.py                 # GUI, webcam 0
   python3 examples/deeplab-seg/seg_stream.py --headless       # CLI output only
   python3 examples/deeplab-seg/seg_stream.py --file dog_ssd.ppm --frames 1
+  python3 examples/deeplab-seg/seg_stream.py --video vendor/models/images/sample_640x360.mp4
   python3 examples/deeplab-seg/seg_stream.py --backend docker --mask-out mask.ppm
   python3 examples/deeplab-seg/seg_stream.py path/to/my-launcher.sh --backend host
 
@@ -261,17 +262,22 @@ def main():
     ap.add_argument("--file", default=None,
                     help="read frames from this image file (.ppm/.jpg/.png) instead of the webcam "
                          "(image kept at its native resolution)")
+    ap.add_argument("--video", default=None,
+                    help="process this video file (.mp4/.avi/.mkv/.mov) instead of the webcam "
+                         "(single pass, ends at the end of the video; frames kept at native size)")
     ap.add_argument("--frames", type=int, default=0,
-                    help="in --file mode, stop after N frames (0 = loop forever)")
+                    help="in --file/--video mode, stop after N frames "
+                         "(0 = loop the image forever / whole video)")
     ap.add_argument("--headless", action="store_true",
                     help="no GUI window; results are printed to stdout")
     ap.add_argument("--mask-out", default=None,
                     help="write the class map of the last frame as a 1-byte/pixel P6 PPM")
     args = ap.parse_args()
 
-    # GUI (and webcam capture) need OpenCV; headless --file .ppm only needs numpy
-    if cv2 is None and not (args.headless and args.file
-                            and args.file.lower().endswith(".ppm")):
+    # GUI, webcam capture and --video need OpenCV; headless --file .ppm only
+    # needs numpy
+    if cv2 is None and (args.video or not (args.headless and args.file
+                                           and args.file.lower().endswith(".ppm"))):
         die("OpenCV is required: pip install opencv-python numpy")
 
     if not os.path.exists(args.server_cmd):
@@ -328,25 +334,42 @@ def main():
                 cv2.waitKey(0)
                 cv2.destroyAllWindows()
         else:
-            cap = cv2.VideoCapture(args.camera)
+            is_video = bool(args.video)
+            cap = cv2.VideoCapture(args.video if is_video else args.camera)
             if not cap.isOpened():
+                if is_video:
+                    die("cannot open video %s (OpenCV %s)" % (args.video, cv2.__version__))
                 die("cannot open camera %d (%s); try --camera <N> or v4l2-ctl --list-devices"
                     % (args.camera, cv2.__version__))
-            if args.width:
-                cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
-            if args.height:
-                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
-            note("camera %d: %dx%d" % (args.camera, int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
-                                       int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))
+            if is_video:
+                note("video %s: %dx%d %.0f fps, %d frames (single pass)"
+                     % (args.video,
+                        int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                        int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                        cap.get(cv2.CAP_PROP_FPS),
+                        int(cap.get(cv2.CAP_PROP_FRAME_COUNT))))
+            else:
+                if args.width:
+                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
+                if args.height:
+                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
+                note("camera %d: %dx%d" % (args.camera, int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                                           int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))
             last_mask = None
             last_dims = None
+            video_frames = 0
             try:
                 while True:
                     if stopping["flag"]:
                         break
+                    if is_video and args.frames and video_frames >= args.frames:
+                        break
                     ok, frame = cap.read()
                     if not ok:
+                        if is_video:
+                            break  # end of video - clean stop
                         die("camera frame grab failed")
+                    video_frames += 1
                     h, w = frame.shape[:2]
                     rgb = frame[:, :, ::-1]
                     t0 = time.monotonic()
