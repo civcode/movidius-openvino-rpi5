@@ -92,6 +92,23 @@ LABELS="${ROOT}/vendor/models/labels/pascal_voc.txt"
 #   amd64: the OV C++ server below with the FP32 IR (unchanged path).
 #   arm64: the Python full-TensorFlow server (host, or in-image copy under docker).
 #   armv7: not available - no 32-bit inference wheels (MYRIAD only).
+# Resolve a python3 interpreter that can import <module>: the system
+# python3 first, then the project venv at work/venv-cpu (PEP 668 system
+# pythons refuse plain pip installs, so the venv is the supported host
+# path: python3 -m venv work/venv-cpu && work/venv-cpu/bin/pip install <pkg>)
+cpu_python_interpreter() {
+    local mod="$1" venv="${ROOT}/work/venv-cpu"
+    if command -v python3 >/dev/null 2>&1 && python3 -c "import ${mod}" >/dev/null 2>&1; then
+        echo "python3"
+        return 0
+    fi
+    if [[ -x "${venv}/bin/python" ]] && "${venv}/bin/python" -c "import ${mod}" >/dev/null 2>&1; then
+        echo "${venv}/bin/python"
+        return 0
+    fi
+    return 1
+}
+
 cpu_python_server() {
     local pb="${ROOT}/vendor/models/deeplabv3/source/frozen_inference_graph.pb"
     if [[ ! -f "${pb}" ]]; then
@@ -103,12 +120,13 @@ cpu_python_server() {
         echo "python3 not found - install Python 3 to use --device CPU on arm64" >&2
         exit 1
     fi
-    if ! python3 -c 'import tensorflow' >/dev/null 2>&1; then
-        echo "tensorflow is not installed - run:  pip install tensorflow" >&2
+    local py
+    py="$(cpu_python_interpreter tensorflow)" || {
+        echo "tensorflow is not installed - run:  pip install tensorflow  (or the venv: python3 -m venv ${ROOT}/work/venv-cpu && ${ROOT}/work/venv-cpu/bin/pip install tensorflow)" >&2
         exit 1
-    fi
+    }
     echo "infer-seg-server: backend=host target=${TARGET} python-tensorflow" >&2
-    exec python3 "${ROOT}/examples/deeplab-seg/seg_cpu_server.py" \
+    exec "${py}" "${ROOT}/examples/deeplab-seg/seg_cpu_server.py" \
         --model "${pb}" --labels "${LABELS}"
 }
 

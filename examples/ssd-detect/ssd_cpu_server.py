@@ -84,7 +84,11 @@ def parse_detections(boxes, scores, classes, num_dets, min_conf, max_dets, fw, f
     classes:  [N] float class ids
     """
     out = []
-    n = min(len(scores), int(num_dets))
+    try:
+        nd = int(num_dets)
+    except (TypeError, ValueError):
+        nd = int(num_dets[0])
+    n = min(len(scores), nd)
     for i in range(n):
         score = float(scores[i])
         if score < min_conf:
