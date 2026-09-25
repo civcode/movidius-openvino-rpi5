@@ -234,6 +234,117 @@ def topk_probs(logits, labels, k):
     return out
 
 
+def wait_alive(proc, timeout=2.5):
+    """Fail fast if the inference server exits during start-up.
+
+    Start-up errors (missing model XML, missing host runtime, missing python
+    dependency, unavailable device) make the server exit within a couple of
+    seconds, while a healthy server stays alive as long as its warm-up takes
+    (a MYRIAD stick needs ~15-20 s to boot, and that is normal).  This
+    reacts to early death only, never to a slow start.
+    """
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < timeout:
+        code = proc.poll()
+        if code is not None:
+            die("inference server exited during startup (exit code %s: %s); "
+                "see its diagnostics above" % (code, server_exit_meaning(code)))
+        time.sleep(0.05)
+
+
+class WindowWatcher:
+    """Detects that the user closed our GUI window via the window manager.
+
+    OpenCV's getWindowProperty(WND_PROP_VISIBLE) keeps returning 1.0 after
+    the X close button has destroyed the window (and waitKey(0) keeps
+    blocking), so the client would otherwise run on forever.  We ask the X
+    server instead whether a window with our title still exists, polling at
+    most twice a second; if xwininfo is unavailable we fall back to "still
+    open" and let the existing checks apply.
+    """
+
+    def __init__(self, title):
+        self._title = title
+        self._last_poll = 0.0
+        self._closed = False
+
+    def closed(self):
+        now = time.monotonic()
+        if now - self._last_poll < 0.5:
+            return self._closed
+        self._last_poll = now
+        try:
+            out = subprocess.run(
+                ["xwininfo", "-root", "-tree"],
+                capture_output=True, text=True, timeout=2).stdout
+            self._closed = self._title not in out
+        except (OSError, subprocess.SubprocessError):
+            pass
+        return self._closed
+
+
+def _docker_container_for(proc):
+    """If proc is a 'docker run' client, find its container's name.
+
+    The launchers name their containers ov203-<sample>[-cpu]-<pid> where
+    <pid> is the launcher's pid, and the launcher execs docker run, so the
+    pid is proc.pid.  Matching the pid suffix makes the lookup exact.
+    """
+    try:
+        with open("/proc/%d/cmdline" % proc.pid, "rb") as f:
+            cmd = f.read().decode()
+    except OSError:
+        return None
+    if "docker" not in cmd or "run" not in cmd:
+        return None
+    try:
+        out = subprocess.run(
+            ["docker", "ps", "-a", "--filter", "name=ov203-",
+             "--format", "{{.Names}}"],
+            capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for line in out.splitlines():
+        name = line.strip()
+        if name.endswith("-%d" % proc.pid):
+            return name
+    return None
+
+
+def stop_server(proc):
+    """Terminate an inference server started with Popen(start_new_session=True).
+
+    The docker backend needs special treatment: a SIGTERM to the `docker run`
+    client does not reliably terminate it (we measured >170 s), and on this
+    host the kernel also drops unhandled SIGTERMs to the container's PID 1
+    (both 'python3' and 'sh' PID 1s survived docker stop's grace period and
+    needed SIGKILL), so ask the daemon to stop the container with a zero
+    grace period - that SIGKILLs the server and the docker run client exits
+    - then SIGTERM the process group, and only SIGKILL as a last resort.
+    The CPU servers are stateless, so the hard kill costs nothing.
+    """
+    if proc.poll() is not None:
+        return
+    container = _docker_container_for(proc)
+    if container:
+        try:
+            subprocess.run(["docker", "stop", "-t", "0", container],
+                           capture_output=True, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+    except (ProcessLookupError, PermissionError):
+        proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            proc.kill()
+
+
 class MyriadClient:
     """Drives the mobilenet_server child process over its stdin/stdout pipes."""
 
@@ -290,15 +401,7 @@ class MyriadClient:
         return np.frombuffer(raw, dtype="<f4")
 
     def close(self):
-        if self.proc.poll() is None:
-            try:
-                os.killpg(os.getpgid(self.proc.pid), signal.SIGTERM)
-            except (ProcessLookupError, PermissionError):
-                self.proc.terminate()
-            try:
-                self.proc.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                os.killpg(os.getpgid(self.proc.pid), signal.SIGKILL)
+        stop_server(self.proc)
         for stream in (self.proc.stdin, self.proc.stdout):
             try:
                 stream.close()

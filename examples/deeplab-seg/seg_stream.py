@@ -41,6 +41,11 @@ import struct
 import subprocess
 import sys
 import time
+# The aarch64 OpenCV wheel bundles no fonts, so Qt prints a QFontDatabase
+# warning on every window operation.  The overlay uses OpenCV's own text
+# renderer, so the warning is pure noise; silence Qt warnings (override by
+# setting QT_LOGGING_RULES yourself).
+os.environ.setdefault("QT_LOGGING_RULES", "*.warning=false")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # single executable path, invoked as [DEFAULT_SERVER_CMD, backend, device]
@@ -48,7 +53,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_SERVER_CMD = os.path.join(HERE, "infer-seg-server.sh")
 
 sys.path.insert(0, os.path.dirname(HERE))  # examples/ (shared client helpers)
-from mobilenet_client import LinePipe, server_exit_meaning, windowed_fps
+from mobilenet_client import (            # noqa: E402
+    LinePipe,
+    server_exit_meaning,
+    stop_server,
+    wait_alive,
+    windowed_fps,
+    WindowWatcher,
+)
 
 import numpy as np
 
@@ -206,15 +218,7 @@ class SegClient:
             raise RuntimeError(str(ex)) from ex
 
     def close(self):
-        if self.proc.poll() is None:
-            try:
-                os.killpg(os.getpgid(self.proc.pid), signal.SIGTERM)
-            except (ProcessLookupError, PermissionError):
-                self.proc.terminate()
-            try:
-                self.proc.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                os.killpg(os.getpgid(self.proc.pid), signal.SIGKILL)
+        stop_server(self.proc)
         for stream in (self.proc.stdin, self.proc.stdout):
             try:
                 stream.close()
@@ -325,7 +329,7 @@ def main():
     ap.add_argument("--mask-out", default=None,
                     help="write the class map of the last frame as a 1-byte/pixel P6 PPM")
     args = ap.parse_args()
-    win = "DeepLabV3 segmentation"
+    win = "deeplab @ %s (q to quit)" % args.device.upper()
     try:
         win_size = parse_window_size(args.window_size)
     except argparse.ArgumentTypeError as ex:
@@ -341,6 +345,7 @@ def main():
     if not os.path.exists(args.server_cmd):
         die("server launcher not found: %s" % args.server_cmd)
     client = SegClient(args.server_cmd, args.backend, args.device, args.request_timeout)
+    wait_alive(client.proc)
 
     stopping = {"flag": False}
     t_start = time.monotonic()
@@ -389,7 +394,13 @@ def main():
             if not args.headless and n:
                 overlaid = overlay(rgb[:, :, ::-1], mask, w, h)
                 show_window(win, overlaid, args.window_size)
-                cv2.waitKey(0)
+                watcher = WindowWatcher(win)
+                # cv2.waitKey(0) would block forever after the window manager
+                # closes the window (the Qt event loop stays alive); poll
+                # instead, so both the X close button and any key quit.
+                while not watcher.closed():
+                    if cv2.waitKey(100) & 0xFF != 255:
+                        break
                 cv2.destroyAllWindows()
         else:
             is_video = bool(args.video)
@@ -416,8 +427,10 @@ def main():
             last_mask = None
             last_dims = None
             video_frames = 0
+            watcher = None
             if not args.headless:
                 show_window(win, None, args.window_size)  # resizable from frame one
+                watcher = WindowWatcher(win)
             try:
                 while True:
                     if stopping["flag"]:
@@ -461,9 +474,9 @@ def main():
                                     (0, 255, 0), 1, cv2.LINE_AA)
                         show_window(win, overlaid, args.window_size)
                         key = cv2.waitKey(1) & 0xFF
-                        if key == ord("q") or key == 27:
-                            break
-                        if cv2.getWindowProperty(win, cv2.WND_PROP_VISIBLE) < 1:
+                        if key == ord("q") or key == 27 \
+                                or (watcher.closed() if watcher else False) \
+                                or cv2.getWindowProperty(win, cv2.WND_PROP_VISIBLE) < 1:
                             break
             finally:
                 cap.release()

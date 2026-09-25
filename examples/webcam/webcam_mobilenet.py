@@ -43,8 +43,15 @@ from mobilenet_client import (            # noqa: E402
     note,
     preprocess,
     topk_probs,
+    wait_alive,
     windowed_fps,
+    WindowWatcher,
 )
+# The aarch64 OpenCV wheel bundles no fonts, so Qt prints a QFontDatabase
+# warning on every window operation.  The overlay uses OpenCV's own text
+# renderer, so the warning is pure noise; silence Qt warnings (override by
+# setting QT_LOGGING_RULES yourself).
+os.environ.setdefault("QT_LOGGING_RULES", "*.warning=false")
 
 try:
     import cv2
@@ -133,6 +140,7 @@ def main():
     ir = args.ir or ("fp32" if args.device.upper() == "CPU" else "fp16")
     client = MyriadClient(args.backend, ir, args.device, args.request_timeout,
                           server_script=args.server_script)
+    wait_alive(client.proc)
 
     stopping = {"flag": False}
 
@@ -142,9 +150,11 @@ def main():
     signal.signal(signal.SIGINT, on_sigint)
 
     window = None
+    watcher = None
     if not args.headless:
-        window = "webcam mobilenet @ MYRIAD (q to quit)"
+        window = "webcam mobilenet @ %s (q to quit)" % args.device.upper()
         cv2.namedWindow(window, cv2.WINDOW_NORMAL)
+        watcher = WindowWatcher(window)
 
     last_probs = []
     last_infer_ms = 0.0
@@ -216,9 +226,9 @@ def main():
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
                 cv2.imshow(window, img)
                 key = cv2.waitKey(1) & 0xFF
-                if key == ord("q") or key == 27:
-                    break
-                if cv2.getWindowProperty(window, cv2.WND_PROP_VISIBLE) < 1:
+                if key == ord("q") or key == 27 \
+                        or (watcher.closed() if watcher else False) \
+                        or cv2.getWindowProperty(window, cv2.WND_PROP_VISIBLE) < 1:
                     break
 
             if args.max_fps > 0:

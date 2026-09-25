@@ -40,6 +40,11 @@ import struct
 import subprocess
 import sys
 import time
+# The aarch64 OpenCV wheel bundles no fonts, so Qt prints a QFontDatabase
+# warning on every window operation.  The overlay uses OpenCV's own text
+# renderer, so the warning is pure noise; silence Qt warnings (override by
+# setting QT_LOGGING_RULES yourself).
+os.environ.setdefault("QT_LOGGING_RULES", "*.warning=false")
 
 import numpy as np
 
@@ -52,7 +57,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 INFER_SERVER = os.path.join(HERE, "infer-ssd-server.sh")
 
 sys.path.insert(0, os.path.dirname(HERE))  # examples/ (shared client helpers)
-from mobilenet_client import LinePipe, server_exit_meaning, windowed_fps
+from mobilenet_client import (            # noqa: E402
+    LinePipe,
+    server_exit_meaning,
+    stop_server,
+    wait_alive,
+    windowed_fps,
+    WindowWatcher,
+)
 
 
 def note(msg):
@@ -149,15 +161,7 @@ class SsdClient:
         return w, h, infer_ms, dets
 
     def close(self):
-        if self.proc.poll() is None:
-            try:
-                os.killpg(os.getpgid(self.proc.pid), signal.SIGTERM)
-            except (ProcessLookupError, PermissionError):
-                self.proc.terminate()
-            try:
-                self.proc.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                os.killpg(os.getpgid(self.proc.pid), signal.SIGKILL)
+        stop_server(self.proc)
         for pipe in (self.proc.stdin, self.proc.stdout):
             try:
                 pipe.close()
@@ -294,6 +298,7 @@ def main():
 
     client = SsdClient(args.infer_server, args.backend, args.device,
                        args.min_conf, args.request_timeout)
+    wait_alive(client.proc)
 
     stopping = {"flag": False}
 
@@ -303,9 +308,11 @@ def main():
     signal.signal(signal.SIGINT, on_sigint)
 
     window = None
+    watcher = None
     if not args.headless:
-        window = "ssdlite @ MYRIAD (q to quit)"
+        window = "ssdlite @ %s (q to quit)" % args.device.upper()
         cv2.namedWindow(window, cv2.WINDOW_NORMAL)
+        watcher = WindowWatcher(window)
 
     t_start = time.monotonic()
     frame_no = 0
@@ -352,9 +359,9 @@ def main():
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
                 cv2.imshow(window, img)
                 key = cv2.waitKey(1) & 0xFF
-                if key == ord("q") or key == 27:
-                    break
-                if cv2.getWindowProperty(window, cv2.WND_PROP_VISIBLE) < 1:
+                if key == ord("q") or key == 27 \
+                        or (watcher.closed() if watcher else False) \
+                        or cv2.getWindowProperty(window, cv2.WND_PROP_VISIBLE) < 1:
                     break
     except RuntimeError as ex:
         die("inference failure: %s" % ex)
