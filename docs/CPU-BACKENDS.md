@@ -345,6 +345,45 @@ full-TF NMS), INT8, armv7 CPU from source (TFLite), HETERO:MYRIAD,CPU.
   consumed the banner bytes and returned shifted (garbage) logits.  Added
   `-e OV_QUIET=1` to all three CPU `docker run` calls.
 
+**Done (2026-09-25, SSD/Deeplab IR unblocked natively on arm64):**
+- The historical `tensorflow==1.15` pin in the prepare scripts was never
+  actually required: MO 2020.3's TF front end loads frozen graphs through
+  `tensorflow.compat.v1`, which TF 2.x still provides. `prepare-ssdlite.sh`
+  and `prepare-deeplabv3.sh` now run Model Optimizer 2020.3 **natively on
+  arm64** (no Docker, no emulation) from `work/venv-cpu` (TF 2.21.0,
+  numpy 2.5.3) via `scripts/mo_compat_run.py`, which restores the removed
+  `np.float`/`np.int`/`np.bool`/`np.str`/`np.object`/`np.unicode` aliases and
+  self-patches the two staged-tree call sites Python 3.13 / ElementTree no
+  longer accept (`exec("import ...")` in `versions_checker.py`,
+  `Element.getchildren()` in `ie_ir_ver_2/emitter.py`).
+- Conversion on the Pi: SSDLite FP16/FP32 ~28 s each, DeepLabV3 ~13 s each.
+  All four IRs land in `vendor/models/*/openvino/` and `./run.sh ssd|seg`
+  (docker and host MYRIAD) work unchanged - the IR is
+  architecture-independent.
+
+**Done (2026-09-25, host CPU backends + full 24-cell matrix):**
+- The three launchers now fall back to `work/venv-cpu/bin/python` (TF 2.21 +
+  ORT 1.30 + cv2 5.0.0) when the system python3 lacks onnxruntime/tensorflow,
+  so the host CPU cells work without any package-manager changes.
+  Measured arm64 host: webcam ORT ~40-43 ms/frame (24 fps); SSD full-TF
+  ~2.9 s/frame (3 detections, same as docker: cat 0.81 / car 0.77 / bicycle
+  0.72); seg full-TF ~1.07 s/frame + ~1.07 s post (5 classes). One TF 2.21 /
+  numpy 2 compatibility fix in `ssd_cpu_server.py`: `num_detections` is a
+  rank-1 tensor, so `int(num_dets)` needed a `[0]` fallback.
+- `device_probe.hpp`: the MYRIAD probe window grew from 3 s to 12 s
+  (11 x 1 s) so a cell can start while the stick is still re-enumerating
+  after the previous cell's shutdown.
+- Client shutdown (`mobilenet_client.py`): `stop_server` now closes the
+  server's stdin first (the protocol's EOF terminator) and waits 5 s for a
+  clean exit before escalating to `docker stop -t 0` / SIGTERM / SIGKILL.
+  The MYRIAD servers exit 0 on EOF and release the VPU with a clean
+  mvnc/XLink deinit - a hard kill orphaned the stick's XLink session and
+  left it slow to re-enumerate, which is why back-to-back MYRIAD cells in
+  the matrix intermittently saw "MYRIAD not available".
+- `scripts/test-examples.sh` 24-cell matrix (3 examples x docker|host x
+  MYRIAD|CPU x headless|gui) after all of the above: **24 PASS / 0 SKIP /
+  0 FAIL** (`logs/rpi5-arm64/matrix-2026-09-25.log`).
+
 ## 13. Benchmark plan (the original goal)
 
 On the RPi5, per example:

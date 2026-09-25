@@ -74,6 +74,16 @@ tested: this host has no `/dev/video*` camera.
 
 ## 5. Blocked: SSD and Deeplabv3 IR conversion on arm64
 
+**RESOLVED 2026-09-25** - the block was the `tensorflow==1.15` pin. MO 2020.3's
+TF frontend works with TF 2.x (it loads the graph through
+`tensorflow.compat.v1`), so `prepare-ssdlite.sh` / `prepare-deeplabv3.sh` now run
+Model Optimizer 2020.3 **natively on arm64** from `work/venv-cpu` (TF 2.21.0,
+numpy 2.5.3) via `scripts/mo_compat_run.py` (restores the removed `np.float` /
+`np.int` / ... aliases and self-patches the two staged-tree call sites that
+Python 3.13 / ElementTree no longer accept). Both scripts are now plain native
+Python - no Docker, no emulation. The historical analysis below is kept for the
+record.
+
 `./run.sh --platform arm64 ssd` and `... seg` stop with
 `no IR in vendor/models/... - run ./scripts/prepare-ssdlite.sh first`.
 The example *binaries* are fine (`ssd_detect --help` and `seg_detect --help` work in the
@@ -170,9 +180,10 @@ python3 -m venv work/venv-examples && work/venv-examples/bin/pip install numpy o
 work/venv-examples/bin/python examples/accuracy-test/accuracy_test.py --backend host --ir fp16
 ./scripts/test-python-clients.sh
 ./ci/verify-static.sh
-# blocked on arm64 (see section 5):
-./scripts/prepare-ssdlite.sh                     # rc=1, no aarch64 TF 1.15 wheel
-./scripts/prepare-deeplabv3.sh                   # rc=1, same
-./run.sh --platform arm64 ssd                    # "no IR ... run prepare-ssdlite.sh first"
-./run.sh --platform arm64 seg                    # "no IR ... run prepare-deeplabv3.sh first"
+./scripts/prepare-ssdlite.sh                     # native arm64 MO: 2x ~28 s (FP16+FP32)
+./scripts/prepare-deeplabv3.sh                   # native arm64 MO: 2x ~13 s (FP16+FP32)
+./run.sh --platform arm64 ssd                    # SSDLite: cat 0.81 / car 0.77 / bicycle 0.72
+./run.sh --platform arm64 seg                    # DeepLabV3: 5 classes on dog_ssd.ppm
+./scripts/test-examples.sh                       # 24-cell matrix, 24 PASS / 0 SKIP / 0 FAIL
+                                                 # (logs/rpi5-arm64/matrix-2026-09-25.log)
 ```
