@@ -329,6 +329,22 @@ full-TF NMS), INT8, armv7 CPU from source (TFLite), HETERO:MYRIAD,CPU.
   DeepLabV3-mnv2@513 are slow (sub-1-fps to ~1 fps class) on Pi5 (honest slow-CPU
   baseline; ONNX-backbone v2 will bring ssd to tens of ms).
 
+- **2026-09-25 — GUI examples validated on CPU (arm64, in-image servers):**
+  all three examples ran on the Pi 5 with `--device CPU --backend docker`,
+  OpenCV windows on the local X display: webcam (live camera + sample video)
+  at 11.7 fps (camera) / 20.9 fps (video) with ~35-42 ms infer; ssd-detect on
+  dog.ppm at 12.4 fps, ~77-85 ms infer, cat 0.81 / car 0.77 / bicycle 0.72
+  (identical to the direct-server run); deeplab-seg on dog.ppm at ~700 ms
+  infer, 1.4 fps, 5 classes (identical).
+
+- **Bug found and fixed in that run - launcher protocol pollution:** the CPU
+  docker branches of all three `infer-*.sh` launchers were missing
+  `-e OV_QUIET=1`, so the `container-entry.sh` banner ("OV target : arm64")
+  leaked onto the protocol stdout.  The text-protocol clients (ssd, seg)
+  aborted on the first unexpected line; the binary webcam client silently
+  consumed the banner bytes and returned shifted (garbage) logits.  Added
+  `-e OV_QUIET=1` to all three CPU `docker run` calls.
+
 ## 13. Benchmark plan (the original goal)
 
 On the RPi5, per example:

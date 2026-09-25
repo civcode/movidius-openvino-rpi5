@@ -214,6 +214,7 @@ docker_backend() {
         exec docker run --rm -i \
             --platform "${DOCKER_PLATFORM}" \
             --name "ov203-seg-cpu-$$" \
+            -e OV_QUIET=1 \
             -v "${ROOT}/vendor/models:/models:ro" \
             "${IMAGE}" \
             python3 /opt/openvino-demo/cpu-servers/seg_cpu_server.py \
