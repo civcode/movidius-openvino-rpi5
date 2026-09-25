@@ -31,9 +31,10 @@
 # f16 constants little-endian, so constant inspection must account for that.)
 #
 # The conversion runs the vendored OpenVINO 2020.3.2 Model Optimizer
-# (mo_tf.py) in a native python:3.7-slim container with a TensorFlow 1.x
-# wheel - the same environment the SSDLite conversion uses (prepare-ssdlite.sh),
-# so no new compiler stack is introduced.
+# (mo_tf.py) natively on the host with a modern TensorFlow 2.x wheel - the
+# same environment the SSDLite conversion uses (prepare-ssdlite.sh), so no new
+# compiler stack is introduced; scripts/mo_compat_run.py bridges the
+# numpy-alias/Python-3.13 gap of the 2020.3 MO tree.
 #
 # Layout after running:
 #   vendor/models/deeplabv3/
@@ -44,7 +45,6 @@
 #
 # Usage:
 #   ./scripts/prepare-deeplabv3.sh
-#   MO_IMAGE=python:3.7-slim ./scripts/prepare-deeplabv3.sh
 #
 set -euo pipefail
 
@@ -58,17 +58,10 @@ MODEL_DIR="$MODELS/deeplabv3"
 SRC_DIR="$MODEL_DIR/source"
 OUT_DIR="$MODEL_DIR/openvino"
 MODEL_NAME=deeplabv3
-MO_IMAGE="${MO_IMAGE:-python:3.7-slim}"
-if [[ -z "${MO_PLATFORM:-}" ]]; then
-	case "$(uname -m)" in
-		x86_64)  MO_PLATFORM=linux/amd64 ;;
-		aarch64) MO_PLATFORM=linux/arm64 ;;
-		armv7l)  MO_PLATFORM=linux/arm/v7 ;;
-		*)       MO_PLATFORM="linux/$(uname -m)" ;;
-	esac
-fi
-# Same pins as prepare-ssdlite.sh (shared MO 2020.3 TF front-end env).
-TF_PIP_PINS='tensorflow==1.15.0 numpy==1.18.5 networkx==2.6.3 protobuf==3.19.6 defusedxml==0.7.1'
+# The converter runs natively on the host with a modern TensorFlow 2.x wheel
+# (no Docker, no emulation): work/venv-cpu when present (this project's
+# CPU-server venv), else any python3 with tensorflow, else a fresh venv.
+MO_VENV=work/venv-cpu
 
 # The TF model zoo release (the Open Model Zoo mirrors the identical file;
 # both URLs are tried).  The OMZ model.yml documents the integrity check as a
@@ -149,52 +142,49 @@ else
 fi
 printf '    staged %s python files\n' "$(find "$MO_STAGE" -name '*.py' | wc -l)"
 
-# --------------------------------------- 4. convert with mo_tf.py (FP16)
+# ------------------------- 4. resolve the host python for the MO front-end
 echo
-echo "== converting to OpenVINO 2020.3.2 IR (FP16, per the OMZ model.yml) =="
-# The OMZ model.yml pins --reverse_input_channels (RGB->BGR) and
-# --output=ArgMax (the class-id head).
-# set -e inside the container so a pip failure is not masked by the log filter.
-docker run --rm --platform "$MO_PLATFORM" \
-	-v "$PWD/$MO_STAGE:/mo:ro" -v "$PWD/$MODELS:/models" \
-	-e PYTHONDONTWRITEBYTECODE=1 "$MO_IMAGE" bash -lc \
-	"set -e
-	 pip install --no-cache-dir -q $TF_PIP_PINS
-	 python /mo/mo_tf.py \
-		--input_model /models/$MODEL_NAME/source/frozen_inference_graph.pb \
-		--reverse_input_channels \
-		--input=ImageTensor \
-		--input_shape=[1,513,513,3] \
-		--output=ArgMax \
-		--data_type FP16 \
-		--output_dir /models/$MODEL_NAME/openvino \
-		--model_name $MODEL_NAME > /tmp/mo.log 2>&1
-	 grep -E '\[ (SUCCESS|ERROR) \]|Elapsed time' /tmp/mo.log || true"
-ls -l "$OUT_DIR/${MODEL_NAME}.xml" "$OUT_DIR/${MODEL_NAME}.bin"
+echo "== resolving host python (TF 2.x, native - no Docker) =="
+if [[ -x "$MO_VENV/bin/python" ]] && "$MO_VENV/bin/python" -c 'import tensorflow' >/dev/null 2>&1; then
+	MO_PY="$MO_VENV/bin/python"
+elif python3 -c 'import tensorflow' >/dev/null 2>&1; then
+	MO_PY=python3
+else
+	echo "    no local TensorFlow - creating $MO_VENV (pip downloads ~1 GB)"
+	python3 -m venv "$MO_VENV"
+	"$MO_VENV/bin/pip" install -q --disable-pip-version-check \
+		tensorflow networkx==2.6.3 defusedxml==0.7.1
+	MO_PY="$MO_VENV/bin/python"
+fi
+echo "    MO python: $MO_PY ($("$MO_PY" -c 'import sys, tensorflow as tf; print(sys.version.split()[0] + " TF " + tf.__version__)'))"
 
-# ------------------------------- 4b. convert the same graph to FP32 IR (CPU)
 # The amd64 runtime's CPU plugin (OpenVINO 2020.3) does not accept FP16 input
 # tensors ("Input image format FP16 is not supported yet"), so --device CPU
-# runs against this FP32 variant; the launchers select it automatically.
-echo
-echo "== converting to OpenVINO 2020.3.2 IR (FP32, for the CPU plugin) =="
-OUT_DIR_FP32="$MODEL_DIR/openvino_fp32"
-mkdir -p "$OUT_DIR_FP32"
-docker run --rm --platform "$MO_PLATFORM" \
-	-v "$PWD/$MO_STAGE:/mo:ro" -v "$PWD/$MODELS:/models" \
-	-e PYTHONDONTWRITEBYTECODE=1 "$MO_IMAGE" bash -lc \
-	"set -e
-	 pip install --no-cache-dir -q $TF_PIP_PINS
-	 python /mo/mo_tf.py \
-		--input_model /models/$MODEL_NAME/source/frozen_inference_graph.pb \
+# runs against the FP32 variant; the launchers select it automatically.
+mo_convert() {  # $1 = --data_type, $2 = output dir (relative to vendor/models)
+	echo "    converting --data_type $1 -> vendor/models/$MODEL_NAME/$2"
+	"$MO_PY" scripts/mo_compat_run.py \
+		--input_model "$SRC_DIR/frozen_inference_graph.pb" \
 		--reverse_input_channels \
 		--input=ImageTensor \
 		--input_shape=[1,513,513,3] \
 		--output=ArgMax \
-		--data_type FP32 \
-		--output_dir /models/$MODEL_NAME/openvino_fp32 \
-		--model_name $MODEL_NAME > /tmp/mo.log 2>&1
-	 grep -E '\[ (SUCCESS|ERROR) \]|Elapsed time' /tmp/mo.log || true"
+		--data_type "$1" \
+		--output_dir "$MODELS/$MODEL_NAME/$2" \
+		--model_name "$MODEL_NAME" 2>&1 \
+		| grep -E '\[ (SUCCESS|ERROR) \]|Elapsed time'
+}
+
+echo
+echo "== converting to OpenVINO 2020.3.2 IR (FP16, per the OMZ model.yml) =="
+mo_convert FP16 openvino
+ls -l "$OUT_DIR/${MODEL_NAME}.xml" "$OUT_DIR/${MODEL_NAME}.bin"
+
+echo
+echo "== converting to OpenVINO 2020.3.2 IR (FP32, for the CPU backend) =="
+OUT_DIR_FP32="$MODEL_DIR/openvino_fp32"
+mkdir -p "$OUT_DIR_FP32"
+mo_convert FP32 openvino_fp32
 ls -l "$OUT_DIR_FP32/${MODEL_NAME}.xml" "$OUT_DIR_FP32/${MODEL_NAME}.bin"
 
 # ------------------------- 5. report the IR's input/output contract
