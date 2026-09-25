@@ -59,6 +59,7 @@ INFER_SERVER = os.path.join(HERE, "infer-ssd-server.sh")
 sys.path.insert(0, os.path.dirname(HERE))  # examples/ (shared client helpers)
 from mobilenet_client import (            # noqa: E402
     LinePipe,
+    LatestFrame,
     server_exit_meaning,
     stop_server,
     wait_alive,
@@ -248,14 +249,17 @@ def frame_source(args):
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.camera_height)
     note("camera %d: %dx%d" % (args.camera, int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
                                int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))
+    # Inference is slower than the camera rate: drain the capture in a
+    # thread and classify only the freshest available frame.
+    src = LatestFrame(cap)
     try:
         while True:
-            ok, frame = cap.read()
-            if not ok:
-                die("camera frame grab failed")
+            frame = src.read()
+            if frame is None:
+                die("camera stream ended")
             yield cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     finally:
-        cap.release()
+        src.close()
 
 
 def main():

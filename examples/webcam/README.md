@@ -2,7 +2,9 @@
 
 A Python app that captures webcam frames, preprocesses them for MobileNet v2
 and classifies them **on the stick** (OpenVINO 2020.3 `MYRIAD` device) in
-real time.
+real time.  In camera mode the capture is drained in a background thread and
+only the freshest available frame is classified, so the window never lags
+behind a queue of frames accumulated while inference was in flight.
 
 ```
 webcam_mobilenet.py (host Python, OpenCV)

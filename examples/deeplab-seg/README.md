@@ -63,7 +63,7 @@ python3 examples/deeplab-seg/seg_stream.py --file img.ppm      # single image, n
 python3 examples/deeplab-seg/seg_stream.py --video vendor/models/images/sample_640x360.mp4
 python3 examples/deeplab-seg/seg_stream.py --mask-out mask.ppm # also save the class map
 
-# same pipeline on the host CPU (amd64/arm64 images; arm64 = generic C++ path):
+# same pipeline on the host CPU (amd64/arm64 images; arm64 = Python full-TensorFlow server):
 python3 examples/deeplab-seg/seg_stream.py --headless --device CPU \
     --video vendor/models/images/sample_640x360.mp4 --frames 10
 # drive the CPU server directly (per-target runtime, see above):
@@ -72,7 +72,10 @@ examples/deeplab-seg/infer-seg-server.sh host CPU < /tmp/frame.bin
 
 `--video` processes a video file (any container/codec OpenCV can decode) instead
 of the webcam: frames are read in order at their native size, in a single pass,
-ending at the end of the video (`--frames N` cuts the pass short).  A short
+ending at the end of the video (`--frames N` cuts the pass short).  In camera
+mode the capture is drained in a background thread and only the freshest
+available frame is classified, so the overlay never lags behind a queue of
+frames accumulated while inference was in flight.  A short
 sample clip is vendored at `vendor/models/images/sample_640x360.mp4`
 (Big Buck Bunny, 640×360, ~13 s, 0.6 MB).
 

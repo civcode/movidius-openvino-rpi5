@@ -105,7 +105,10 @@ the MobileNet webcam example; the server is started by
 `infer-ssd-server.sh`, host-native or Docker).  A different launcher can be
 passed as the optional first positional argument; it is invoked as
 `<launcher> <backend> <device> <min-conf>` (all clients share this
-positional-launcher convention):
+positional-launcher convention).  In camera mode the capture is drained in a
+background thread and only the freshest available frame is classified, so the
+window never lags behind a queue of frames accumulated while inference was in
+flight:
 
 ```
 # GUI (default): window with labelled boxes, q/Esc to quit

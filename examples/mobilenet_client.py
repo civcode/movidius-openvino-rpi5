@@ -17,6 +17,7 @@ import select
 import signal
 import subprocess
 import sys
+import threading
 import time
 
 import numpy as np
@@ -250,6 +251,63 @@ def wait_alive(proc, timeout=2.5):
             die("inference server exited during startup (exit code %s: %s); "
                 "see its diagnostics above" % (code, server_exit_meaning(code)))
         time.sleep(0.05)
+
+
+class LatestFrame:
+    """Drains a cv2.VideoCapture continuously and keeps only the newest frame.
+
+    Inference at a few fps is slower than the camera rate, so a synchronous
+    read-then-infer loop lets the device's frame ring fill up behind each
+    request and every run classifies a frame that is one or more cycles old.
+    A dedicated thread reads frames as fast as the device produces them and
+    discards everything except the last one, so the main loop's read() always
+    returns the freshest available frame - the capture buffer is drained
+    until empty on every turn.  Used for the camera path only; --video and
+    --file keep their one-shot semantics.
+    """
+
+    def __init__(self, cap):
+        self._cap = cap
+        self._cv = threading.Condition()
+        self._frame = None
+        self._eof = False
+        self._stop = False
+        self._thread = threading.Thread(target=self._drain, daemon=True)
+        self._thread.start()
+
+    def _drain(self):
+        while not self._stop:
+            ok, frame = self._cap.read()
+            if not ok:
+                with self._cv:
+                    self._eof = True
+                    self._cv.notify_all()
+                return
+            with self._cv:
+                self._frame = frame
+                self._cv.notify_all()
+
+    def read(self):
+        """Block until a fresh frame has been captured and return it (BGR).
+
+        The frame is consumed (the slot empties), so a loop cannot classify
+        the same frame twice; returns None if the stream ended.
+        """
+        with self._cv:
+            while self._frame is None and not self._eof:
+                self._cv.wait()
+            if self._frame is None:
+                return None
+            frame, self._frame = self._frame, None
+            return frame
+
+    def close(self):
+        self._stop = True
+        self._thread.join(timeout=2.0)
+        try:
+            self._cap.release()
+        except Exception:
+            pass
 
 
 class WindowWatcher:

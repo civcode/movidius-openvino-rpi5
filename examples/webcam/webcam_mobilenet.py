@@ -38,6 +38,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from mobilenet_client import (            # noqa: E402
     DEFAULT_LABELS,
     OUTPUT_BYTES,
+    LatestFrame,
     MyriadClient,
     load_labels,
     note,
@@ -134,6 +135,10 @@ def main():
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.camera_height)
         note("camera %d: %dx%d" % (args.camera, w, h))
 
+    # Camera mode: inference is slower than the camera rate, so drain the
+    # capture in a thread and classify only the freshest available frame.
+    source = LatestFrame(cap) if not is_video else None
+
     # ------------------------------------------------------------- inference
     if args.server_script and not os.path.exists(args.server_script):
         die("server launcher not found: %s" % args.server_script)
@@ -170,11 +175,14 @@ def main():
             if is_video and args.frames and frame_no >= args.frames:
                 break
             t_frame0 = time.monotonic()
-            ok, frame = cap.read()
-            if not ok:
-                if is_video:
+            if is_video:
+                ok, frame = cap.read()
+                if not ok:
                     break  # end of video - clean stop
-                die("camera frame grab failed")
+            else:
+                frame = source.read()
+                if frame is None:
+                    die("camera stream ended")
             frame_no += 1
 
             classified = frame_no % args.every == 0
@@ -239,7 +247,10 @@ def main():
     except RuntimeError as ex:
         die("inference failure: %s" % ex)
     finally:
-        cap.release()
+        if source is not None:
+            source.close()
+        else:
+            cap.release()
         if window:
             cv2.destroyAllWindows()
         client.close()

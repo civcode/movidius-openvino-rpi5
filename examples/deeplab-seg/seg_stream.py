@@ -55,6 +55,7 @@ DEFAULT_SERVER_CMD = os.path.join(HERE, "infer-seg-server.sh")
 sys.path.insert(0, os.path.dirname(HERE))  # examples/ (shared client helpers)
 from mobilenet_client import (            # noqa: E402
     LinePipe,
+    LatestFrame,
     server_exit_meaning,
     stop_server,
     wait_alive,
@@ -424,6 +425,9 @@ def main():
                     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
                 note("camera %d: %dx%d" % (args.camera, int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
                                            int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))
+            # Inference is slower than the camera rate: drain the capture in
+            # a thread and classify only the freshest available frame.
+            source = LatestFrame(cap) if not is_video else None
             last_mask = None
             last_dims = None
             video_frames = 0
@@ -437,11 +441,14 @@ def main():
                         break
                     if is_video and args.frames and video_frames >= args.frames:
                         break
-                    ok, frame = cap.read()
-                    if not ok:
-                        if is_video:
+                    if is_video:
+                        ok, frame = cap.read()
+                        if not ok:
                             break  # end of video - clean stop
-                        die("camera frame grab failed")
+                    else:
+                        frame = source.read()
+                        if frame is None:
+                            die("camera stream ended")
                     video_frames += 1
                     h, w = frame.shape[:2]
                     rgb = frame[:, :, ::-1]
@@ -479,7 +486,10 @@ def main():
                                 or cv2.getWindowProperty(win, cv2.WND_PROP_VISIBLE) < 1:
                             break
             finally:
-                cap.release()
+                if source is not None:
+                    source.close()
+                else:
+                    cap.release()
             if args.mask_out and last_mask is not None:
                 last_w, last_h = last_dims
                 write_class_map(args.mask_out, last_mask, last_w, last_h)
