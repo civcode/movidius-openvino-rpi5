@@ -65,6 +65,10 @@ Platform selection is centralized in `scripts/platform.sh`. If `--platform` is o
 
 ### Raspberry Pi 5 — preferred native ARM64
 
+Use a 32 GB or larger SD card. On top of the OS come this repository,
+the pinned vendor payload and the Docker images plus build cache
+(several GB in total), so a smaller card will run out of space.
+
 ```bash
 ./build.sh --platform arm64
 ./run.sh --platform arm64 list
