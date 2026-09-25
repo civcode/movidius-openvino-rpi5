@@ -32,11 +32,6 @@ RUN set -eux; \
     printf 'deb http://snapshot.debian.org/archive/debian/%s bullseye main\ndeb http://snapshot.debian.org/archive/debian-security/%s bullseye-security main\ndeb http://snapshot.debian.org/archive/debian/%s bullseye-updates main\n' \
         "${SNAPSHOT_DATE}" "${SNAPSHOT_DATE}" "${SNAPSHOT_DATE}" > /etc/apt/sources.list; \
     apt -o Acquire::Retries=5 -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false update; \
-    # arm64 only: the CPU plugin on AARCH64 uses GEMM=OPENBLAS (mkl-dnn's AARCH64
-    # default), which needs cblas.h + libopenblas at build and run time; amd64
-    # uses GEMM=JIT and armv7 builds no CPU plugin at all.
-    BLAS_PKG=""; \
-    if [ "${TARGET}" = arm64 ]; then BLAS_PKG=libopenblas-dev; fi; \
     apt-get -o Acquire::Retries=5 install -y --no-install-recommends \
         build-essential \
         cmake \
@@ -47,8 +42,7 @@ RUN set -eux; \
         libusb-1.0-0-dev \
         zlib1g-dev \
         python3 \
-        python3-venv \
-        ${BLAS_PKG}; \
+        python3-venv; \
     rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m venv /opt/venv
@@ -118,14 +112,16 @@ RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
     fi; \
     # CPU plugin (mkldnn_plugin) availability per target:
     #   amd64 -> ON  (pinned mkl-dnn 0.21.3 has full x86 SSE4.2/AVX2/AVX-512 kernels)
-    #   arm64 -> ON  (mkl-dnn 0.21.3 predates AArch64/NEON kernels, so this is the
-    #                  generic C++ path - slow, but a valid on-Pi CPU baseline for
-    #                  benchmarking against the MYRIAD stick)
+    #   arm64 -> OFF (mkl-dnn 0.21.3 has no AArch64/NEON kernels: the conv+dwconv
+    #                  fusion pass leaves zero supported primitive descriptors, so
+    #                  the C++ CPU path cannot run inference there - arm64 CPU
+    #                  inference uses the Python ORT/TF servers, see
+    #                  docs/CPU-BACKENDS.md)
     #   armv7 -> OFF (mkl-dnn 0.21.3 FATAL_ERRORs on 32-bit: "supports 64 bit
     #                  platforms only"; Intel's official 2020.3.355 raspbian
     #                  runtime also ships without a CPU plugin)
     MKL_DNN_FLAG=OFF; \
-    case "${TARGET}" in amd64|arm64) MKL_DNN_FLAG=ON ;; esac; \
+    case "${TARGET}" in amd64) MKL_DNN_FLAG=ON ;; esac; \
     echo "ENABLE_MKL_DNN=${MKL_DNN_FLAG} (target=${TARGET})"; \
     cmake -S /work/src -B /work/build \
         "$@" \
@@ -205,7 +201,7 @@ RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
     IE_LIB="$(dirname "${IE_PLUGIN}")"; \
     echo "installed MYRIAD plugin: ${IE_PLUGIN}"; \
     CPU_PLUGIN="$(find /work/stage/deployment_tools/inference_engine/lib -mindepth 2 -maxdepth 2 -type f -name libMKLDNNPlugin.so -print -quit)"; \
-    case "${TARGET}" in amd64|arm64) CPU_EXPECTED=1 ;; *) CPU_EXPECTED=0 ;; esac; \
+    case "${TARGET}" in amd64) CPU_EXPECTED=1 ;; *) CPU_EXPECTED=0 ;; esac; \
     if [ "${CPU_EXPECTED}" = 1 ]; then \
         test -n "${CPU_PLUGIN}"; \
         echo "installed CPU plugin: ${CPU_PLUGIN}"; \
@@ -431,11 +427,8 @@ RUN set -eux; \
     printf 'deb http://snapshot.debian.org/archive/debian/%s bullseye main\ndeb http://snapshot.debian.org/archive/debian-security/%s bullseye-security main\ndeb http://snapshot.debian.org/archive/debian/%s bullseye-updates main\n' \
         "${SNAPSHOT_DATE}" "${SNAPSHOT_DATE}" "${SNAPSHOT_DATE}" > /etc/apt/sources.list; \
     apt -o Acquire::Retries=5 -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false update; \
-    BLAS_PKG=""; \
-    if [ "${TARGET}" = arm64 ]; then BLAS_PKG=libopenblas0-pthread; fi; \
     apt-get -o Acquire::Retries=5 install -y --no-install-recommends \
-        libusb-1.0-0 ca-certificates python3 \
-        ${BLAS_PKG}; \
+        libusb-1.0-0 ca-certificates python3; \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /work/stage/deployment_tools ${OV_ROOT}/
@@ -448,17 +441,18 @@ COPY --from=seg /work/seg-build/seg_detect ${OV_ROOT}/bin/seg_detect
 COPY container-entry.sh /opt/openvino-demo/run.sh
 
 # Python CPU inference servers for --device CPU (docs/CPU-BACKENDS.md).
-# On arm64 the OV CPU plugin is only the slow generic C++ path (mkl-dnn
-# 0.21.3 predates AArch64 kernels), so the launchers select Python
-# runtimes there instead: onnxruntime for the webcam classifier, full
-# TensorFlow for the SSDLite and DeepLabV3 frozen graphs.  Only the
-# arm64 image installs the (large) interpreter dependencies; amd64 keeps
-# the C++ OV server, armv7 has no CPU path.
+# The arm64 image ships no OV CPU plugin (mkl-dnn 0.21.3 has no AArch64
+# kernels and cannot run inference there), so the launchers select Python
+# runtimes on arm64: onnxruntime for the webcam classifier, full TensorFlow
+# for the SSDLite and DeepLabV3 frozen graphs.  Only the arm64 image installs
+# the (large) interpreter dependencies; amd64 keeps the C++ OV server, armv7
+# has no CPU path.
 COPY examples/webcam/mobilenet_cpu_server.py /opt/openvino-demo/cpu-servers/mobilenet_cpu_server.py
 COPY examples/ssd-detect/ssd_cpu_server.py /opt/openvino-demo/cpu-servers/ssd_cpu_server.py
 COPY examples/deeplab-seg/seg_cpu_server.py /opt/openvino-demo/cpu-servers/seg_cpu_server.py
 RUN set -eux; \
     if [ "${TARGET}" = arm64 ]; then \
+        apt -o Acquire::Retries=5 -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false update; \
         apt-get -o Acquire::Retries=5 install -y --no-install-recommends python3-pip; \
         python3 -m pip install --no-cache-dir \
             tensorflow onnxruntime opencv-python-headless; \
@@ -474,7 +468,7 @@ RUN set -eux; \
     IE_LIB="$(dirname "${IE_PLUGIN}")"; \
     test -f "${IE_LIB}/usb-ma2450.mvcmd"; \
     test -f "${IE_LIB}/plugins.xml"; \
-    case "${TARGET}" in amd64|arm64) grep -q 'name="CPU"' "${IE_LIB}/plugins.xml" ;; esac; \
+    case "${TARGET}" in amd64) grep -q 'name="CPU"' "${IE_LIB}/plugins.xml" ;; esac; \
     case "${TARGET}" in arm64) test -f /opt/openvino-demo/cpu-servers/seg_cpu_server.py; esac; \
     printf 'PROJECT_REVISION=%s\nTARGET=%s\nDOCKER_PLATFORM=%s\nBASE_IMAGE=%s\nOPENVINO_COMMIT=%s\nIE_LIB_BASENAME=%s\nEXPECTED_ELF_CLASS=%s\nEXPECTED_ELF_MACHINE_ID=%s\n' \
         "${PROJECT_REVISION}" "${TARGET}" "${DOCKER_PLATFORM}" "${BASE_IMAGE}" "${OPENVINO_COMMIT}" "$(basename "${IE_LIB}")" "${EXPECTED_ELF_CLASS}" "${EXPECTED_ELF_MACHINE_ID}" \
