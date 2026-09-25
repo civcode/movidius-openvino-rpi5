@@ -284,6 +284,72 @@ detector: `seg_detect --stdin` + `examples/deeplab-seg/seg_stream.py`
 (GUI overlay / `--headless` / `--file`).  See
 `examples/deeplab-seg/README.md`.
 
+## CPU vs MYRIAD performance on the Raspberry Pi 5
+
+The Pi 5's four Cortex-A76 cores run these models at (or above) NCS2 speed,
+so end-to-end fps are surprisingly close between the two backends.
+Measured on this host on 2026-09-25 (Docker backend, `--headless`; webcam =
+100 frames of `sample_640x360.mp4`, ssd = 20 iterations on `dog_ssd.ppm`,
+seg = 10 iterations on `dog.ppm`; system CPU from `/proc/stat` deltas over
+the whole run plus `top` samples in steady state):
+
+| Example | Backend | fps (end-to-end) | infer per frame | CPU utilisation |
+|---|---|---|---|---|
+| webcam / MobileNet v2 | MYRIAD | 19.1 | 47.5 ms | ~10 % of the 4-core machine (~0.4 cores), incl. startup |
+| webcam / MobileNet v2 | CPU (onnxruntime, fp32) | 24.0-25.5 | 34-39 ms | ~58 % average over the run; ~90-98 % in steady state; ~300 % of one core (75 % x 4 cores) observed sustained in GUI mode |
+| ssd / SSDLite MobileNet v2 | MYRIAD | 10.3 | 91.9 ms | ~11 % (~0.4 cores) |
+| ssd / SSDLite MobileNet v2 | CPU (TensorFlow, fp32) | 12.3 | 75-97 ms | ~37 % average (~1.5 cores) |
+| seg / DeepLabV3 (Pascal VOC) | MYRIAD | 1.4 | 676 ms | ~7 % |
+| seg / DeepLabV3 (Pascal VOC) | CPU (TensorFlow, fp32) | 1.5 | 642-659 ms | ~54 % average, peaks ~87 % |
+
+The CPU backend is slightly faster in every example - the uncanny part is
+how close MYRIAD is while using 6-10x less CPU.
+
+### Effective throughput (FLOPS)
+
+| Model | FLOPs/image (est.) | Backend | fps (infer only) | effective GFLOP/s |
+|---|---|---|---|---|
+| MobileNet v2 (224x224) | ~0.6 (300 MMAC) | MYRIAD (fp16) | 21.1 | ~12.6 |
+| MobileNet v2 (224x224) | ~0.6 (300 MMAC) | CPU (fp32) | 29.4 | ~17.6 |
+| SSDLite MobileNet v2 (224) | ~1.1 | MYRIAD (fp16) | 10.9 | ~12.0 |
+| SSDLite MobileNet v2 (224) | ~1.1 | CPU (fp32) | 12.5 | ~13.8 |
+| DeepLabV3 (224, 5 classes) | ~1.4 | MYRIAD (fp16) | 1.48 | ~2.1 |
+| DeepLabV3 (224, 5 classes) | ~1.4 | CPU (fp32) | 1.56 | ~2.2 |
+
+FLOPs/image are architectural estimates: MobileNet v2 is 300 MMAC in the
+literature; the SSD figure comes from the measured 1.9x time ratio vs the
+classification model; DeepLabV3 is backbone + atrous spatial pyramid pool.
+DeepLabV3 takes ~14-19x longer than MobileNet v2 on *both* engines, i.e.
+its dilated ASPP convolutions are inefficient under both the 2020.3 MYRIAD
+compiler and generic TF/XNNPACK fp32 - effective throughput collapses to
+~2 GFLOP/s there.
+
+### Why the fps are almost identical
+
+* The NCS2 (MA24X) is 2018-era accelerator silicon designed for exactly
+  this model class; MobileNet v2 at ~25 fps is its canonical benchmark and
+  its peak regime.
+* The Pi 5's 4x A76 @ 2.4 GHz has a fp32 peak of ~150 GFLOP/s (4-8x the
+  VPU), but this CPU path runs fp32 (2x the arithmetic of the VPU's fp16)
+  through generic TF/XNNPACK code at ~10-15 % efficiency. Those two
+  disadvantages roughly cancel the raw advantage: both engines land at
+  ~12-18 GFLOP/s effective on MobileNet-class work.
+* End-to-end fps also include the shared client overhead (preprocessing,
+  stdin pipe, ~5 ms/frame), which masks small inference deltas.
+
+### What the backends actually differ in
+
+* **CPU utilisation / headroom:** the VPU path leaves all four A76 cores
+  free (~10 % system utilisation); the CPU path burns ~1.5-3.9 cores
+  depending on the example.
+* **Load sensitivity:** MYRIAD's ~47 ms inference does not degrade when the
+  GUI/OS is busy; CPU inference shares the cores and slows under load.
+* **Power:** the NCS2 draws 1-2.5 W total (Intel datasheet); 2.5-3.5 busy
+  A76 cores cost a similar amount - the advantage is headroom, not watts.
+* **Int8 headroom:** a quantised int8 MobileNet on XNNPACK (NEON dotprod)
+  would run ~4x faster than the fp32 CPU path (~100 fps) and would beat
+  the VPU on speed as well.
+
 ## Host-native execution without Docker at inference time
 
 Docker remains the primary and most deterministic runtime, but the built tree
