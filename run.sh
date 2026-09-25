@@ -134,6 +134,9 @@ case "${MODE}" in
             exit 1
         fi
         DOCKER_ARGS+=(-v "${ROOT}/vendor/models:/models:ro")
+        if [[ $# -eq 0 ]]; then
+            set -- --image /models/images/dog_ssd.ppm
+        fi
         ENTRY=("/opt/openvino/bin/ssd_detect" "--device" "MYRIAD"
                "--model" "/models/ssdlite_mobilenet_v2/openvino/ssdlite_mobilenet_v2.xml"
                "--weights" "/models/ssdlite_mobilenet_v2/openvino/ssdlite_mobilenet_v2.bin"
