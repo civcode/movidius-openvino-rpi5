@@ -47,7 +47,7 @@ All three are trivially implementable in Python (struct + numpy).
 | B | TensorFlow Lite (+ XNNPACK delegate) | `pip install tensorflow` (aarch64 wheel); `.pb → .tflite` via TF1's `TFLiteConverter` | XNNPACK NEON; strong INT8 story | `.tflite` | good alternative; same subgraph caveat as A for the detector |
 | C | full TensorFlow (aarch64 wheel, AWS-maintained since 2.10) | `pip install tensorflow` | slowest (no XNNPACK) | runs the frozen `.pb` **as-is** | zero conversion (the `DetectionOutput` op runs natively); useful as fallback |
 | D | ncnn | build in image | fastest raw ARM (hand-rolled NEON) | `.param/.bin` via ONNX | no NMS op → hand-rolled post-processing; heaviest integration cost |
-| E | OpenVINO generic CPU (already wired for arm64) | in the runtime image | slowest of all here (generic C++) | IR | keep as *secondary* same-stack reference, not the default |
+| E | ~~OpenVINO generic CPU~~ | ~~in the runtime image~~ | ~~generic C++~~ | IR | **removed 2026-09-25**: cannot run inference on arm64 (no AArch64 kernels in mkl-dnn 0.21.3; see §12) |
 
 **Recommendation: A (ONNX Runtime).** Reasons:
 - official aarch64 PyPI wheels → zero build steps, works on the Pi's 64-bit
@@ -188,10 +188,11 @@ interchangeable behind the launcher:
   three server scripts (small; they're pure Python).
 - **amd64 / armv7 images:** unchanged (aside from the already-landed
   amd64 OV-CPU work).
-- **Already in the working tree:** arm64 `ENABLE_MKL_DNN=ON` + OpenBLAS
-  (OV generic CPU on arm64). Proposal: **keep it** as the secondary
-  same-stack backend (matrix row E); it costs nothing at runtime and gives
-  the apples-to-apples OpenVINO number on the Pi.
+- **arm64 OV generic CPU (matrix row E): removed 2026-09-25.** The arm64
+  image no longer sets `ENABLE_MKL_DNN` (and drops OpenBLAS). The first
+  live arm64 test proved the C++ OV CPU path cannot run inference there
+  (mkl-dnn 0.21.3 has no AArch64 kernels; full root cause in §12). The
+  Python servers remain the arm64 CPU path.
 
 ## 9. armv7 ("if possible")
 
@@ -206,9 +207,11 @@ interchangeable behind the launcher:
 
 ## 10. Open decisions
 
-1. ~~Keep arm64 OV generic CPU as the secondary backend?~~ **Decided: yes**
-   (already in the tree; it is the benchmark baseline on the Pi and costs
-   nothing at runtime).
+1. ~~Keep arm64 OV generic CPU as the secondary backend?~~ **Decided yes
+   (2026-09-24), reversed 2026-09-25**: the first live arm64 run showed the
+   C++ OV CPU path cannot run inference there (mkl-dnn 0.21.3 has no
+   AArch64 kernels; see §12). The arm64 image drops the CPU plugin; the
+   Python servers are the arm64 CPU path and MYRIAD the fast path.
 2. ~~Confirm the per-example arm64 CPU split~~ **Decided (2026-09-24,
    advisor-reviewed): ORT for webcam, full TF for ssd/seg.**
 3. Still open: INT8 / ONNX-backbone detector optimization (good Pi5 fit;
@@ -243,9 +246,16 @@ docker image predates it until 1d); armv7 → hard error
    in-image copy. QEMU-verified 2026-09-24: the pinned bullseye snapshot
    supplies the deps (tf 2.20, ort 1.19.2, cv2 5.0, numpy 2.0) and all three
    servers produce valid protocol output under aarch64 emulation.
-2. On-Pi validation (pending): rebuild with `./build.sh --platform arm64`,
-   then (a) `scripts/cpu-parity-*.sh`-style accuracy diff of the Python
-   servers vs the C++ server, (b) benchmark MYRIAD vs CPU per example.
+2. On-Pi validation (**done 2026-09-25**, arm64 image rebuilt without the
+   OV CPU plugin - see §12): in-image ORT server on the reference 224x224
+   tensor: 43.2 ms/infer, logits byte-identical to the zoo reference
+   (max |diff| = 0.0000), top-5 556/818/811/827/918 - identical to the
+   MYRIAD baseline; in-image TF servers on dog.ppm: SSD 2775 ms/frame (3
+   detections: cat/car/bicycle), seg 1073 ms/frame + 1071 ms postprocess
+   (5 classes - same set as the amd64 spike). MYRIAD self-test on the same
+   image: RESULT PASS (max |diff| 0.0525, top-5 identical). The C++ OV CPU
+   server comparison is amd64-only now (the plugin no longer ships on
+   arm64).
 
 **Phase 2 (optional)** — ONNX-backbone SSD detector (5–10× faster than
 full-TF NMS), INT8, armv7 CPU from source (TFLite), HETERO:MYRIAD,CPU.
@@ -290,6 +300,28 @@ full-TF NMS), INT8, armv7 CPU from source (TFLite), HETERO:MYRIAD,CPU.
   the TF server therefore feeds RGB to the graph and mirrors all other
   preprocessing (bilinear 513 resize, raw 0..255, in-graph normalization).
 
+**Done (2026-09-25, first live arm64 OV CPU test - failure root cause):**
+- First ever live C++ OV CPU inference on the Pi 5 (arm64 image, 4-core
+  build): `mobilenet_server --device CPU` on the MobileNet v2 FP32 IR
+  fails with `Supported primitive descriptors list is empty for node:
+  ...linearbottleneck0_batchnorm0_fwd/variance/Fused_Add_` (throw site
+  `mkldnn_node.cpp:306`).
+- Root cause (GDB object dumps + source + bisection): the MKLDNN graph
+  optimizer fuses `1x1 conv + bias Add + ReLU` and, in this model, merges
+  the following depthwise-conv block into the same `MKLDNNConvolutionNode`
+  (`fusedWith = [ReLU, next Convolution]`). That merge appends a custom
+  mkl-dnn `dw_conv` post-op to the convolution; the `dw_conv` post-op is
+  implemented only in the x86 JIT conv kernels (SSE4.2/AVX2). On AArch64
+  only the generic GEMM/reference convs exist, and conv primitive-desc
+  creation with that post-op combo yields zero descriptors.
+- Bisection: the identical conv block works (4 descriptors) when the
+  dwconv block is not merged (sub-model layers 0-13) and fails (0
+  descriptors) when it is (layers 0-14) - so every MobileNet-family graph
+  hits this, not just this IR.
+- **Consequence:** the arm64 image no longer ships the OV CPU plugin
+  (`ENABLE_MKL_DNN=OFF`, no OpenBLAS); `--device CPU` on arm64 routes to
+  the Python servers (§4), and `list` shows MYRIAD only.
+
 - **glibc**: manylinux wheels need glibc ≥ 2.17 — fine on bullseye (2.31)
   and 64-bit Raspberry Pi OS.
 - **Performance is estimated until measured on the Pi**: expect ORT/XNNPACK
@@ -303,9 +335,8 @@ On the RPi5, per example:
 
 ```
 MYRIAD  : infer-*-server.sh docker|host MYRIAD
-CPU     : infer-*-server.sh host CPU        (arm64: ORT for webcam,
+CPU     : infer-*-server.sh docker CPU      (arm64: ORT for webcam,
                                               full TF for ssd/seg)
-CPU-OV  : (optional) OV generic CPU inside the arm64 image (same-stack)
 ```
 
 Report fps + ms/frame for each; the ratio MYRIAD/CPU answers "is the stick
