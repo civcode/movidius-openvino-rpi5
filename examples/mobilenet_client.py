@@ -314,17 +314,35 @@ def _docker_container_for(proc):
 def stop_server(proc):
     """Terminate an inference server started with Popen(start_new_session=True).
 
-    The docker backend needs special treatment: a SIGTERM to the `docker run`
-    client does not reliably terminate it (we measured >170 s), and on this
-    host the kernel also drops unhandled SIGTERMs to the container's PID 1
-    (both 'python3' and 'sh' PID 1s survived docker stop's grace period and
-    needed SIGKILL), so ask the daemon to stop the container with a zero
-    grace period - that SIGKILLs the server and the docker run client exits
-    - then SIGTERM the process group, and only SIGKILL as a last resort.
-    The CPU servers are stateless, so the hard kill costs nothing.
+    Every server treats end-of-stdin as the end of the protocol and exits 0;
+    the MYRIAD servers additionally release the VPU with a clean mvnc/XLink
+    deinit.  A hard kill orphans the stick's XLink session and can leave the
+    USB device slow to re-enumerate, so close stdin first and give the
+    server a few seconds to exit cleanly before escalating.
+
+    The docker backend still needs special treatment in the escalation path:
+    a SIGTERM to the `docker run` client does not reliably terminate it (we
+    measured >170 s), and on this host the kernel also drops unhandled
+    SIGTERMs to the container's PID 1 (both 'python3' and 'sh' PID 1s
+    survived docker stop's grace period and needed SIGKILL), so ask the
+    daemon to stop the container with a zero grace period - that SIGKILLs
+    the server and the docker run client exits - then SIGTERM the process
+    group, and only SIGKILL as a last resort.
     """
     if proc.poll() is not None:
         return
+    # Clean shutdown: EOF on stdin is the protocol terminator for every
+    # server (C++ and Python alike).
+    try:
+        if proc.stdin and not proc.stdin.closed:
+            proc.stdin.close()
+    except (OSError, ValueError):
+        pass
+    try:
+        proc.wait(timeout=5)
+        return
+    except subprocess.TimeoutExpired:
+        pass
     container = _docker_container_for(proc)
     if container:
         try:
