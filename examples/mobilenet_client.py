@@ -1189,3 +1189,105 @@ def bench_processes(client_factory, payload, workers, iters, progress_every=1.0)
     with done.get_lock():
         total = done.value
     return (total / span if span > 0 else 0.0, span, cores, total)
+
+
+class DisplayPump:
+    """Render the newest result in an OpenCV window from its own thread.
+
+    Drawing is not free - palette blending a frame, putText, then imshow over
+    X11 and waitKey pumping the event loop - and doing it inside the collect
+    loop means the inference rate becomes the display rate: a slow or enlarged
+    window throttles the run to a few fps no matter how many servers run.  The
+    pump keeps one slot; if the worker posts faster than the display can draw,
+    superseded frames are dropped rather than queued, so the window always
+    shows the newest result and the inference loop never waits for it.
+
+    OpenCV's HighGUI wants window creation, imshow and waitKey on the same
+    thread, so all three live here.  post() takes anything and draw(item)
+    returns the BGR image to show; closed() reports the user quitting.
+    """
+
+    def __init__(self, title, draw, size_spec=None, idle_sleep=0.001):
+        self._title = title
+        self._draw = draw
+        self._size_spec = size_spec
+        self._idle = idle_sleep
+        self._cv = threading.Condition()
+        self._item = None
+        self._pending = False
+        self._stop = False
+        self._closed = False
+        self._sized = False
+        self._seen_visible = False
+        self._shown = 0
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def post(self, item):
+        """Hand the newest result to the window; never blocks."""
+        with self._cv:
+            self._item = item
+            self._pending = True
+            self._cv.notify()
+
+    def closed(self):
+        return self._closed or self._stop
+
+    def _run(self):
+        if cv2 is None:                       # pragma: no cover - GUI needs cv2
+            return
+        cv2.namedWindow(self._title, cv2.WINDOW_NORMAL)
+        while not self._stop:
+            # Wait for something to draw.  Falling through here with no item
+            # passed None to the draw callback, which the exception handler then
+            # read as a dead window and closed the run after one frame.
+            with self._cv:
+                while not self._pending and not self._stop:
+                    self._cv.wait(0.05)
+                item, self._pending = self._item, None
+            if self._stop:
+                break
+            if item is None:
+                continue
+            try:
+                img = self._draw(item)
+                if img is not None:
+                    cv2.imshow(self._title, img)
+                    if not self._sized:
+                        if self._size_spec is not None:
+                            cv2.resizeWindow(self._title, *self._size_spec)
+                        else:
+                            cv2.resizeWindow(self._title, img.shape[1], img.shape[0])
+                        self._sized = True
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord("q") or key == 27:
+                    self._closed = True
+                    continue
+                # A window that has just been created is not mapped yet, so
+                # WND_PROP_VISIBLE reads 0 for the first frames; treating that
+                # as "user closed it" ended the run after one frame.  Only count
+                # it as closed once it has actually been seen on screen.
+                try:
+                    vis = cv2.getWindowProperty(self._title, cv2.WND_PROP_VISIBLE)
+                except Exception:
+                    vis = -1
+                if vis is not None and vis >= 1:
+                    self._seen_visible = True
+                    self._shown += 1
+                elif self._seen_visible:
+                    self._closed = True
+            except Exception as exc:          # a dead window must not kill inference
+                note("display: %s" % exc)
+                self._closed = True
+                break
+
+    def close(self):
+        self._stop = True
+        with self._cv:
+            self._cv.notify_all()
+        self._thread.join(timeout=2.0)
+        if cv2 is not None:
+            try:
+                cv2.destroyWindow(self._title)
+            except Exception:
+                pass

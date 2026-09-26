@@ -59,6 +59,7 @@ from mobilenet_client import (            # noqa: E402
     LinePipe,
     LatestFrame,
     ProcCpu,
+    DisplayPump,
     RequestPool,
     spawn_servers,
     write_all,
@@ -491,10 +492,24 @@ def main():
             last_mask = None
             last_dims = None
             video_frames = 0
-            watcher = None
+            display = None
             if not args.headless:
-                show_window(win, None, args.window_size)  # resizable from frame one
-                watcher = WindowWatcher(win)
+                # Drawing runs on its own thread.  Inlined here, the overlay +
+                # imshow + waitKey path sets the inference rate: a big or slow
+                # window throttles the run to a few fps however many servers
+                # --servers starts.  The pump shows the newest result and drops
+                # anything superseded, so the loop never waits on the display.
+                def _draw(item):
+                    frame, mask, w, h, classes, total_ms, fps_s = item
+                    overlaid = overlay(frame, mask, w, h)
+                    txt = " ".join("%s %.0f%%" % (name, 100.0 * px / (w * h))
+                                   for cid, name, px in classes[:5])
+                    cv2.putText(overlaid,
+                                "%.0f ms  fps %s  %s" % (total_ms, fps_s.strip(), txt),
+                                (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                                (0, 255, 0), 1, cv2.LINE_AA)
+                    return overlaid
+                display = DisplayPump(win, _draw, args.window_size)
             try:
                 def _grab():
                     """Next (frame, w, h) payload, or None at end of stream."""
@@ -542,29 +557,22 @@ def main():
                                if len(stamps) > 1 else " warm")
                     last_mask = mask
                     last_dims = (w, h)
-                    if args.headless:
-                        cores = cpu.cores()
-                        print("[t=%7.2fs fps=%5s total=%6.0f ms (infer %5.0f ms) "
-                              "cpu=%s cores servers=%d] %s"
-                              % (time.monotonic() - t_start, fps_str, total_ms,
-                                 infer_ms,
-                                 "%.2f" % cores if cores is not None else "?",
-                                 len(clients),
-                                 ", ".join("%s %.1f%%" % (name, 100.0 * px / (w * h))
-                                           for cid, name, px in classes)),
-                              flush=True)
-                    else:
-                        overlaid = overlay(frame, mask, w, h)
-                        txt = " ".join("%s %.0f%%" % (name, 100.0 * px / (w * h))
-                                       for cid, name, px in classes[:5])
-                        cv2.putText(overlaid, "%.0f ms  fps %s  %s" % (total_ms, fps_str.strip(), txt),
-                                    (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                                    (0, 255, 0), 1, cv2.LINE_AA)
-                        show_window(win, overlaid, args.window_size)
-                        key = cv2.waitKey(1) & 0xFF
-                        if key == ord("q") or key == 27 \
-                                or (watcher.closed() if watcher else False) \
-                                or cv2.getWindowProperty(win, cv2.WND_PROP_VISIBLE) < 1:
+                    # Reported in both modes: a GUI run otherwise showed its rate
+                    # only in the window overlay, so a slow window could not be compared
+                    # against the headless number.
+                    cores = cpu.cores()
+                    print("[t=%7.2fs fps=%5s total=%6.0f ms (infer %5.0f ms) "
+                          "cpu=%s cores servers=%d] %s"
+                          % (time.monotonic() - t_start, fps_str, total_ms,
+                             infer_ms,
+                             "%.2f" % cores if cores is not None else "?",
+                             len(clients),
+                             ", ".join("%s %.1f%%" % (name, 100.0 * px / (w * h))
+                                       for cid, name, px in classes)),
+                          flush=True)
+                    if display is not None:
+                        display.post((frame, mask, w, h, classes, total_ms, fps_str))
+                        if display.closed():
                             break
                     # refill after collecting, so `servers` requests stay in flight
                     payload = _grab()
@@ -572,6 +580,8 @@ def main():
                         pool.submit(payload)
                         live += 1
             finally:
+                if display is not None:
+                    display.close()
                 if source is not None:
                     source.close()
                 else:
