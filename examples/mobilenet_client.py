@@ -382,9 +382,10 @@ def add_camera_capture_args(ap, width_opt="--camera-width",
     ap.add_argument(*height_opt, type=int, default=height_default,
                     help="request capture height (0 = device default)")
     ap.add_argument("--camera-fps", type=float, default=0.0,
-                    help="request capture frame rate (0 = device default).  The loop "
-                         "cannot run faster than the device delivers frames, so a "
-                         "slow camera caps the fps no matter how fast inference is")
+                    help="request capture frame rate (0 = device default).  Sets how "
+                         "often a *new* image arrives: the loop re-classifies the "
+                         "newest capture above that rate, and --fresh-frame paces "
+                         "itself to it")
     ap.add_argument("--camera-fourcc", default=fourcc_default,
                     help="request this pixel format (MJPG / YUYV / none).  MJPG is "
                          "compressed and reaches far higher rates than the "
@@ -478,9 +479,10 @@ def note_camera_settings(index, accepted, requested_fourcc=None,
                          requested_fps=0.0, requested_size=None):
     """note() what the driver accepted against what was asked for.
 
-    Also states the capture-rate ceiling plainly: LatestFrame.read() consumes
-    its slot, so every loop iteration needs a brand-new capture and the device
-    rate - not inference speed - is what caps the reported fps.
+    Also spells out the frame-freshness default: read() hands the newest
+    capture out without consuming it, so a loop rate above the device rate is
+    re-classified frames rather than new ones, and --fresh-frame is what paces
+    the loop to the camera.
     """
     w, h, tag, fps = accepted
     note("camera %d: %dx%d fourcc=%s nominal=%.0f fps"
@@ -489,11 +491,12 @@ def note_camera_settings(index, accepted, requested_fourcc=None,
             fourcc_tag(requested_fourcc) if requested_fourcc is not None else "none",
             requested_fps or 0.0,
             "" if not requested_size else " size=%dx%d" % requested_size))
-    note("note: the loop cannot run faster than the camera delivers frames;")
-    note("      'v4l2-ctl --list-formats-ext -d /dev/video%d' lists the real"
+    note("note: read() hands out the newest capture without consuming it, so this")
+    note("      loop is not paced by the device - a rate above %.1f fps means" % (fps or 0.0))
+    note("      captures are being re-classified (--fresh-frame paces it to the")
+    note("      camera).  'v4l2-ctl --list-formats-ext -d /dev/video%d' lists the real"
          % index)
-    note("      rate per format, and dim light cuts it further (auto-exposure"
-         " lengthens each frame).")
+    note("      rate per format, and dim light cuts it (auto-exposure lengthens frames).")
 
 
 class LatestFrame:
