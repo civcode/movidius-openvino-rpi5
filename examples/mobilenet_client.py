@@ -406,6 +406,31 @@ def wait_alive(proc, timeout=2.5):
         time.sleep(0.05)
 
 
+def spawn_servers(factory, count, startup_window=2.5):
+    """Start `count` servers so their model loads overlap, then fail fast on death.
+
+    Every server is spawned before anything waits, because load and compile are
+    per-process work that can run in parallel.  Checking each one inside the
+    spawn loop cost a full startup window per server - wait_alive() sleeps its
+    whole timeout when the process is healthy - so --servers 8 meant ~20 s of
+    serial sleeping before a window appeared.  The liveness check now covers the
+    batch in one shared window.
+
+    factory() must return an object exposing .proc (the subprocess.Popen).
+    """
+    servers = [factory() for _ in range(max(1, int(count)))]
+    deadline = time.monotonic() + startup_window
+    while time.monotonic() < deadline:
+        for srv in servers:
+            code = srv.proc.poll()
+            if code is not None:
+                die("inference server exited during startup (exit code %s: %s); "
+                    "see its diagnostics above"
+                    % (code, server_exit_meaning(code)))
+        time.sleep(0.05)
+    return servers
+
+
 def add_camera_capture_args(ap, width_opt="--camera-width",
                            height_opt="--camera-height",
                            width_default=0, height_default=0,

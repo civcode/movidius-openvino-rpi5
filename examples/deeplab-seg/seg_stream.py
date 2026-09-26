@@ -60,6 +60,7 @@ from mobilenet_client import (            # noqa: E402
     LatestFrame,
     ProcCpu,
     RequestPool,
+    spawn_servers,
     add_camera_capture_args,
     add_fake_camera_args,
     fourcc_from_tag,
@@ -368,12 +369,10 @@ def main():
 
     if not os.path.exists(args.server_cmd):
         die("server launcher not found: %s" % args.server_cmd)
-    clients = []
-    for _ in range(max(1, args.servers)):
-        cli = SegClient(args.server_cmd, args.backend, args.device,
-                        args.request_timeout)
-        wait_alive(cli.proc)
-        clients.append(cli)
+    clients = spawn_servers(
+        lambda: SegClient(args.server_cmd, args.backend, args.device,
+                          args.request_timeout),
+        args.servers)
     client = clients[0]
     if len(clients) > 1:
         note("inference servers: %d x %s in parallel, one request each"

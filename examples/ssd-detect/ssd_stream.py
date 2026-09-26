@@ -64,6 +64,7 @@ from mobilenet_client import (            # noqa: E402
     LatestFrame,
     ProcCpu,
     RequestPool,
+    spawn_servers,
     add_camera_capture_args,
     add_fake_camera_args,
     fourcc_from_tag,
@@ -342,12 +343,10 @@ def main():
     if cv2 is None and (args.video or not (args.headless and args.file)):
         die("OpenCV is required: pip install opencv-python numpy")
 
-    clients = []
-    for _ in range(max(1, args.servers)):
-        cli = SsdClient(args.infer_server, args.backend, args.device,
-                        args.min_conf, args.request_timeout)
-        wait_alive(cli.proc)
-        clients.append(cli)
+    clients = spawn_servers(
+        lambda: SsdClient(args.infer_server, args.backend, args.device,
+                          args.min_conf, args.request_timeout),
+        args.servers)
     client = clients[0]
     if len(clients) > 1:
         note("inference servers: %d x %s in parallel, one request each"

@@ -72,6 +72,7 @@ from mobilenet_client import (            # noqa: E402
     MyriadClient,
     ProcCpu,
     RequestPool,
+    spawn_servers,
     bench_processes,
     add_camera_capture_args,
     add_fake_camera_args,
@@ -239,12 +240,10 @@ def main():
         note("note: --servers %d scales a CPU backend; one %s device is still one "
              "device, so these servers will contend rather than add throughput"
              % (args.servers, args.device.upper()))
-    clients = []
-    for _ in range(max(1, args.servers)):
-        srv = MyriadClient(args.backend, ir, args.device, args.request_timeout,
-                           server_script=args.server_script)
-        wait_alive(srv.proc)
-        clients.append(srv)
+    clients = spawn_servers(
+        lambda: MyriadClient(args.backend, ir, args.device, args.request_timeout,
+                             server_script=args.server_script),
+        args.servers)
     client = clients[0]
     if len(clients) > 1:
         note("inference servers: %d x %s in parallel"
