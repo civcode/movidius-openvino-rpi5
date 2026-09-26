@@ -12,6 +12,7 @@ mirrored from mobilenet-test/main.cpp (resize to 224x224, BGR->RGB, /255,
 mean [0.485, 0.456, 0.406], std [0.229, 0.224, 0.225], NCHW float32).
 """
 
+import argparse
 import os
 import select
 import signal
@@ -253,6 +254,136 @@ def wait_alive(proc, timeout=2.5):
         time.sleep(0.05)
 
 
+def add_camera_capture_args(ap, width_opt="--camera-width",
+                           height_opt="--camera-height",
+                           width_default=0, height_default=0,
+                           fourcc_default="MJPG"):
+    """Register the shared webcam-capture options on an ArgumentParser.
+
+    All three stream examples (webcam/ssd/seg) negotiate the capture the same
+    way, so the flags and their help text live here and a new capture knob
+    lands in every example at once.  The geometry flag names and defaults are
+    parameters because seg_stream historically spells them --width/--height
+    with 640x480 defaults; renaming them would break existing invocations.
+    width_opt/height_opt may be a single option string or a sequence of
+    aliases - the first one names the dest, so a caller adding
+    ('--width', '--camera-width') keeps args.width while both spellings work.
+    """
+    width_opt = ([width_opt] if isinstance(width_opt, str) else list(width_opt))
+    height_opt = ([height_opt] if isinstance(height_opt, str) else list(height_opt))
+    ap.add_argument(*width_opt, type=int, default=width_default,
+                    help="request capture width (0 = device default)")
+    ap.add_argument(*height_opt, type=int, default=height_default,
+                    help="request capture height (0 = device default)")
+    ap.add_argument("--camera-fps", type=float, default=0.0,
+                    help="request capture frame rate (0 = device default).  The loop "
+                         "cannot run faster than the device delivers frames, so a "
+                         "slow camera caps the fps no matter how fast inference is")
+    ap.add_argument("--camera-fourcc", default=fourcc_default,
+                    help="request this pixel format (MJPG / YUYV / none).  MJPG is "
+                         "compressed and reaches far higher rates than the "
+                         "bandwidth-bound YUYV default; cameras with no "
+                         "compressed mode (a PS3 Eye / ov534, for instance) keep "
+                         "their native format automatically; 'none' leaves the "
+                         "device alone")
+
+
+def fourcc_from_tag(tag):
+    """'MJPG' -> OpenCV fourcc int; 'none'/'' -> None (leave the device alone)."""
+    tag = (tag or "").strip().upper()
+    if tag in ("", "NONE", "DEFAULT", "0"):
+        return None
+    if len(tag) != 4:
+        die("--camera-fourcc needs a 4-char tag like MJPG or YUYV (got %r)" % tag)
+    if cv2 is None:
+        die("OpenCV is required for --camera-fourcc: pip install opencv-python")
+    return cv2.VideoWriter_fourcc(*tag)
+
+
+def fourcc_tag(value):
+    """OpenCV fourcc int -> readable 4-char tag ('MJPG'); 0 -> 'none'."""
+    if not value:
+        return "none"
+    tag = "".join(chr((int(value) >> (8 * i)) & 0xFF) for i in range(4))
+    return tag.strip() or "none"
+
+
+def configure_camera(cap, fourcc=None, width=0, height=0, fps=0.0):
+    """Negotiate format -> geometry -> rate on an already-opened capture.
+
+    Order matters: V4L2 re-derives the frame interval when the pixel format or
+    the geometry changes, so asking for the format first and the rate last is
+    what actually sticks on most drivers.  Every request is read back, because
+    a driver is free to accept only some of them.
+
+    Returns the accepted (width, height, fourcc_tag, fps).
+    """
+    if fourcc is not None:
+        cap.set(cv2.CAP_PROP_FOURCC, fourcc)
+    if width:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+    if height:
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+    if fps and fps > 0:
+        cap.set(cv2.CAP_PROP_FPS, fps)
+    return (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+            int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+            fourcc_tag(cap.get(cv2.CAP_PROP_FOURCC)),
+            cap.get(cv2.CAP_PROP_FPS))
+
+
+def open_camera(index, fourcc=None, width=0, height=0, fps=0.0):
+    """Open /dev/video<index> through the native V4L2 backend and negotiate it.
+
+    CAP_V4L2 is named explicitly because FOURCC/FPS negotiation only goes
+    through the native backend; picking it up front stops the format request
+    from being silently dropped by backend auto-selection.
+
+    A rejected format request is dropped and negotiation is retried from a
+    clean open: plenty of cameras simply have no compressed mode (a PS3 Eye /
+    ov534 is YUV-only yet reaches 640x480@60 on its own), and leaving a
+    request the driver refused in place can perturb the geometry/rate step.
+
+    Returns (cap, accepted) where accepted is configure_camera's tuple, or
+    (None, None) when the device will not open.
+    """
+    cap = cv2.VideoCapture(index, cv2.CAP_V4L2)
+    if not cap.isOpened():
+        return None, None
+    accepted = configure_camera(cap, fourcc, width, height, fps)
+    if fourcc is not None and accepted[2] != fourcc_tag(fourcc):
+        note("camera %d: no %s mode, driver kept %s - renegotiating without a "
+             "format request" % (index, fourcc_tag(fourcc), accepted[2]))
+        cap.release()
+        cap = cv2.VideoCapture(index, cv2.CAP_V4L2)
+        if not cap.isOpened():
+            return None, None
+        accepted = configure_camera(cap, None, width, height, fps)
+    return cap, accepted
+
+
+def note_camera_settings(index, accepted, requested_fourcc=None,
+                         requested_fps=0.0, requested_size=None):
+    """note() what the driver accepted against what was asked for.
+
+    Also states the capture-rate ceiling plainly: LatestFrame.read() consumes
+    its slot, so every loop iteration needs a brand-new capture and the device
+    rate - not inference speed - is what caps the reported fps.
+    """
+    w, h, tag, fps = accepted
+    note("camera %d: %dx%d fourcc=%s nominal=%.0f fps"
+         " (requested fourcc=%s fps=%.0f%s)"
+         % (index, w, h, tag, fps,
+            fourcc_tag(requested_fourcc) if requested_fourcc is not None else "none",
+            requested_fps or 0.0,
+            "" if not requested_size else " size=%dx%d" % requested_size))
+    note("note: the loop cannot run faster than the camera delivers frames;")
+    note("      'v4l2-ctl --list-formats-ext -d /dev/video%d' lists the real"
+         % index)
+    note("      rate per format, and dim light cuts it further (auto-exposure"
+         " lengthens each frame).")
+
+
 class LatestFrame:
     """Drains a cv2.VideoCapture continuously and keeps only the newest frame.
 
@@ -266,12 +397,20 @@ class LatestFrame:
     --file keep their one-shot semantics.
     """
 
-    def __init__(self, cap):
+    def __init__(self, cap, history=32):
         self._cap = cap
         self._cv = threading.Condition()
         self._frame = None
         self._eof = False
         self._stop = False
+        # camera-rate instrumentation: the loop can never run faster than the
+        # device delivers frames, and read() consumes the slot, so a slow
+        # camera - not slow inference - is often what caps the fps.  Keep the
+        # recent arrival stamps so the caller can report the true device rate
+        # and how long each read() spent blocked waiting for one.
+        self._arrivals = []
+        self._history = max(2, history)
+        self._last_wait = 0.0
         self._thread = threading.Thread(target=self._drain, daemon=True)
         self._thread.start()
 
@@ -283,23 +422,50 @@ class LatestFrame:
                     self._eof = True
                     self._cv.notify_all()
                 return
+            now = time.monotonic()
             with self._cv:
                 self._frame = frame
+                self._arrivals.append(now)
+                if len(self._arrivals) > self._history:
+                    del self._arrivals[:len(self._arrivals) - self._history]
                 self._cv.notify_all()
 
     def read(self):
         """Block until a fresh frame has been captured and return it (BGR).
 
         The frame is consumed (the slot empties), so a loop cannot classify
-        the same frame twice; returns None if the stream ended.
+        the same frame twice; returns None if the stream ended.  The seconds
+        spent blocked are kept for `last_wait_s`.
         """
+        t0 = time.monotonic()
         with self._cv:
             while self._frame is None and not self._eof:
                 self._cv.wait()
             if self._frame is None:
                 return None
             frame, self._frame = self._frame, None
+            self._last_wait = time.monotonic() - t0
             return frame
+
+    @property
+    def last_wait_s(self):
+        """Seconds the most recent read() blocked waiting for the device."""
+        return self._last_wait
+
+    def camera_fps(self, n=16):
+        """Measured device delivery rate over the last n captured frames.
+
+        This is the real ceiling on the loop rate: read() consumes the frame
+        slot, so every iteration needs a brand-new capture.  Returns 0.0
+        until two frames have arrived.
+        """
+        with self._cv:
+            stamps = list(self._arrivals)
+        stamps = stamps[-(n + 1):]
+        if len(stamps) < 2:
+            return 0.0
+        span = stamps[-1] - stamps[0]
+        return (len(stamps) - 1) / span if span > 0 else 0.0
 
     def close(self):
         self._stop = True

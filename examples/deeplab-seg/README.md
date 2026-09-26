@@ -106,6 +106,19 @@ CPU parity against the C++ server is a tracked regression test:
 dog_ssd.ppm reference frame it passes with 99.75 % mask agreement - the
 residual flips are ArgMax ties between the two FP32 backends).
 
+### Capture options
+
+`seg_stream.py` accepts `--camera`, `--camera-fps` and `--camera-fourcc`, and
+its geometry can be spelled either way: `--width`/`--height` (historical, default
+640×480) or `--camera-width`/`--camera-height`, which are aliases for the same
+value.
+
+As in the webcam example, the capture rate - not inference - often sets the loop
+rate: `LatestFrame.read()` consumes its slot, so each iteration blocks for a
+brand-new frame. Ask for the rate you want, e.g. `--camera-fps 60` on a 640×480
+PS3 Eye, and check the `camera N: ...` line it prints at startup: the driver's
+accepted format/size/rate are read back, so you see what it really gave you.
+
 ## Streaming protocol (`seg_detect --stdin`)
 
 ```

@@ -26,6 +26,19 @@ Usage:
   python3 examples/webcam/webcam_mobilenet.py --ir fp32 --backend docker
   python3 examples/webcam/webcam_mobilenet.py --headless \
       --video vendor/models/images/sample_640x360.mp4 --every 10
+
+Frame rate: the loop can never run faster than the camera delivers frames,
+because LatestFrame.read() consumes its slot and blocks for the next
+capture.  A webcam left at its OpenCV default is frequently 1280x720 YUYV,
+which is USB-bandwidth bound at ~9 fps - so the fps you see can be the
+capture rate rather than anything to do with inference, and the CPU looks
+idle because both processes spend their time blocked waiting for frames.
+The status line therefore reports the measured device rate as 'cam=...',
+and a one-time note says which of the two is the ceiling.  To raise it:
+  --camera-fourcc MJPG --camera-fps 30   (compressed format, far higher rates)
+  --camera-width 640 --camera-height 480 (YUYV reaches 30 fps here)
+  more light                             (auto-exposure lengthens each frame)
+'v4l2-ctl --list-formats-ext -d /dev/videoN' lists the real rates.
 """
 
 import argparse
@@ -40,8 +53,12 @@ from mobilenet_client import (            # noqa: E402
     OUTPUT_BYTES,
     LatestFrame,
     MyriadClient,
+    add_camera_capture_args,
+    fourcc_from_tag,
     load_labels,
     note,
+    note_camera_settings,
+    open_camera,
     preprocess,
     topk_probs,
     wait_alive,
@@ -58,6 +75,67 @@ try:
     import cv2
 except ImportError:
     cv2 = None
+
+import threading
+
+
+class PipelinedInfer:
+    """Run client.infer() in a background thread so preprocessing of the
+    next frame can overlap with inference of the current frame.
+
+    Usage::
+
+        pipeline = PipelinedInfer(client)
+        pipeline.submit(tensor_1)          # starts infer_1 in background
+        tensor_2 = preprocess(frame_2)     # runs while infer_1 is in-flight
+        logits_1 = pipeline.wait()         # blocks until infer_1 finishes
+        pipeline.submit(tensor_2)          # starts infer_2
+    """
+
+    def __init__(self, client):
+        self._client = client
+        self._thread = None
+        self._result = None
+        self._error = None
+        self._t_submit = 0.0
+        self._t_done = 0.0
+
+    def submit(self, tensor):
+        """Begin async inference on *tensor*; call wait() before next submit()."""
+        if self._thread is not None:
+            raise RuntimeError("previous inference still in flight")
+        self._result = None
+        self._error = None
+        self._t_submit = time.monotonic()
+
+        def _run():
+            try:
+                self._result = self._client.infer(tensor)
+            except Exception as exc:
+                self._error = exc
+
+        self._thread = threading.Thread(target=_run, daemon=True)
+        self._thread.start()
+
+    def wait(self):
+        """Block until the background inference finishes; return logits."""
+        if self._thread is None:
+            raise RuntimeError("no inference in progress")
+        self._thread.join()
+        self._t_done = time.monotonic()
+        self._thread = None
+        if self._error:
+            raise RuntimeError("inference failed: %s" % self._error) from self._error
+        return self._result
+
+    @property
+    def infer_ms(self):
+        """Wall-clock ms of the most recent completed infer()."""
+        return (self._t_done - self._t_submit) * 1000.0
+
+    @property
+    def running(self):
+        return self._thread is not None
 
 
 def die(msg, code=1):
@@ -81,8 +159,7 @@ def main():
                          "to decode the codec)")
     ap.add_argument("--frames", type=int, default=0,
                     help="in --video mode, stop after N frames (0 = whole video)")
-    ap.add_argument("--camera-width", type=int, default=0, help="request capture width (0 = device default)")
-    ap.add_argument("--camera-height", type=int, default=0, help="request capture height (0 = device default)")
+    add_camera_capture_args(ap)
     ap.add_argument("--backend", choices=["auto", "host", "docker"], default="auto",
                     help="where mobilenet_server runs")
     ap.add_argument("--ir", choices=["fp16", "fp32"], default=None,
@@ -116,27 +193,38 @@ def main():
 
     # ------------------------------------------------------------- source: video or camera
     is_video = bool(args.video)
-    cap = cv2.VideoCapture(args.video if is_video else args.camera)
-    if not cap.isOpened():
-        if is_video:
-            die("cannot open video %s (OpenCV %s)" % (args.video, cv2.__version__))
-        die("cannot open camera %d (%s); try --camera <N> or v4l2-ctl --list-devices"
-            % (args.camera, cv2.__version__))
-    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     if is_video:
+        cap = cv2.VideoCapture(args.video)
+        if not cap.isOpened():
+            die("cannot open video %s (OpenCV %s)" % (args.video, cv2.__version__))
+        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         note("video %s: %dx%d %.0f fps, %d frames (single pass)"
              % (args.video, w, h, cap.get(cv2.CAP_PROP_FPS),
                 int(cap.get(cv2.CAP_PROP_FRAME_COUNT))))
     else:
-        if args.camera_width:
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.camera_width)
-        if args.camera_height:
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.camera_height)
-        note("camera %d: %dx%d" % (args.camera, w, h))
+        # Uncompressed YUYV is USB-bandwidth bound: a typical webcam offers
+        # 1920x1080@6 and 1280x720@9 in YUYV but 640x480@30, while MJPG reaches
+        # 720p@60 / 480p@120.  OpenCV leaves the device at whatever it defaults
+        # to - very often 720p YUYV, i.e. ~9 fps - unless told otherwise, and
+        # that rate (not inference) then caps the whole loop.  The shared
+        # open_camera() asks for format, then geometry, then rate, and reads
+        # them all back because a driver may accept only some of them.
+        want_fourcc = fourcc_from_tag(args.camera_fourcc)
+        cap, accepted = open_camera(args.camera, want_fourcc, args.camera_width,
+                                    args.camera_height, args.camera_fps)
+        if cap is None:
+            die("cannot open camera %d (%s); try --camera <N> or v4l2-ctl "
+                "--list-devices" % (args.camera, cv2.__version__))
+        w, h = accepted[0], accepted[1]
+        note_camera_settings(args.camera, accepted, want_fourcc, args.camera_fps,
+                             (args.camera_width, args.camera_height))
 
-    # Camera mode: inference is slower than the camera rate, so drain the
-    # capture in a thread and classify only the freshest available frame.
+    # Camera mode: drain the capture in a thread and classify only the
+    # freshest available frame, so the ring cannot fill up behind a slow
+    # request.  Note this does NOT decouple the loop rate from the device:
+    # read() consumes the slot, so each iteration still needs a brand-new
+    # capture and a slow camera caps the fps whatever inference does.
     source = LatestFrame(cap) if not is_video else None
 
     # ------------------------------------------------------------- inference
@@ -161,89 +249,155 @@ def main():
         cv2.namedWindow(window, cv2.WINDOW_NORMAL)
         watcher = WindowWatcher(window)
 
+    # --- pipelined inference: overlap preprocessing of frame N+1 with
+    #     inference of frame N to hide the preprocessing latency ---------
+    pipeline = PipelinedInfer(client)
+
     last_probs = []
     last_infer_ms = 0.0
     frame_times = []
     warmup_s = None
+    cam_warned = None
     fps_str = " warm"
     frame_no = 0
     classified_no = 0
     t_start = time.monotonic()
 
+    def _read_frame():
+        """Read one frame from camera/video; return frame or None on EOF."""
+        nonlocal frame_no
+        if is_video:
+            ok, f = cap.read()
+            if not ok:
+                return None
+        else:
+            f = source.read()
+        frame_no += 1
+        return f
+
+    def _show(img, probs, t_val, fps_s, infer_ms_val):
+        """Draw classification overlay, show the frame, return True to quit."""
+        for i, (p, cid, name) in enumerate(probs):
+            y = 24 + 24 * i
+            text = "%d. %.4f  %s %s" % (i + 1, p, cid, name)
+            (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1)
+            cv2.rectangle(img, (4, y - th - 2), (8 + tw, y + 2), (0, 0, 0), -1)
+            cv2.putText(img, text, (8, y), cv2.FONT_HERSHEY_SIMPLEX, 0.55,
+                        (0, 255, 0), 1, cv2.LINE_AA)
+        cam = ("  cam=%.1f fps" % source.camera_fps()) if source is not None else ""
+        status = "t=%.1fs  fps=%s  infer=%.1f ms%s" % (
+            t_val, fps_s.strip(), infer_ms_val, cam)
+        cv2.putText(img, status, (8, img.shape[0] - 12),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
+        cv2.imshow(window, img)
+        key = cv2.waitKey(1) & 0xFF
+        return (key == ord("q") or key == 27
+                or (watcher.closed() if watcher else False)
+                or cv2.getWindowProperty(window, cv2.WND_PROP_VISIBLE) < 1)
+
     try:
+        # --- warm-up: find first classified frame, preprocess, submit infer
+        frame = _read_frame()
+        while frame is not None and frame_no % args.every != 0:
+            if not args.headless:
+                if _show(frame.copy(), last_probs, 0, " warm", 0):
+                    break
+            frame = _read_frame()
+
+        if frame is None:
+            die("camera stream ended")
+
+        tensor = preprocess(frame)
+        t_frame0 = time.monotonic()
+        pipeline.submit(tensor)
+        classified_no = 1
+
         while not stopping["flag"]:
             if is_video and args.frames and frame_no >= args.frames:
                 break
-            t_frame0 = time.monotonic()
-            if is_video:
-                ok, frame = cap.read()
-                if not ok:
-                    break  # end of video - clean stop
-            else:
-                frame = source.read()
-                if frame is None:
-                    die("camera stream ended")
-            frame_no += 1
 
-            classified = frame_no % args.every == 0
-            if classified:
+            # --- read next frame(s) while infer runs in background ----
+            frame_next = _read_frame()
+            next_tensor = None
+
+            # skip non-classified frames (display them with last results)
+            while frame_next is not None and frame_no % args.every != 0:
+                if not args.headless:
+                    t = time.monotonic() - t_start
+                    if _show(frame_next.copy(), last_probs, t, fps_str, last_infer_ms):
+                        stopping["flag"] = True
+                        break
+                frame_next = _read_frame()
+
+            if not stopping["flag"] and frame_next is not None:
                 classified_no += 1
-                tensor = preprocess(frame)
-                t0 = time.monotonic()
-                logits = client.infer(tensor)
-                last_infer_ms = (time.monotonic() - t0) * 1000.0
-                last_probs = topk_probs(logits, labels, args.topk)
-                # steady-state fps over the last 10 classified frames; the
-                # first (warm-up) round-trip carries the one-time device
-                # compile, so it is reported separately and excluded.
-                # windowed_fps expects per-frame DURATIONS, not stamps
-                elapsed = time.monotonic() - t_frame0
-                if warmup_s is None:
-                    warmup_s = elapsed
-                    note("warmup: first classification %.0f ms (includes "
-                         "device compile); excluded from fps"
-                         % (warmup_s * 1000))
-                else:
-                    frame_times.append(elapsed)
-                fps_str = ("%5.1f" % windowed_fps(frame_times)
-                           if frame_times else " warm")
-            probs = last_probs
+                next_tensor = preprocess(frame_next)
 
-            # ------------------------------------------------------- reporting
+            # --- wait for previous inference to complete ----------------
+            logits = pipeline.wait()
+            last_infer_ms = pipeline.infer_ms
+            last_probs = topk_probs(logits, labels, args.topk)
+            elapsed = time.monotonic() - t_frame0
+            if warmup_s is None:
+                warmup_s = elapsed
+                note("warmup: first classification %.0f ms (includes "
+                     "device compile); excluded from fps"
+                     % (warmup_s * 1000))
+            else:
+                frame_times.append(elapsed)
+            fps_str = ("%5.1f" % windowed_fps(frame_times)
+                       if frame_times else " warm")
+
+            # One-time verdict once a few steady frames are in: say plainly
+            # whether the capture rate or inference is what caps the loop.
+            if source is not None and cam_warned is None and len(frame_times) >= 5:
+                cam_fps = source.camera_fps()
+                infer_fps = 1000.0 / last_infer_ms if last_infer_ms > 0 else 0.0
+                if cam_fps > 0 and infer_fps > 0 and cam_fps < infer_fps * 0.9:
+                    note("\nnote: CAMERA-BOUND - the device delivers %.1f fps while "
+                         "inference could sustain %.1f fps (%.1f ms), so the capture "
+                         "rate is the ceiling and the CPU is mostly idle waiting for "
+                         "frames.  To go faster: --camera-fourcc MJPG --camera-fps 30, "
+                         "a smaller --camera-width/--camera-height, or more light "
+                         "(auto-exposure lengthens each frame in dim rooms).\n"
+                         % (cam_fps, infer_fps, last_infer_ms))
+                elif cam_fps > 0:
+                    note("note: inference-bound - camera %.1f fps, inference %.1f fps "
+                         "(%.1f ms)\n" % (cam_fps, infer_fps, last_infer_ms))
+                cam_warned = True
+
+            # --- reporting ----------------------------------------------
             t = time.monotonic() - t_start
             top = "\n".join(
                 "  %d. %7.4f %s %s" % (i + 1, p, cid, name)
-                for i, (p, cid, name) in enumerate(probs))
+                for i, (p, cid, name) in enumerate(last_probs))
+            cam_s = (" cam=%5.1f" % source.camera_fps()) if source is not None else ""
+            print("[t=%7.2fs fps=%5s infer=%6.1fms%s]\n%s"
+                  % (t, fps_str, last_infer_ms, cam_s, top),
+                  flush=True)
 
-            # results always go to the command line, on every classified frame
-            if classified:
-                print("[t=%7.2fs fps=%5s infer=%6.1fms]\n%s" % (t, fps_str, last_infer_ms, top),
-                      flush=True)
-
+            # --- display current classified frame -----------------------
             if not args.headless:
-                img = frame.copy()
-                for i, (p, cid, name) in enumerate(probs):
-                    y = 24 + 24 * i
-                    text = "%d. %.4f  %s %s" % (i + 1, p, cid, name)
-                    (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1)
-                    cv2.rectangle(img, (4, y - th - 2), (8 + tw, y + 2), (0, 0, 0), -1)
-                    cv2.putText(img, text, (8, y), cv2.FONT_HERSHEY_SIMPLEX, 0.55,
-                                (0, 255, 0), 1, cv2.LINE_AA)
-                status = "t=%.1fs  fps=%s  infer=%.1f ms" % (t, fps_str.strip(), last_infer_ms)
-                cv2.putText(img, status, (8, img.shape[0] - 12),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
-                cv2.imshow(window, img)
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord("q") or key == 27 \
-                        or (watcher.closed() if watcher else False) \
-                        or cv2.getWindowProperty(window, cv2.WND_PROP_VISIBLE) < 1:
+                if _show(frame.copy(), last_probs, t, fps_str, last_infer_ms):
                     break
 
+            if stopping["flag"]:
+                break
+
+            # --- throttle -----------------------------------------------
             if args.max_fps > 0:
-                # sleep whatever of the per-frame budget is still unspent
                 remainder = 1.0 / args.max_fps - (time.monotonic() - t_frame0)
                 if remainder > 0:
                     time.sleep(remainder)
+
+            # --- submit next inference ----------------------------------
+            if next_tensor is not None:
+                t_frame0 = time.monotonic()
+                pipeline.submit(next_tensor)
+                frame = frame_next
+            else:
+                break   # stream ended while waiting
+
     except RuntimeError as ex:
         die("inference failure: %s" % ex)
     finally:

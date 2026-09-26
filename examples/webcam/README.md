@@ -84,6 +84,32 @@ frames; the first classified frame prints `fps= warm` because its
 round-trip includes the one-time MYRIAD compile (reported on a separate
 `warmup:` line and excluded from the average).
 
+**The camera, not inference, often sets that rate.** `LatestFrame.read()`
+consumes its slot, so every loop iteration has to block for a brand-new
+capture - the loop can never run faster than the device delivers frames.  A
+webcam left at OpenCV's default is frequently 1280x720 **YUYV**, which is
+USB-bandwidth bound at ~9 fps (the same device typically does 640x480@30 in
+YUYV and 720p@60 in MJPG), so `fps~10` with an idle-looking CPU usually means
+the capture rate is the ceiling rather than the backend.  The status line
+reports the measured device rate as `cam=...`, and after 5 steady frames a
+one-time note states whether the run is camera-bound or inference-bound.
+To raise it:
+
+```bash
+# compressed format: far higher rates than bandwidth-bound YUYV
+python3 examples/webcam/webcam_mobilenet.py --camera-fourcc MJPG --camera-fps 30
+
+# or drop the resolution (YUYV reaches 30 fps at 640x480)
+python3 examples/webcam/webcam_mobilenet.py --camera-width 640 --camera-height 480
+```
+
+`v4l2-ctl --list-formats-ext -d /dev/video0` lists the real rate per format.
+Cameras with no compressed mode - a PS3 Eye (`ov534`) is YUV-only, yet does
+640x480@60 natively - are detected automatically: the rejected `MJPG` request
+is dropped and the capture is renegotiated without touching the pixel format.
+Dim light makes things worse: auto-exposure lengthens each frame's exposure
+time, which on a sensor like the PS3 Eye's can drop 60 fps far below it.
+
 Main options (see `--help`); the optional first positional argument replaces
 the launcher script (invoked as `<script> <backend> <ir> <device>`;
 default `examples/webcam/infer-server.sh`):
@@ -91,6 +117,10 @@ default `examples/webcam/infer-server.sh`):
 | option | default | meaning |
 |---|---|---|
 | `--camera N` | 0 | webcam index | `--video PATH` | off | classify frames of a video file instead of the webcam (single pass) |
+| `--camera-width N` | 0 | request capture width (0 = device default) |
+| `--camera-height N` | 0 | request capture height (0 = device default) |
+| `--camera-fps F` | 0 | request capture frame rate (0 = device default); a slow camera caps the loop whatever the backend does |
+| `--camera-fourcc TAG` | MJPG | request pixel format (`MJPG` / `YUYV` / `none`); MJPG is compressed and reaches far higher rates than the bandwidth-bound YUYV default |
 | `--backend auto\|host\|docker` | auto | where `mobilenet_server` runs |
 | `--ir fp16\|fp32` | auto (fp32 with `--device CPU`, else fp16) | model precision; auto because the 2020.3 CPU plugin cannot take FP16 inputs |
 | `--device NAME` | MYRIAD | `MYRIAD` (default) or `CPU`.  CPU per target: amd64 = OpenVINO CPU (FP32 IR); arm64 = Python ONNX Runtime server `mobilenet_cpu_server.py` (host needs `pip install onnxruntime`; docker uses the in-image copy); armv7 = not supported (error).  See `docs/CPU-BACKENDS.md` |

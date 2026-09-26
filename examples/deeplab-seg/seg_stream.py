@@ -56,6 +56,10 @@ sys.path.insert(0, os.path.dirname(HERE))  # examples/ (shared client helpers)
 from mobilenet_client import (            # noqa: E402
     LinePipe,
     LatestFrame,
+    add_camera_capture_args,
+    fourcc_from_tag,
+    note_camera_settings,
+    open_camera,
     server_exit_meaning,
     stop_server,
     wait_alive,
@@ -310,8 +314,14 @@ def main():
                     help="max seconds to wait for one frame response (first frame "
                          "includes the ~1.7 s stick boot + 513x513 inference)")
     ap.add_argument("--camera", type=int, default=0, help="webcam index (/dev/videoN)")
-    ap.add_argument("--width", type=int, default=640, help="request capture width (0 = device default)")
-    ap.add_argument("--height", type=int, default=480, help="request capture height (0 = device default)")
+    # This example has always spelled its geometry flags --width/--height with
+    # 640x480 defaults; keep those names so existing invocations still work,
+    # and add the --camera-* spellings plus the capture-rate knobs the other
+    # examples share.
+    add_camera_capture_args(ap,
+                            width_opt=("--width", "--camera-width"),
+                            height_opt=("--height", "--camera-height"),
+                            width_default=640, height_default=480)
     ap.add_argument("--file", default=None,
                     help="read frames from this image file (.ppm/.jpg/.png) instead of the webcam "
                          "(image kept at its native resolution)")
@@ -405,13 +415,10 @@ def main():
                 cv2.destroyAllWindows()
         else:
             is_video = bool(args.video)
-            cap = cv2.VideoCapture(args.video if is_video else args.camera)
-            if not cap.isOpened():
-                if is_video:
-                    die("cannot open video %s (OpenCV %s)" % (args.video, cv2.__version__))
-                die("cannot open camera %d (%s); try --camera <N> or v4l2-ctl --list-devices"
-                    % (args.camera, cv2.__version__))
             if is_video:
+                cap = cv2.VideoCapture(args.video)
+                if not cap.isOpened():
+                    die("cannot open video %s (OpenCV %s)" % (args.video, cv2.__version__))
                 note("video %s: %dx%d %.0f fps, %d frames (single pass)"
                      % (args.video,
                         int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
@@ -419,14 +426,21 @@ def main():
                         cap.get(cv2.CAP_PROP_FPS),
                         int(cap.get(cv2.CAP_PROP_FRAME_COUNT))))
             else:
-                if args.width:
-                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
-                if args.height:
-                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
-                note("camera %d: %dx%d" % (args.camera, int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
-                                           int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))
-            # Inference is slower than the camera rate: drain the capture in
-            # a thread and classify only the freshest available frame.
+                # Same capture negotiation as the webcam/ssd examples: format
+                # -> geometry -> rate, then read them all back.  A webcam left
+                # at its OpenCV default is very often 1280x720 YUYV, which is
+                # USB-bandwidth bound at ~9 fps and then caps this loop.
+                want_fourcc = fourcc_from_tag(args.camera_fourcc)
+                cap, accepted = open_camera(args.camera, want_fourcc, args.width,
+                                            args.height, args.camera_fps)
+                if cap is None:
+                    die("cannot open camera %d (%s); try --camera <N> or "
+                        "v4l2-ctl --list-devices" % (args.camera, cv2.__version__))
+                note_camera_settings(args.camera, accepted, want_fourcc,
+                                     args.camera_fps, (args.width, args.height))
+            # Drain the capture in a thread and keep only the freshest frame.
+            # This does NOT decouple the loop from the device rate: read()
+            # consumes the slot, so every iteration needs a brand-new capture.
             source = LatestFrame(cap) if not is_video else None
             last_mask = None
             last_dims = None
