@@ -108,18 +108,26 @@ residual flips are ArgMax ties between the two FP32 backends).
 
 ### Capture options
 
-`seg_stream.py` accepts `--camera`, `--camera-fps`, `--camera-fourcc` and
-`--fresh-frame`, and its geometry can be spelled either way: `--width`/`--height`
+`seg_stream.py` accepts `--camera`, `--camera-fps`, `--camera-fourcc`,
+`--fake-camera`, `--fake-camera-fps` and `--servers`, and its geometry can be
+spelled either way: `--width`/`--height`
 (historical, default 640×480) or `--camera-width`/`--camera-height`, which are
 aliases for the same value.
 
-The capture does not pace the loop by default: `LatestFrame.read()` hands out the
-newest frame without consuming it, so an iteration never blocks waiting for the
-camera and the `fps` column is completed segments per wall-clock second (it
-agrees with `t=` rather than being derived from request durations).  Here
+Each captured frame is segmented exactly once: `LatestFrame.read()` keeps only
+the newest frame and consumes it, so the loop never repeats an image and the
+`fps` column counts distinct images per second against the `t=` column.  Here
 segmentation is the slow side anyway (~100 ms/frame on CPU against a 30-60 fps
-camera), so each iteration still tends to get a genuinely newer frame.
-`--fresh-frame` waits for a capture the run has not seen - the true camera rate.  Ask for the
+camera), so each iteration still gets a genuinely newer frame; the startup note
+says which of the two is limiting the run.  `--servers N` runs N servers, one
+request each, on distinct frames.
+
+To measure the ceiling without a camera, use `--fake-camera --fake-camera-fps 0`,
+which serves one static image as fast as the loop asks (a webcam can never supply
+enough frames to exhaust several servers).  Ask for a capture rate with
+`--camera-fps 60` on a 640x480 PS3 Eye and check the `camera N: ...` line at
+startup: the driver's accepted format/size/rate are read back, so you see what it
+really gave you.  Ask for the
 rate you want, e.g. `--camera-fps 60` on a 640×480 PS3 Eye, and check the
 `camera N: ...` line printed at startup: the driver's accepted format/size/rate
 are read back, so you see what it really gave you.

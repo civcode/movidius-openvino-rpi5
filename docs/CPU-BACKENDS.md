@@ -431,28 +431,48 @@ CPU 0 and the workload is capped at one core's worth of inference.
 and `--threads N`.  Verified with `scripts/cpu-parity-webcam.sh`: PASS, max
 |Δlogit| 0.000022, identical top-5.
 
-**Measured** (`--depth 2`, 800-1200 inferences per run, same host):
+**Measured - and then partly corrected.**  Lifting the pin was necessary but not
+sufficient: with the pin gone, *one* client process still cannot push more than
+about one server's worth of requests, whatever `--servers` says.
 
-| `--servers` | before (pinned) | after (unpinned) | cores used after |
-|---|---|---|---|
-| 1 | ~181 fps | ~151 fps | 1.02 |
-| 2 | ~190 fps | ~296 fps | 2.05 |
-| 4 | ~190 fps | ~565 fps | 4.09 |
-| 8 | ~190 fps | ~1027 fps | 8.15 |
-| 12 | ~190 fps | ~1324 fps | 12.03 |
+| `--servers` | one client process, pooled threads | one client process per server |
+|---|---|---|
+| 1 | ~146 fps | ~146 fps |
+| 2 | ~155 fps | ~277 fps (139 each) |
+| 4 | ~152 fps | ~521 fps (130 each) |
+| 8 | ~137 fps | ~950 fps (119 each) |
+| 12 | - | ~1235 fps (103 each) |
+
+The flat second column is the GIL again: each request costs this interpreter
+queue handoffs, response parsing and syscall setup, so those costs serialise no
+matter which worker thread pays them.  The measurement path therefore runs one
+client process per server (`bench_processes()` in `examples/mobilenet_client.py`)
+- the third column.  A live `--servers N` pool still helps up to roughly one
+server's rate, and the tool says so when it starts.
+
+So the "~190 fps regardless of servers" reading had two independent causes, the
+first hiding the second: `CPU_BIND_THREAD=YES` put every server on one core, and
+the client process caps the request rate at about one server's throughput.  Only
+the first is fixed in the server; the second is a property of a
+single-Python-client design, and an earlier version of the table above claimed
+~565 fps from one client process with four servers, which a repeat run did not
+reproduce.
 
 **Caveats worth remembering.**
 
-* One lone server is *slower* unpinned (~181 → ~151 fps): its thread loses core
+* One lone server is *slower* unpinned (~181 → ~146 fps): its thread loses core
   affinity and cache locality.  The fix pays off only when several inferences
   run at once, which is the point of `--servers`.
-* Unpinning does not make a single inference use several cores.  That needs
-  `CPU_THROUGHPUT_STREAMS` plus multiple `InferRequest`s; the servers keep one
-  request each, so `--servers` is the scaling axis, not `--depth`.
+* Unpinning does not make a single inference use several cores, and neither does
+  queue depth: measured at depth 1/2/4/8, one server stayed within noise of
+  ~180 fps.  `--depth` was removed in favour of `--servers`; intra-request
+  parallelism would need `CPU_THROUGHPUT_STREAMS` plus several `InferRequest`s
+  per server.
 * A **live** run is client-bound: on the video path it caps near ~118 fps
   whatever `--servers` says, because decode plus preprocessing happens in the
-  client's single Python thread.  Use `--bench` to measure the inference path
-  alone.
+  client's single Python thread.  `--fake-camera` takes the camera out of that
+  path and `--bench` takes the drawing out; `--bench` with `--servers` uses one
+  client process per server.
 * The arm64 CPU servers (`mobilenet_cpu_server.py` ONNX Runtime, the TF servers)
   were not touched - their threading knobs are different and they were not
   measurable here.

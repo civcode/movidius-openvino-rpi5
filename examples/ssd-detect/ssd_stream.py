@@ -58,10 +58,16 @@ INFER_SERVER = os.path.join(HERE, "infer-ssd-server.sh")
 
 sys.path.insert(0, os.path.dirname(HERE))  # examples/ (shared client helpers)
 from mobilenet_client import (            # noqa: E402
+    REPO_ROOT,
+    FakeCamera,
     LinePipe,
     LatestFrame,
+    ProcCpu,
+    RequestPool,
     add_camera_capture_args,
+    add_fake_camera_args,
     fourcc_from_tag,
+    load_static_image,
     note_camera_settings,
     open_camera,
     server_exit_meaning,
@@ -243,6 +249,26 @@ def frame_source(args):
             yield rgb
             n += 1
         return
+    if args.fake_camera:
+        # A static image delivered at any rate, pulled directly (no drain thread
+        # to spin): the way to find the ceiling of --servers, because no webcam
+        # supplies enough frames to exhaust them.  Every delivery is a distinct
+        # frame, so the servers never share one image.
+        image = load_static_image(args.fake_camera_image)
+        fake = FakeCamera(image, args.fake_camera_fps)
+        rgb = image[:, :, ::-1]
+        note("fake camera: %s (%dx%d) delivering %s fps"
+             % (os.path.basename(args.fake_camera_image), image.shape[1],
+                image.shape[0],
+                "%.0f" % args.fake_camera_fps if args.fake_camera_fps else "unbounded"))
+        n = 0
+        while args.frames == 0 or n < args.frames:
+            ok, _ = fake.read()
+            if not ok:
+                return
+            n += 1
+            yield rgb
+        return
     # Same capture negotiation as the webcam example: format -> geometry ->
     # rate, then read them all back.  A webcam left at its OpenCV default is
     # very often 1280x720 YUYV, which is USB-bandwidth bound at ~9 fps and
@@ -255,14 +281,14 @@ def frame_source(args):
             % (args.camera, cv2.__version__))
     note_camera_settings(args.camera, accepted, want_fourcc, args.camera_fps,
                          (args.camera_width, args.camera_height))
-    # The capture thread keeps the newest frame in one slot and read() does not
-    # consume it, so this generator can hand out the same frame repeatedly when
-    # inference outruns the device - the loop then measures inference throughput
-    # rather than the camera rate.  --fresh-frame paces it to the camera.
+    # A dedicated thread drains the capture into one slot, keeping only the
+    # newest frame, and read() serves each capture exactly once: it blocks until
+    # the device delivers a new one, so a frame is never detected twice and
+    # --servers splits up distinct frames.  A faster loop drops frames instead.
     src = LatestFrame(cap)
     try:
         while True:
-            frame = src.read(fresh=args.fresh_frame)
+            frame = src.read()
             if frame is None:
                 die("camera stream ended")
             yield cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -277,6 +303,15 @@ def main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     ap.add_argument("--camera", type=int, default=0, help="webcam index (/dev/videoN)")
     add_camera_capture_args(ap)
+    add_fake_camera_args(ap, default_image=os.path.join(
+        REPO_ROOT, "vendor", "models", "images", "dog_ssd.ppm"))
+    ap.add_argument("--servers", type=int, default=1,
+                    help="run N inference server processes in parallel, one request "
+                         "in flight each.  A server computes one request at a time, "
+                         "so this is how to use more than one core; each extra "
+                         "server costs a model load.  Note a single Python client "
+                         "process tops out near 180 inferences/s on its GIL, so "
+                         "rates above that need several client processes")
     ap.add_argument("infer_server", nargs="?", default=INFER_SERVER,
                     help="server script to run for inference (see examples/ssd-detect/README.md)")
     ap.add_argument("--file", default=None,
@@ -307,9 +342,22 @@ def main():
     if cv2 is None and (args.video or not (args.headless and args.file)):
         die("OpenCV is required: pip install opencv-python numpy")
 
-    client = SsdClient(args.infer_server, args.backend, args.device,
-                       args.min_conf, args.request_timeout)
-    wait_alive(client.proc)
+    clients = []
+    for _ in range(max(1, args.servers)):
+        cli = SsdClient(args.infer_server, args.backend, args.device,
+                        args.min_conf, args.request_timeout)
+        wait_alive(cli.proc)
+        clients.append(cli)
+    client = clients[0]
+    if len(clients) > 1:
+        note("inference servers: %d x %s in parallel, one request each"
+             % (len(clients), args.device.upper()))
+    # One worker thread per server.  The handler also returns the frame the
+    # detections belong to: with several servers results come back in completion
+    # order, and the overlay has to be drawn on the frame that produced them.
+    pool = RequestPool([(lambda rgb, c=cli: (c.detect(rgb), rgb)) for cli in clients],
+                       default_timeout=args.request_timeout)
+    cpu = ProcCpu([os.getpid()] + [c.proc.pid for c in clients])
 
     stopping = {"flag": False}
 
@@ -333,10 +381,11 @@ def main():
         for rgb in frame_source(args):
             if stopping["flag"]:
                 break
-            t0 = time.monotonic()
-            w, h, infer_ms, dets = client.detect(rgb)
+            pool.submit(rgb)
+            (result, rgb), elapsed_ms = pool.get()
+            w, h, infer_ms, dets = result
             frame_no += 1
-            elapsed = time.monotonic() - t0
+            elapsed = elapsed_ms / 1000.0
             if warmup_s is None:
                 # first round-trip carries the one-time device compile:
                 # report it as warm-up, keep it out of the fps window
@@ -347,16 +396,17 @@ def main():
             # Rate measured as completions per wall-clock second, so it cannot
             # drift from the t= column the way a 1/(mean duration) figure does
             # when the timing window excludes the frame grab.
-            if warmup_s is not None:
-                stamps.append(time.monotonic())
+            stamps.append(time.monotonic())
             fps_str = "%5.1f" % windowed_rate(stamps) if len(stamps) > 1 else " warm"
 
-            # results always go to the command line
-            if dets:
-                listing = ", ".join("%s %.2f (%d,%d,%d,%d)" % d for d in dets)
-            else:
-                listing = "(no detections at confidence >= %.2f)" % args.min_conf
-            print("[t=%7.2fs fps=%5s infer=%6.1fms] %s" % (t, fps_str, infer_ms, listing),
+            listing = (", ".join("%s %.2f (%d,%d,%d,%d)" % d for d in dets)
+                       if dets else
+                       "(no detections at confidence >= %.2f)" % args.min_conf)
+            cores = cpu.cores()
+            print("[t=%7.2fs fps=%5s infer=%6.1fms cpu=%s cores servers=%d] %s"
+                  % (t, fps_str, infer_ms,
+                     "%.2f" % cores if cores is not None else "?",
+                     len(clients), listing),
                   flush=True)
 
             if not args.headless:
@@ -380,9 +430,11 @@ def main():
     except RuntimeError as ex:
         die("inference failure: %s" % ex)
     finally:
+        pool.close()
         if window:
             cv2.destroyAllWindows()
-        client.close()
+        for cli in clients:
+            cli.close()
         note("bye (%d frame%s read)" % (frame_no, "s" if frame_no != 1 else ""))
 
 

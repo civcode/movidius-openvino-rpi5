@@ -165,20 +165,28 @@ server -> client:  "FRAME <w> <h> <infer_ms>"
 The client needs `numpy` + `opencv-python(-headless)` (pip; the runtime
 image deliberately ships no Python libraries).  Options mirror the single-
 image mode (`--min-conf`, `--backend`, `--device`) plus `--camera`,
-`--camera-width/-height`, `--camera-fps`, `--camera-fourcc`, `--fresh-frame`,
-`--file`, `--video`, `--frames`, `--request-timeout`.
+`--camera-width/-height`, `--camera-fps`, `--camera-fourcc`, `--fake-camera`,
+`--fake-camera-fps`, `--servers`, `--file`, `--video`, `--frames`,
+`--request-timeout`.
 
-The capture does not pace this loop by default: `LatestFrame.read()` keeps the
-newest frame in one slot without consuming it, so if detection outruns the camera
-the same frame is detected again and the `fps` column is detection throughput
-(`cam=` in the startup line is the device rate).  `--fresh-frame` waits for a
-capture the run has not seen, which is the honest end-to-end camera rate.  The
-camera rate is worth raising on its own for what you see: a webcam left at
-OpenCV's default is frequently 1280x720 YUYV, USB-bandwidth bound at ~9 fps, so
-use `--camera-fourcc MJPG --camera-fps 30` (or a smaller
-`--camera-width/-height`); `v4l2-ctl --list-formats-ext -d /dev/videoN` lists
-the real rates.  `fps` is now completed detections per wall-clock second, so it
-agrees with the `t=` column instead of being derived from request durations.
+Each captured frame is detected exactly once: `LatestFrame.read()` keeps only the
+newest frame and consumes it, so the loop never re-detects the same image and the
+`fps` column counts distinct images per second - it agrees with `t=`, unlike the
+old 1/(mean duration) figure that let this print ~100 fps on a 60 fps camera.
+`cam=` in the startup line is the device rate that ceilings them, and a faster
+loop drops frames.  That rule is what makes `--servers N` meaningful: the servers
+split up different frames instead of duplicating one.
+
+To probe the throughput ceiling without a camera, drive one static image at any
+rate: `--fake-camera --fake-camera-fps 0` (unbounded) or a chosen rate, with
+`--servers N`.  One client process is GIL-limited to roughly one server's rate,
+so large server counts only pay off with a client process per server - see
+`examples/webcam/README.md` for the measured numbers.
+
+A webcam left at OpenCV's default is frequently 1280x720 YUYV, USB-bandwidth
+bound at ~9 fps, which caps how many distinct images exist: use
+`--camera-fourcc MJPG --camera-fps 30` (or a smaller `--camera-width/-height`);
+`v4l2-ctl --list-formats-ext -d /dev/videoN` lists the real rates.
 
 ## Verified results (MA2450, amd64 image)
 

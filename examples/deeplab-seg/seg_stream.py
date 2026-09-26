@@ -54,10 +54,16 @@ DEFAULT_SERVER_CMD = os.path.join(HERE, "infer-seg-server.sh")
 
 sys.path.insert(0, os.path.dirname(HERE))  # examples/ (shared client helpers)
 from mobilenet_client import (            # noqa: E402
+    REPO_ROOT,
+    FakeCamera,
     LinePipe,
     LatestFrame,
+    ProcCpu,
+    RequestPool,
     add_camera_capture_args,
+    add_fake_camera_args,
     fourcc_from_tag,
+    load_static_image,
     note_camera_settings,
     open_camera,
     server_exit_meaning,
@@ -318,10 +324,17 @@ def main():
     # 640x480 defaults; keep those names so existing invocations still work,
     # and add the --camera-* spellings plus the capture-rate knobs the other
     # examples share.
-    add_camera_capture_args(ap,
-                            width_opt=("--width", "--camera-width"),
+    add_camera_capture_args(ap, width_opt=("--width", "--camera-width"),
                             height_opt=("--height", "--camera-height"),
                             width_default=640, height_default=480)
+    add_fake_camera_args(ap, default_image=os.path.join(
+        REPO_ROOT, "vendor", "models", "images", "dog_ssd.ppm"))
+    ap.add_argument("--servers", type=int, default=1,
+                    help="run N inference server processes in parallel, one request "
+                         "in flight each; this model is ~100 ms/frame on CPU, so "
+                         "several servers is how to use more than one core.  With "
+                         "N>1 the window overlay can show a mask from a different "
+                         "frame, since results return in completion order")
     ap.add_argument("--file", default=None,
                     help="read frames from this image file (.ppm/.jpg/.png) instead of the webcam "
                          "(image kept at its native resolution)")
@@ -355,8 +368,21 @@ def main():
 
     if not os.path.exists(args.server_cmd):
         die("server launcher not found: %s" % args.server_cmd)
-    client = SegClient(args.server_cmd, args.backend, args.device, args.request_timeout)
-    wait_alive(client.proc)
+    clients = []
+    for _ in range(max(1, args.servers)):
+        cli = SegClient(args.server_cmd, args.backend, args.device,
+                        args.request_timeout)
+        wait_alive(cli.proc)
+        clients.append(cli)
+    client = clients[0]
+    if len(clients) > 1:
+        note("inference servers: %d x %s in parallel, one request each"
+             % (len(clients), args.device.upper()))
+    # One worker thread per server, each doing a whole request/response on its
+    # own connection: a server is serial, so N servers is the way to use N cores.
+    pool = RequestPool([(lambda p, c=cli: c.segment(*p)) for cli in clients],
+                       default_timeout=args.request_timeout)
+    cpu = ProcCpu([os.getpid()] + [c.proc.pid for c in clients])
 
     stopping = {"flag": False}
     t_start = time.monotonic()
@@ -415,7 +441,22 @@ def main():
                 cv2.destroyAllWindows()
         else:
             is_video = bool(args.video)
-            if is_video:
+            if args.fake_camera and is_video:
+                die("--fake-camera and --video are alternatives; pick one")
+            is_fake = bool(args.fake_camera)
+            if is_fake:
+                # A static image delivered at any rate, pulled directly: the way
+                # to find the ceiling of --servers, since no webcam supplies
+                # enough frames to exhaust them.  Each delivery is a distinct
+                # frame, so the servers never share one image.
+                image = load_static_image(args.fake_camera_image)
+                cap = FakeCamera(image, args.fake_camera_fps)
+                note("fake camera: %s (%dx%d) delivering %s fps"
+                     % (os.path.basename(args.fake_camera_image), image.shape[1],
+                        image.shape[0],
+                        "%.0f" % args.fake_camera_fps
+                        if args.fake_camera_fps else "unbounded"))
+            elif is_video:
                 cap = cv2.VideoCapture(args.video)
                 if not cap.isOpened():
                     die("cannot open video %s (OpenCV %s)" % (args.video, cv2.__version__))
@@ -438,11 +479,11 @@ def main():
                         "v4l2-ctl --list-devices" % (args.camera, cv2.__version__))
                 note_camera_settings(args.camera, accepted, want_fourcc,
                                      args.camera_fps, (args.width, args.height))
-            # The capture thread keeps the newest frame in one slot and read()
-            # does not consume it, so the loop is not paced by the device: when
-            # inference outruns the camera the same frame is segmented again.
-            # --fresh-frame restores one iteration per capture.
-            source = LatestFrame(cap) if not is_video else None
+            # Every capture is served to the loop exactly once, so a frame is
+            # never segmented twice and --servers splits distinct frames; a loop
+            # that cannot keep up drops frames rather than ageing them.  A video
+            # or fake camera is pulled directly - neither has a buffer to drain.
+            source = LatestFrame(cap) if not (is_video or is_fake) else None
             last_mask = None
             last_dims = None
             video_frames = 0
@@ -454,24 +495,23 @@ def main():
                 while True:
                     if stopping["flag"]:
                         break
-                    if is_video and args.frames and video_frames >= args.frames:
+                    if (is_video or is_fake) and args.frames and video_frames >= args.frames:
                         break
-                    if is_video:
+                    if is_video or is_fake:
                         ok, frame = cap.read()
                         if not ok:
                             break  # end of video - clean stop
                     else:
-                        frame = source.read(fresh=args.fresh_frame)
+                        frame = source.read()
                         if frame is None:
                             die("camera stream ended")
                     video_frames += 1
                     h, w = frame.shape[:2]
                     rgb = frame[:, :, ::-1]
-                    t0 = time.monotonic()
-                    classes, mask, total_ms, infer_ms = client.segment(rgb, w, h)
-                    elapsed = time.monotonic() - t0
+                    pool.submit((rgb, w, h))
+                    (classes, mask, total_ms, infer_ms), elapsed_ms = pool.get()
                     if warmup_s is None:
-                        warmup_s = elapsed
+                        warmup_s = elapsed_ms / 1000.0
                         note("warmup: first segmentation %.0f ms (includes "
                              "device compile); excluded from fps"
                              % (warmup_s * 1000))
@@ -482,8 +522,13 @@ def main():
                     last_mask = mask
                     last_dims = (w, h)
                     if args.headless:
-                        print("[t=%7.2fs fps=%5s total=%6.0f ms (infer %5.0f ms)] %s"
-                              % (time.monotonic() - t_start, fps_str, total_ms, infer_ms,
+                        cores = cpu.cores()
+                        print("[t=%7.2fs fps=%5s total=%6.0f ms (infer %5.0f ms) "
+                              "cpu=%s cores servers=%d] %s"
+                              % (time.monotonic() - t_start, fps_str, total_ms,
+                                 infer_ms,
+                                 "%.2f" % cores if cores is not None else "?",
+                                 len(clients),
                                  ", ".join("%s %.1f%%" % (name, 100.0 * px / (w * h))
                                            for cid, name, px in classes)),
                               flush=True)
@@ -512,12 +557,14 @@ def main():
     except RuntimeError as ex:
         die("inference failure: %s" % ex)
     finally:
+        pool.close()
         if not args.headless:
             try:
                 cv2.destroyAllWindows()
             except Exception:
                 pass
-        client.close()
+        for cli in clients:
+            cli.close()
         frames_done = len(stamps) + (1 if warmup_s is not None else 0)
         note("bye (%d frame%s read)"
              % (frames_done, "s" if frames_done != 1 else ""))

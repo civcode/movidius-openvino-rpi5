@@ -85,21 +85,22 @@ round-trip includes the one-time MYRIAD compile (reported on a separate
 `warmup:` line and excluded from the average).  It is counted as completed
 iterations per wall-clock second, so it cannot drift away from the `t=` column.
 
-**By default the camera does not set that rate.** `LatestFrame.read()` keeps the
-newest capture in one slot and does **not** consume it, so when inference
-outruns the device the same frame is classified again instead of the loop
-blocking for the next capture; the `fps` you see is then the inference path's
-throughput, and `cam=` beside it is the real device rate.  After a few steady
-frames a one-time note says which of the two the run is doing, and how many
-times on average each capture was classified.  Pass `--fresh-frame` to go back
-to one iteration per capture - that is the honest end-to-end camera rate, and
-it is the number to compare against a `cam=` reading.
+**Every frame is classified exactly once.** `LatestFrame.read()` keeps only the
+newest capture in one slot and *consumes* it, so it blocks until the device
+delivers a new frame: the same image is never classified twice.  `fps` therefore
+counts distinct images, and `cam=` beside it is the device rate that ceilings
+them.  A loop faster than the camera drops frames rather than repeating them, and
+after a few steady frames a one-time note says which limit you are at -
+`SOURCE-LIMITED` (the camera is) or `INFERENCE-LIMITED` (the servers are), with
+how many frames were dropped.
 
-The device still matters for what you *see*: a webcam left at OpenCV's default
-is frequently 1280x720 **YUYV**, which is USB-bandwidth bound at ~9 fps (the
-same device typically does 640x480@30 in YUYV and 720p@60 in MJPG), so without
-`--fresh-frame` a stale frame just gets re-classified many times.  To raise the
-capture rate itself:
+That once-per-frame rule is what makes `--servers N` worth having: the servers
+split up *different* frames instead of duplicating one image N times.
+
+The capture rate still sets how many distinct images exist - a webcam left at
+OpenCV's default is frequently 1280x720 **YUYV**, USB-bandwidth bound at ~9 fps
+(the same device typically does 640x480@30 in YUYV and 720p@60 in MJPG).  To
+raise it:
 
 ```bash
 # compressed format: far higher rates than bandwidth-bound YUYV
@@ -131,11 +132,13 @@ default `examples/webcam/infer-server.sh`):
 | `--ir fp16\|fp32` | auto (fp32 with `--device CPU`, else fp16) | model precision; auto because the 2020.3 CPU plugin cannot take FP16 inputs |
 | `--device NAME` | MYRIAD | `MYRIAD` (default) or `CPU`.  CPU per target: amd64 = OpenVINO CPU (FP32 IR); arm64 = Python ONNX Runtime server `mobilenet_cpu_server.py` (host needs `pip install onnxruntime`; docker uses the in-image copy); armv7 = not supported (error).  See `docs/CPU-BACKENDS.md` |
 | `--topk N` | 5 | classes to report / draw |
-| `--every N` | 1 | classify every Nth frame (implies `--fresh-frame`: skipping only counts against real captures) |
-| `--fresh-frame` | off | pace the loop to the camera: wait for a capture this run has not seen. Off by default, where the newest frame is served repeatedly - see "Frame rate" above and "Measuring throughput" below |
-| `--depth N` | 2 | inference requests kept outstanding, so frame N+1's capture/preprocessing overlaps frame N's compute. The server still runs one request at a time, so this hides latency, it does not add cores |
-| `--servers N` | 1 | run N server processes in parallel. This is what actually uses more cores for a small model; each costs a model load |
-| `--bench N` | 0 (off) | replay one prepared tensor through the pipeline N times with no capture and no drawing, then report max inference throughput, latency spread and CPU cores busy |
+| `--every N` | 1 | classify every Nth frame; each capture is served once, so N>1 skips real frames |
+| `--servers N` | 1 | run N server processes in parallel, one request in flight each. This is what uses more than one core; each costs a model load |
+| `--report-every N` | 1 | print the status/top-k block every Nth frame. Rendering and writing a line costs milliseconds, so raise it when measuring a maximum rate |
+| `--fake-camera` | off | serve frames from a static image instead of the webcam, to load the servers past what a camera can feed |
+| `--fake-camera-fps F` | 30 | deliveries per second from the fake camera (0 = as fast as the loop asks) |
+| `--fake-camera-image PATH` | `vendor/models/images/banana.ppm` | the still image to serve |
+| `--bench N` | 0 (off) | replay one prepared tensor N times per server with no capture and no drawing, then report max inference throughput and CPU cores busy |
 | `--max-fps F` | 0 (off) | throttle the loop |
 | `--request-timeout S` | 60 | wait budget per inference (first frame includes the stick boot) |
 | `--headless` | off | command-line output only, no window |
@@ -143,35 +146,48 @@ default `examples/webcam/infer-server.sh`):
 ## Measuring throughput
 
 `--bench` measures the inference path on its own - no camera, no window, one
-frame replayed - so the number is comparable between backends and machines:
+frame replayed - so the number is comparable between backends and machines, and
+no webcam can supply enough frames to exhaust the servers:
 
 ```bash
 python3 examples/webcam/webcam_mobilenet.py --headless --device CPU \
-    --video vendor/models/images/sample_640x360.mp4 --bench 800
-# bench:  151.5 fps over 800 inferences in 5.28 s | infer_ms p50=13.0 ... | cpu=1.02 of 32 cores
+    --fake-camera --fake-camera-fps 0 --bench 500 --servers 4
+# bench:  520.7 fps aggregate from 4 servers x 600 inferences in 4.61 s |
+#         130.2 fps per server | cpu=3.98 of 32 cores
 ```
 
-Scale it with `--servers` (one server computes one request at a time, so more
-servers is how you use more cores). Measured on a 32-core amd64 host, FP32 IR,
-`--depth 2`, 800-1200 inferences per run:
+Measured on a 32-core amd64 host, FP32 IR, 500-600 inferences per server:
 
-| `--servers` | throughput before the thread-placement fix | after |
-|---|---|---|
-| 1 | ~181 fps | ~151 fps |
-| 2 | ~190 fps | ~296 fps |
-| 4 | ~190 fps | ~565 fps |
-| 8 | ~190 fps | ~1027 fps |
-| 12 | ~190 fps | ~1324 fps |
+| `--servers` | aggregate fps | per server | cores busy |
+|---|---|---|---|
+| 1 | 146 | 146 | 1.00 |
+| 2 | 277 | 139 | 1.99 |
+| 4 | 521 | 130 | 3.98 |
+| 8 | 950 | 119 | ~8 |
+| 12 | 1235 | 103 | 11.67 |
 
-The flat "before" column was OpenVINO's `CPU_BIND_THREAD=YES` pinning every
-server's inference thread to the same core - see `docs/CPU-BACKENDS.md` and
-`cpu_threading.hpp`; the small dip at one server is that thread losing core
-affinity. `cpu=` in the output is client+server cores over the steady window.
+Two things to know about reading these numbers:
 
-One caveat: a **live** run is not bench-limited. On the video path this client
-caps around ~118 fps no matter how many servers run, because decoding and
-preprocessing happen in the client's single Python thread - that is the next
-thing to parallelise if a live rate matters more than an inference number.
+* **`--bench` uses one client process per server above `--servers 1`, and it has
+  to.** A single Python process serialises its per-request work on the GIL, so a
+  thread-pooled `--servers` plateaus near one server's rate (~150-180 fps here)
+  however many servers it drives; four separate client+server pairs reach
+  ~550/s.  In a *live* run `--servers N` is still worth something up to about
+  that plateau, and the tool says so when it starts.
+* The older flat column in `docs/CPU-BACKENDS.md` (1-12 servers all ~190 fps)
+  was OpenVINO's `CPU_BIND_THREAD=YES` pinning every server's inference thread
+  to the same core - see `cpu_threading.hpp`.  The small drop at one server
+  (~181 to ~146 fps) is that thread losing core affinity.
+
+Queue depth is not a lever: measured at depth 1/2/4/8 a single server stayed
+within noise of ~180 fps, because the server computes one request at a time - so
+`--depth` was removed in favour of `--servers`.
+
+A **live** run measures something different: every frame is classified once, so
+its rate is `min(camera fps, what the client can feed)`.  With a 30 fps webcam
+that is 30 fps whatever the servers can do, and `--report-every` plus the
+`SOURCE-LIMITED` / `INFERENCE-LIMITED` note make clear which of the two you are
+looking at.
 
 The first frame is slow (~1.7 s: USB stick boot + VPU compile), then the
 loop runs at the device rate.

@@ -27,23 +27,29 @@ Usage:
   python3 examples/webcam/webcam_mobilenet.py --headless \
       --video vendor/models/images/sample_640x360.mp4 --every 10
 
-Frame rate: by default the loop is NOT paced by the camera.  The capture
-thread keeps the newest frame on hand and read() does not consume it, so when
-inference outruns the device the same frame is classified again instead of the
-loop blocking for the next capture - the fps column is then the inference
-path's throughput, and 'cam=...' beside it is the real device rate.  Use
---fresh-frame to go back to one iteration per capture (a true end-to-end
-rate), and --bench N to measure max inference throughput with no capture in
-the loop at all.  'cpu=' reports cores busy across client and server over the
-steady loop.
+Frame rate: every frame the camera delivers is classified exactly once, never
+twice.  The capture thread keeps only the newest frame and read() blocks until a
+new one arrives, so the fps column counts distinct images per second and the
+device rate ('cam=...') is its ceiling: faster inference drops frames (the
+startup note reports how many) rather than repeating them.  That is what makes
+--servers N meaningful - the servers split up *different* frames.
 
-A webcam left at its OpenCV default is frequently 1280x720 YUYV, which is
-USB-bandwidth bound at ~9 fps, so in --fresh-frame mode - and for the image
-content itself - the capture still matters:
+'cpu=' reports cores busy across the client and every server over the steady
+loop.
+
+A webcam is still worth configuring well, because it caps the distinct images
+you get: one left at OpenCV's default is frequently 1280x720 YUYV, which is
+USB-bandwidth bound at ~9 fps.
   --camera-fourcc MJPG --camera-fps 30   (compressed format, far higher rates)
   --camera-width 640 --camera-height 480 (YUYV reaches 30 fps here)
   more light                             (auto-exposure lengthens each frame)
 'v4l2-ctl --list-formats-ext -d /dev/videoN' lists the real rates.
+
+Measure the inference ceiling with a source that never runs dry (a webcam caps
+demand at 30-60 fps no matter how many servers run):
+  --fake-camera --fake-camera-fps 0 --servers 4   static image, unbounded rate
+With --fake-camera the image is preprocessed once up front, so the number is the
+servers rather than this thread's resize and normalise.
 
 Bench the inference path (no webcam needed, works off --video too):
   python3 examples/webcam/webcam_mobilenet.py --headless --device CPU \
@@ -60,14 +66,18 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from mobilenet_client import (            # noqa: E402
     DEFAULT_LABELS,
     OUTPUT_BYTES,
-    InferPipeline,
+    REPO_ROOT,
+    FakeCamera,
     LatestFrame,
     MyriadClient,
     ProcCpu,
-    ServerPool,
+    RequestPool,
+    bench_processes,
     add_camera_capture_args,
+    add_fake_camera_args,
     fourcc_from_tag,
     load_labels,
+    load_static_image,
     note,
     note_camera_settings,
     open_camera,
@@ -109,8 +119,11 @@ def main():
                          "single pass, ends at the end of the video (OpenCV must be able "
                          "to decode the codec)")
     ap.add_argument("--frames", type=int, default=0,
-                    help="in --video mode, stop after N frames (0 = whole video)")
+                    help="stop after N frames read (0 = whole video, or run until "
+                         "the window closes / Ctrl-C for a live or fake camera)")
     add_camera_capture_args(ap)
+    add_fake_camera_args(ap, default_image=os.path.join(
+        REPO_ROOT, "vendor", "models", "images", "banana.ppm"))
     ap.add_argument("--backend", choices=["auto", "host", "docker"], default="auto",
                     help="where mobilenet_server runs")
     ap.add_argument("--ir", choices=["fp16", "fp32"], default=None,
@@ -124,22 +137,21 @@ def main():
     ap.add_argument("--topk", type=int, default=5, help="classes to report")
     ap.add_argument("--every", type=int, default=1,
                     help="classify every Nth frame (others reuse the last result); "
-                         "implies --fresh-frame, since skipping only means something "
-                         "against real captures")
-    ap.add_argument("--depth", type=int, default=2,
-                    help="inference requests to keep outstanding; hides the "
-                         "capture/preprocess latency behind compute.  The server "
-                         "still runs one request at a time, so this buys back idle "
-                         "gaps, not extra cores")
+                         "each capture is served once, so N>1 skips real frames")
     ap.add_argument("--servers", type=int, default=1,
-                    help="run N inference server processes in parallel.  One "
-                         "server computes a single request at a time, so this is "
-                         "the only way to use more than about one core; it costs "
-                         "a model load per server and only scales a CPU backend")
+                    help="run N inference server processes in parallel, one request "
+                         "in flight each.  A server computes one request at a time, "
+                         "so this is the way to use more than one core; it costs a "
+                         "model load per server and only scales a CPU backend")
     ap.add_argument("--bench", type=int, default=0,
                     help="run N inferences on one prepared frame with no capture "
                          "and no display in the loop, then report max inference "
                          "throughput, latency spread and CPU cores busy (0 = off)")
+    ap.add_argument("--report-every", type=int, default=1,
+                    help="print the status/top-k block every Nth classified frame. "
+                         "Rendering and writing one line costs milliseconds per "
+                         "frame, so raise this (e.g. 100) when measuring a maximum "
+                         "rate; the fps/cpu counters still track every frame")
     ap.add_argument("--max-fps", type=float, default=0.0,
                     help="throttle the capture/classify loop to N fps (0 = unthrottled)")
     ap.add_argument("--request-timeout", type=float, default=60.0,
@@ -158,8 +170,11 @@ def main():
         note("note: label file has %d lines but the model outputs %d classes"
              % (len(labels), OUTPUT_BYTES // 4))
 
-    # ------------------------------------------------------------- source: video or camera
+    # ------------------------------------------------------------- source: video, fake or camera
     is_video = bool(args.video)
+    if args.fake_camera and is_video:
+        die("--fake-camera and --video are alternatives; pick one")
+    is_fake = bool(args.fake_camera)
     if is_video:
         cap = cv2.VideoCapture(args.video)
         if not cap.isOpened():
@@ -169,6 +184,17 @@ def main():
         note("video %s: %dx%d %.0f fps, %d frames (single pass)"
              % (args.video, w, h, cap.get(cv2.CAP_PROP_FPS),
                 int(cap.get(cv2.CAP_PROP_FRAME_COUNT))))
+    elif is_fake:
+        # A webcam tops out at 30-60 fps, so it can never tell you how fast a
+        # pool of servers could really go.  FakeCamera delivers frame ticks at
+        # any rate (0 = as fast as asked) from one still image, and every
+        # delivery is a distinct frame, so each server gets its own work.
+        image = load_static_image(args.fake_camera_image)
+        cap = FakeCamera(image, args.fake_camera_fps)
+        w, h = image.shape[1], image.shape[0]
+        note("fake camera: %s (%dx%d) delivering %s fps"
+             % (os.path.basename(args.fake_camera_image), w, h,
+                "%.0f" % args.fake_camera_fps if args.fake_camera_fps else "unbounded"))
     else:
         # Uncompressed YUYV is USB-bandwidth bound: a typical webcam offers
         # 1920x1080@6 and 1280x720@9 in YUYV but 640x480@30, while MJPG reaches
@@ -187,10 +213,19 @@ def main():
         note_camera_settings(args.camera, accepted, want_fourcc, args.camera_fps,
                              (args.camera_width, args.camera_height))
 
-    # Camera mode: a thread drains the capture into one slot holding the newest
-    # frame, which read() hands out without consuming - the loop is free to run
-    # faster than the device (see the module docstring and --fresh-frame).
-    source = LatestFrame(cap) if not is_video else None
+    # Real camera: a thread drains the capture into one slot so a slow consumer
+    # always gets the newest frame rather than a queue of stale ones, and each
+    # capture is served exactly once.  A video file or the fake camera is pulled
+    # directly instead - neither has a buffer to overflow, and giving the fake
+    # camera a free-running thread made it spin millions of deliveries a second
+    # and starve the worker threads.
+    source = LatestFrame(cap) if not (is_video or is_fake) else None
+
+    # The fake camera's pixels never change, so preprocessing happens once up
+    # front and the request bytes are built once too: the worker threads are
+    # then left with a single os.write() per request, so a measured rate is the
+    # servers' and not this process's resize, normalise or GIL handover.
+    fake_payload = memoryview(preprocess(image)).cast("B") if is_fake else None
 
     # ------------------------------------------------------------- inference
     if args.server_script and not os.path.exists(args.server_script):
@@ -214,6 +249,9 @@ def main():
     if len(clients) > 1:
         note("inference servers: %d x %s in parallel"
              % (len(clients), args.device.upper()))
+        note("note: this client process has one GIL, so a live --servers pool "
+             "stays near one server's rate; --bench N with --servers N measures "
+             "the real ceiling with one client process per server")
 
     stopping = {"flag": False}
 
@@ -229,14 +267,13 @@ def main():
         cv2.namedWindow(window, cv2.WINDOW_NORMAL)
         watcher = WindowWatcher(window)
 
-    # --- overlapped inference -----------------------------------------------
-    # InferPipeline's writer/reader threads keep requests parked at the server,
-    # so capturing and preprocessing one frame overlaps the compute of another
-    # and neither process spends the round trip idle.  --depth is how many
-    # requests may be outstanding; the server still computes one at a time, so
-    # depth buys back the client-side gaps, not extra cores.
-    pipeline = (ServerPool(clients, depth=args.depth) if len(clients) > 1
-                else InferPipeline(client, depth=args.depth))
+    # --- parallel inference servers ------------------------------------------
+    # One worker thread per server, each with one request in flight: a server is
+    # strictly serial, so depth beyond that buys nothing (measured: depth
+    # 1/2/4/8 all within noise of ~180 fps) while --servers scales.  Queuing the
+    # payload here keeps capture and preprocessing overlapping compute.
+    pipeline = RequestPool([srv.infer for srv in clients],
+                           default_timeout=args.request_timeout)
 
     last_probs = []
     last_infer_ms = 0.0
@@ -254,27 +291,36 @@ def main():
         """False once --frames has been reached in --video mode."""
         return not (is_video and args.frames and frame_no >= args.frames)
 
-    def _read_frame():
-        """Return the newest frame (BGR) from video or camera, None at EOF.
+    def _budget_left():
+        """False once --frames has been reached (any source)."""
+        return not (args.frames and frame_no >= args.frames)
 
-        Camera frames come from LatestFrame, which hands out the newest capture
-        without consuming it: when inference outruns the device the same frame
-        is classified again instead of the loop blocking for the next one, so
-        the reported rate is the inference path's throughput.  Pacing the loop
-        to the camera instead (--fresh-frame, or implicitly --every > 1) asks
-        for a capture that has not been served yet.
+    def _read_frame():
+        """Return the next frame (BGR) from video, fake camera or webcam.
+
+        Camera frames come from LatestFrame, which serves each capture exactly
+        once: the call blocks until the device delivers a new one, so an
+        iteration is always a distinct image and never a repeat.  The fake
+        camera is pulled directly, which makes it paced by demand - at
+        --fake-camera-fps 0 the loop asks for a frame as often as the servers
+        finish one, and that rate is the inference ceiling by construction.
+        None means the stream ended.
         """
         nonlocal frame_no
-        if is_video:
+        if is_video or is_fake:
             ok, f = cap.read()
             if not ok:
                 return None
         else:
-            f = source.read(fresh=args.fresh_frame or args.every > 1)
+            f = source.read()
             if f is None:
                 return None
         frame_no += 1
         return f
+
+    def _payload(frame):
+        """Preprocess a frame into a request payload (bytes for the fake camera)."""
+        return fake_payload if is_fake else preprocess(frame)
 
     def _show(img, probs, t_val, fps_s, infer_ms_val):
         """Draw classification overlay, show the frame, return True to quit."""
@@ -310,17 +356,48 @@ def main():
                 break
         if probe is None:
             die("bench: no frame available to build a tensor from")
-        tensor = preprocess(probe)
-        note("bench: %d inferences on one %dx%d frame (device=%s ir=%s depth=%d "
-             "servers=%d)" % (args.bench, probe.shape[1], probe.shape[0],
-                              args.device, ir, args.depth, len(clients)))
+        tensor = fake_payload if is_fake else preprocess(probe)
+        note("bench: %d inferences per server on one %dx%d frame "
+             "(device=%s ir=%s servers=%d)"
+             % (args.bench, probe.shape[1], probe.shape[0],
+                args.device, ir, len(clients)))
+        if len(clients) > 1:
+            # Several servers cannot be measured from this one process: its GIL
+            # serialises the per-request work and the pool plateaus at about one
+            # server's rate however many servers are attached.  Hand each server
+            # its own client process and measure the real ceiling.
+            pipeline.close()
+            for srv in clients:
+                srv.close()
+            script, backend, device, tmo = (args.server_script, args.backend,
+                                            args.device, args.request_timeout)
+
+            def make_client():
+                return MyriadClient(backend, ir, device, tmo, server_script=script)
+
+            try:
+                agg, span, cores, total = bench_processes(make_client, tensor,
+                                                          args.servers, args.bench)
+            except RuntimeError as ex:
+                die("bench: %s" % ex)
+            print("bench: %6.1f fps aggregate from %d servers x %d inferences in "
+                  "%.2f s | %5.1f fps per server | cpu=%s of %d cores"
+                  % (agg, args.servers, args.bench, span, agg / args.servers,
+                     "%.2f" % cores if cores is not None else "?",
+                     os.cpu_count() or 1),
+                  flush=True)
+            if source is not None:
+                source.close()
+            else:
+                cap.release()
+            return
+        # One server: keep the in-process path, which also reports latency spread.
         # One round trip first: it carries the device compile and would
         # otherwise dominate the average.
         pipeline.submit(tensor)
         _, warm_ms = pipeline.get()
         note("bench: warm inference %.1f ms" % warm_ms)
-        for _ in range(args.depth * len(clients)):
-            pipeline.submit(tensor)           # fill every server's queue
+        pipeline.submit(tensor)             # keep the server's queue fed
         cpu.reset()
         t0 = time.monotonic()
         lat = []
@@ -328,7 +405,7 @@ def main():
             _, infer_ms = pipeline.get()
             lat.append(infer_ms)
             if i + 1 < args.bench:
-                pipeline.submit(tensor)       # keep exactly depth outstanding
+                pipeline.submit(tensor)      # keep one request in flight
         span = time.monotonic() - t0
         lat.sort()
         cores = cpu.cores() or 0.0
@@ -357,7 +434,7 @@ def main():
         if frame is None:
             die("camera stream ended")
 
-        pipeline.submit(preprocess(frame))
+        pipeline.submit(_payload(frame))
         logits, last_infer_ms = pipeline.get()
         last_probs = topk_probs(logits, labels, args.topk)
         classified_no = 1
@@ -389,7 +466,7 @@ def main():
                 if stopping["flag"]:
                     break
             if nxt is not None:
-                pipeline.submit(preprocess(nxt))
+                pipeline.submit(_payload(nxt))
                 frame = nxt
                 classified_no += 1
             elif pipeline.in_flight == 0:
@@ -397,7 +474,11 @@ def main():
 
             # --- collect the oldest finished result -----------------------
             logits, last_infer_ms = pipeline.get()
-            last_probs = topk_probs(logits, labels, args.topk)
+            # top-k is only needed for the line or the overlay about to be
+            # drawn; sorting 1000 logits every frame is real work at a few
+            # hundred fps, so skip it on frames that report nothing.
+            if not args.headless or classified_no % args.report_every == 0:
+                last_probs = topk_probs(logits, labels, args.topk)
             stamps.append(time.monotonic())
             fps = windowed_rate(stamps)
             fps_str = "%5.1f" % fps
@@ -405,30 +486,52 @@ def main():
             cpu_str = "%.2f" % cores if cores is not None else "?"
             t = time.monotonic() - t_start
 
-            # Say once what is pacing the loop now that the capture cannot:
-            # above the device rate means the same frame is being classified
-            # repeatedly, i.e. this is inference throughput, not new images.
-            if source is not None and cam_note is None and len(stamps) > 6:
-                served, distinct = source.reuse()
-                cam_fps = source.camera_fps()
-                if cam_fps > 0 and fps > cam_fps * 1.2 and served > distinct:
-                    note("\n\nnote: inference outruns the camera - %.1f fps against a "
-                         "%.1f fps device, so each capture was classified %.1f times on "
-                         "average.  That is the inference path's throughput, not new "
-                         "images; --fresh-frame paces the loop to the camera instead.\n"
-                         % (fps, cam_fps, float(served) / max(1, distinct)))
-                elif cam_fps > 0:
-                    note("\n\nnote: loop %.1f fps, camera %.1f fps - the capture rate is "
-                         "still what paces this run\n" % (fps, cam_fps))
+            # Say once what is limiting the run: each frame is served exactly
+            # once, so either the source is the ceiling or the servers are.
+            if cam_note is None and len(stamps) > 6:
+                if is_fake and not args.fake_camera_fps:
+                    note("\n\nnote: FAKE CAMERA unbounded - frames were demanded as fast as "
+                         "the %d server%s could answer, so %.1f fps is the inference "
+                         "ceiling of this configuration (%s cores busy).  Add --servers to "
+                         "raise it; with a real camera the device rate would cap it.\n"
+                         % (len(clients), "s" if len(clients) > 1 else "", fps,
+                            cpu_str))
+                else:
+                    src_fps = (source.camera_fps() if source is not None
+                               else args.fake_camera_fps)
+                    if src_fps > 0 and fps >= src_fps * 0.9:
+                        note("\n\nnote: SOURCE-LIMITED - the source delivers %.1f fps and the "
+                             "loop keeps up (%d frames dropped), so this rate is the source, "
+                             "not inference.  Raise the capture rate, or drive the servers "
+                             "harder with --fake-camera --fake-camera-fps 0.\n"
+                             % (src_fps, source.dropped() if source else 0))
+                    elif src_fps > 0:
+                        note("\n\nnote: INFERENCE-LIMITED - the source delivers %.1f fps but the "
+                             "loop sustains only %.1f fps (%d server%s, %d frames dropped).  "
+                             "%.1f fps is this configuration's ceiling for distinct images; "
+                             "--servers N is what raises it.\n"
+                             % (src_fps, fps, len(clients),
+                                "s" if len(clients) > 1 else "",
+                                source.dropped() if source else 0, fps))
                 cam_note = True
 
             # --- reporting ------------------------------------------------
-            top = "\n".join(
-                "  %d. %7.4f %s %s" % (i + 1, p, cid, name)
-                for i, (p, cid, name) in enumerate(last_probs))
-            cam_s = (" cam=%5.1f" % source.camera_fps()) if source is not None else ""
-            print("[t=%7.2fs fps=%5s infer=%6.1fms cpu=%s cores%s]\n%s"
-                  % (t, fps_str, last_infer_ms, cpu_str, cam_s, top),
+            # Rendering the top-k block and writing a line costs milliseconds per
+            # frame, which caps a measured rate all by itself - so --report-every
+            # exists to keep the loop honest while still printing progress.
+            if classified_no % args.report_every == 0:
+                top = "\n".join(
+                    "  %d. %7.4f %s %s" % (i + 1, p, cid, name)
+                    for i, (p, cid, name) in enumerate(last_probs))
+                if is_fake:
+                    cam_s = ((" cam=%5.1f" % args.fake_camera_fps)
+                             if args.fake_camera_fps else " cam=  unbdd")
+                elif source is not None:
+                    cam_s = " cam=%5.1f" % source.camera_fps()
+                else:
+                    cam_s = ""
+                print("[t=%7.2fs fps=%5s infer=%6.1fms cpu=%s cores%s]\n%s"
+                      % (t, fps_str, last_infer_ms, cpu_str, cam_s, top),
                   flush=True)
 
             # --- display current classified frame -----------------------

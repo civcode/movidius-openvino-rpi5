@@ -11,14 +11,21 @@
 // identical FP32 IR:
 //
 //     servers   pinned (plugin default)   unpinned (this header)
-//         1        ~180 inferences/s          ~150 inferences/s
-//         2        ~190 inferences/s          ~296 inferences/s
-//         4        ~190 inferences/s          ~565 inferences/s
-//        12          (no gain available)     ~1324 inferences/s
+//         1        ~181 inferences/s          ~146 inferences/s
+//         4        ~190 inferences/s          ~152 inferences/s   one client
+//         4        ~190 inferences/s          ~521 inferences/s   client each
+//        12          (no gain available)     ~1235 inferences/s   client each
 //
 // So the pinning costs a few percent on a lone server and costs nearly everything
 // above that.  Servers therefore ask for NO by default and print what they set.
 // MYRIAD has no such option and is left untouched.
+//
+// Lifting the pin removed only the FIRST of two ceilings.  A single client
+// process still caps the request rate at about one server's throughput - its GIL
+// serialises the per-request work however many worker threads share it - so the
+// scaling rows above come from one client process per server; see
+// bench_processes() in examples/mobilenet_client.py and docs/CPU-BACKENDS.md
+// section 14 for both sets of numbers.
 //
 // Override per server with --bind-thread yes|no|numa (mobilenet_server), or by
 // editing the call site.  Note this is about *thread placement*: it does not make
