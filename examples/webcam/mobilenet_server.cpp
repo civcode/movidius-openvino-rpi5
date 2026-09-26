@@ -21,11 +21,13 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <map>
 #include <string>
 #include <vector>
 
 #include "half.hpp"  // shared IEEE-754 f16<->f32 conversion (unit-tested in examples/webcam/test_half.cpp)
 #include "device_probe.hpp"  // shared MYRIAD device probe with retry
+#include "cpu_threading.hpp"  // shared CPU plugin thread-placement fix
 using namespace InferenceEngine;
 
 namespace {
@@ -41,6 +43,7 @@ std::string dimsToString(const SizeVector& dims) {
 
 int main(int argc, char** argv) {
     std::string modelXml, modelBin, device = "MYRIAD";
+    std::string bindThread, streams, threadsNum;   // CPU plugin threading
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -51,11 +54,20 @@ int main(int argc, char** argv) {
         if (arg == "--model") { modelXml = next("--model"); }
         else if (arg == "--weights") { modelBin = next("--weights"); }
         else if (arg == "--device") { device = next("--device"); }
+        else if (arg == "--bind-thread") { bindThread = next("--bind-thread"); }
+        else if (arg == "--streams") { streams = next("--streams"); }
+        else if (arg == "--threads") { threadsNum = next("--threads"); }
         else if (arg == "-h" || arg == "--help") {
             std::printf("usage: mobilenet_server --model <IR.xml> [--weights <IR.bin>]"
                         " [--device MYRIAD]\n"
                         "stdin : 1x3x224x224 float32 tensors (602112 B each)\n"
                         "stdout: float32 logits (1000 * 4 B) per request, until EOF\n"
+                        "CPU threading (ignored for MYRIAD):\n"
+                        "  --bind-thread yes|no|numa   pin the plugin's worker threads to\n"
+                        "                              cores; default 'no', because several\n"
+                        "                              servers all pin to the same core\n"
+                        "  --streams N|auto            CPU_THROUGHPUT_STREAMS\n"
+                        "  --threads N                 CPU_THREADS_NUM\n"
                         "exit codes: 0 ok, 2 no device, 3 model/IO failure, 4 bad command line\n");
             return 0;
         } else {
@@ -81,6 +93,17 @@ int main(int argc, char** argv) {
         CNNNetwork network = ie.ReadNetwork(modelXml, modelBin);
         std::fprintf(stderr, "mobilenet_server: model %s%s loaded as %s\n", modelXml.c_str(),
                      modelBin.empty() ? "" : (" + " + modelBin).c_str(), network.getName().c_str());
+
+        // ---- CPU plugin threading ------------------------------------------
+        // Un-pin the plugin's worker threads by default: with the stock YES the
+        // whole process' inference thread lands on one core, and several servers
+        // then queue on that same core instead of using the machine.  See
+        // cpu_threading.hpp for the measured difference.
+        const std::string applied = configureCpuThreading(ie, device, bindThread,
+                                                         streams, threadsNum);
+        if (!applied.empty()) {
+            std::fprintf(stderr, "mobilenet_server: %s\n", applied.c_str());
+        }
 
         InputsDataMap inputs = network.getInputsInfo();
         if (inputs.size() != 1) { std::fprintf(stderr, "expected exactly one input\n"); return 3; }

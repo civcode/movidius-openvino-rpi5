@@ -45,6 +45,7 @@
 
 #include "half.hpp"
 #include "device_probe.hpp"  // shared MYRIAD device probe with retry
+#include "cpu_threading.hpp"  // shared CPU plugin thread-placement fix
 #include "frame_utils.hpp"   // shared PPM I/O + bilinear resize
 #include "seg_postprocess.hpp"
 
@@ -178,6 +179,13 @@ int main(int argc, char** argv) {
 
         // in stream mode stdout is the frame protocol; diagnostics go to stderr
         std::ostream& info = a.stdinMode ? std::cerr : std::cout;
+
+        // Un-pin the CPU plugin's worker threads: the stock binding lands every
+        // server process's inference thread on the same core, so several
+        // processes queue on one CPU instead of using the machine.  See
+        // cpu_threading.hpp for the measured difference.
+        const std::string cpuCfg = configureCpuThreading(ie, a.device, "", "", "");
+        if (!cpuCfg.empty()) info << "seg_detect: " << cpuCfg << "\n";
 
         const auto t0 = std::chrono::steady_clock::now();
         CNNNetwork network = ie.ReadNetwork(a.model.c_str(), a.weights.c_str());

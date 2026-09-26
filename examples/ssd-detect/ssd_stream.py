@@ -67,7 +67,7 @@ from mobilenet_client import (            # noqa: E402
     server_exit_meaning,
     stop_server,
     wait_alive,
-    windowed_fps,
+    windowed_rate,
     WindowWatcher,
 )
 
@@ -255,13 +255,14 @@ def frame_source(args):
             % (args.camera, cv2.__version__))
     note_camera_settings(args.camera, accepted, want_fourcc, args.camera_fps,
                          (args.camera_width, args.camera_height))
-    # Drain the capture in a thread and keep only the freshest frame.  This
-    # does NOT decouple the loop from the device rate: read() consumes the
-    # slot, so every iteration still needs a brand-new capture.
+    # The capture thread keeps the newest frame in one slot and read() does not
+    # consume it, so this generator can hand out the same frame repeatedly when
+    # inference outruns the device - the loop then measures inference throughput
+    # rather than the camera rate.  --fresh-frame paces it to the camera.
     src = LatestFrame(cap)
     try:
         while True:
-            frame = src.read()
+            frame = src.read(fresh=args.fresh_frame)
             if frame is None:
                 die("camera stream ended")
             yield cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -326,7 +327,7 @@ def main():
 
     t_start = time.monotonic()
     frame_no = 0
-    frame_times = []
+    stamps = []
     warmup_s = None
     try:
         for rgb in frame_source(args):
@@ -342,10 +343,13 @@ def main():
                 warmup_s = elapsed
                 note("warmup: first inference %.0f ms (includes device "
                      "compile); excluded from fps" % (warmup_s * 1000))
-            else:
-                frame_times.append(elapsed)
             t = time.monotonic() - t_start
-            fps_str = "%5.1f" % windowed_fps(frame_times) if frame_times else " warm"
+            # Rate measured as completions per wall-clock second, so it cannot
+            # drift from the t= column the way a 1/(mean duration) figure does
+            # when the timing window excludes the frame grab.
+            if warmup_s is not None:
+                stamps.append(time.monotonic())
+            fps_str = "%5.1f" % windowed_rate(stamps) if len(stamps) > 1 else " warm"
 
             # results always go to the command line
             if dets:

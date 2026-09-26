@@ -13,7 +13,9 @@ mean [0.485, 0.456, 0.406], std [0.229, 0.224, 0.225], NCHW float32).
 """
 
 import argparse
+import fcntl
 import os
+import queue
 import select
 import signal
 import subprocess
@@ -21,6 +23,7 @@ import sys
 import threading
 import time
 
+from collections import deque
 import numpy as np
 
 try:
@@ -179,12 +182,95 @@ def windowed_fps(times, n=10):
     the first (warm-up) round-trip here: it contains the one-time device
     compile and would drag the average for n frames.  The stream clients
     report that sample separately as `warm` and window only steady-state
-    frames, so the printed fps is the steady rate from frame 2 onward."""
+    frames, so the printed fps is the steady rate from frame 2 onward.
+
+    Note this is a *duration-derived* rate: it says how fast the measured work
+    would run if iterations touched end to end, and it ignores everything
+    outside the interval that was timed - waiting for a camera frame included
+    or excluded changes the number completely.  Two stream clients historically
+    timed different windows, which is why their fps columns disagreed with each
+    other and with their own t= column.  Prefer windowed_rate(), which counts
+    real completions against real elapsed time.
+    """
     tail = list(times)[-n:]
     if not tail:
         return 0.0
     total = sum(tail)
     return len(tail) / total if total > 0 else 0.0
+
+
+def windowed_rate(stamps, n=10):
+    """Completions per second over the last n wall-clock completion stamps.
+
+    Counts actual finished iterations against the elapsed span between them, so
+    the rate cannot disagree with the run's own t= column no matter where the
+    loop waits (camera, inference, display).  `stamps` holds time.monotonic()
+    values taken as each iteration finished, oldest first.
+    """
+    tail = list(stamps)[-(n + 1):]
+    if len(tail) < 2:
+        return 0.0
+    span = tail[-1] - tail[0]
+    return (len(tail) - 1) / span if span > 0 else 0.0
+
+
+class ProcCpu:
+    """Average CPU cores busy across a set of processes over a sampled window.
+
+    /proc/<pid>/stat totals utime+stime over every thread of the process, so
+    two readings bracketed by a wall-clock span give "cores busy" - the number
+    that shows whether an inference path is compute-bound or mostly idling on
+    round trips.  Start the window after warm-up (reset()) and read cores()
+    from the steady loop; dead or unreadable pids are skipped rather than
+    raising, so a server restart cannot take the reporter down.
+    """
+
+    def __init__(self, pids=()):
+        self.hz = os.sysconf("SC_CLK_TCK") or 100
+        self.logical = os.cpu_count() or 1
+        self._pids = []
+        self._ticks = 0
+        self._when = 0.0
+        self.add(pids)
+        self.reset()
+
+    def add(self, pids):
+        for pid in pids:
+            if pid is not None and int(pid) not in self._pids:
+                self._pids.append(int(pid))
+        return self
+
+    def reset(self):
+        """Begin a fresh measurement window."""
+        self._ticks = self._total_ticks()
+        self._when = time.monotonic()
+        return self
+
+    def _total_ticks(self):
+        total = 0
+        for pid in self._pids:
+            try:
+                with open("/proc/%d/stat" % pid, "rb") as fh:
+                    fields = fh.read().decode("ascii", "replace")
+                fields = fields.rsplit(")", 1)[1].split()
+                total += int(fields[11]) + int(fields[12])      # utime + stime
+            except (OSError, IndexError, ValueError):
+                continue
+        return total
+
+    def cores(self):
+        """Mean cores busy since reset(); None if nothing is tracked yet."""
+        if not self._pids:
+            return None
+        span = time.monotonic() - self._when
+        if span <= 0:
+            return None
+        return (self._total_ticks() - self._ticks) / self.hz / span
+
+    def percent(self):
+        """Cores busy as a share of all logical CPUs (None if unmeasurable)."""
+        cores = self.cores()
+        return None if cores is None else 100.0 * cores / self.logical
 
 
 def load_labels(path):
@@ -234,6 +320,26 @@ def topk_probs(logits, labels, k):
             cid, name = labels[idx]
         out.append((float(probs[idx]), cid, name))
     return out
+
+
+def pipe_capacity(stream, want=0):
+    """Return the byte capacity of the pipe behind *stream*, growing it to `want`.
+
+    A fresh Linux pipe is only 64 KiB (16 pages), which is smaller than one
+    inference request, so a writer blocks until the reader drains it.  Raising
+    the capacity is what lets a client hand the server its next whole request
+    while the server is still computing the current one.  Best effort by
+    design: F_SETPIPE_SZ is refused above /proc/sys/fs/pipe-max-size, needs
+    Linux, and an unenlarged pipe is merely slower, not wrong - so 0 (unknown)
+    or the previous size is always a safe answer.
+    """
+    try:
+        fd = stream.fileno()
+        if want:
+            fcntl.fcntl(fd, fcntl.F_SETPIPE_SZ, int(want))
+        return fcntl.fcntl(fd, fcntl.F_GETPIPE_SZ)
+    except (OSError, AttributeError, ValueError):
+        return 0
 
 
 def wait_alive(proc, timeout=2.5):
@@ -286,6 +392,12 @@ def add_camera_capture_args(ap, width_opt="--camera-width",
                          "compressed mode (a PS3 Eye / ov534, for instance) keep "
                          "their native format automatically; 'none' leaves the "
                          "device alone")
+    ap.add_argument("--fresh-frame", action="store_true",
+                    help="pace the loop to the camera: wait for a capture this run "
+                         "has not seen yet.  Off by default, where the newest frame "
+                         "is handed out repeatedly, so inference faster than the "
+                         "device shows up as throughput instead of being capped by "
+                         "the camera rate")
 
 
 def fourcc_from_tag(tag):
@@ -385,16 +497,24 @@ def note_camera_settings(index, accepted, requested_fourcc=None,
 
 
 class LatestFrame:
-    """Drains a cv2.VideoCapture continuously and keeps only the newest frame.
+    """Keeps the newest captured frame readable by any number of requests.
 
-    Inference at a few fps is slower than the camera rate, so a synchronous
-    read-then-infer loop lets the device's frame ring fill up behind each
-    request and every run classifies a frame that is one or more cycles old.
-    A dedicated thread reads frames as fast as the device produces them and
-    discards everything except the last one, so the main loop's read() always
-    returns the freshest available frame - the capture buffer is drained
-    until empty on every turn.  Used for the camera path only; --video and
-    --file keep their one-shot semantics.
+    A dedicated thread drains the device as fast as it produces frames and
+    overwrites a single slot, and read() hands out whatever is newest WITHOUT
+    consuming it.  That is what lets an inference-throughput measurement stand
+    on its own: the loop may classify one captured frame a thousand times
+    instead of being paced by the camera, and read() blocks only until the very
+    first frame exists.
+
+    read(fresh=True) restores consuming behaviour - wait for a capture this
+    caller has not been served yet - which is what you want when measuring a
+    live camera's real end-to-end rate rather than raw inference speed.
+
+    reuse() reports how many reads were served from the same capture, so a
+    caller can show plainly that an fps above the camera rate comes from
+    repeated frames, while camera_fps() gives the device rate from the capture
+    stamps.  Used for the camera path only; --video and --file keep their
+    one-shot semantics.
     """
 
     def __init__(self, cap, history=32):
@@ -403,12 +523,15 @@ class LatestFrame:
         self._frame = None
         self._eof = False
         self._stop = False
-        # camera-rate instrumentation: the loop can never run faster than the
-        # device delivers frames, and read() consumes the slot, so a slow
-        # camera - not slow inference - is often what caps the fps.  Keep the
-        # recent arrival stamps so the caller can report the true device rate
-        # and how long each read() spent blocked waiting for one.
+        # Capture bookkeeping.  _captures counts frames the device delivered
+        # (the stamps behind camera_fps()); _served counts read() calls and
+        # _distinct the captures actually handed out, so reuse() can say how
+        # much of a high fps is duplicate work rather than new images.
         self._arrivals = []
+        self._captures = 0
+        self._served = 0
+        self._distinct = 0
+        self._served_seq = 0
         self._history = max(2, history)
         self._last_wait = 0.0
         self._thread = threading.Thread(target=self._drain, daemon=True)
@@ -425,17 +548,20 @@ class LatestFrame:
             now = time.monotonic()
             with self._cv:
                 self._frame = frame
+                self._captures += 1
                 self._arrivals.append(now)
                 if len(self._arrivals) > self._history:
                     del self._arrivals[:len(self._arrivals) - self._history]
                 self._cv.notify_all()
 
-    def read(self):
-        """Block until a fresh frame has been captured and return it (BGR).
+    def read(self, fresh=False):
+        """Return the newest captured frame (BGR); None once the stream ended.
 
-        The frame is consumed (the slot empties), so a loop cannot classify
-        the same frame twice; returns None if the stream ended.  The seconds
-        spent blocked are kept for `last_wait_s`.
+        The slot is not consumed, so back-to-back calls return the same capture
+        until the drain thread replaces it.  The array is that shared slot -
+        copy it before drawing into it.  With fresh=True the call instead waits
+        for a capture that has not been served yet, which paces the caller to
+        the device rate.
         """
         t0 = time.monotonic()
         with self._cv:
@@ -443,21 +569,36 @@ class LatestFrame:
                 self._cv.wait()
             if self._frame is None:
                 return None
-            frame, self._frame = self._frame, None
+            if fresh:
+                while not self._eof and self._captures == self._served_seq:
+                    self._cv.wait()
+                if self._frame is None:
+                    return None
+            self._served += 1
+            if self._captures != self._served_seq:
+                self._distinct += 1
+                self._served_seq = self._captures
             self._last_wait = time.monotonic() - t0
-            return frame
+            return self._frame
 
     @property
     def last_wait_s(self):
         """Seconds the most recent read() blocked waiting for the device."""
         return self._last_wait
 
+    def reuse(self):
+        """(reads served, distinct captures served); reads/distinct is the
+        factor by which the loop re-classified frames instead of getting new
+        ones - 1.0 when paced to the camera, larger when inference is faster."""
+        with self._cv:
+            return self._served, self._distinct
+
     def camera_fps(self, n=16):
         """Measured device delivery rate over the last n captured frames.
 
-        This is the real ceiling on the loop rate: read() consumes the frame
-        slot, so every iteration needs a brand-new capture.  Returns 0.0
-        until two frames have arrived.
+        With the default non-consuming read() this is information, not a
+        ceiling: inference may run faster than the device delivers.  Only
+        read(fresh=True) paces the loop to this rate.
         """
         with self._cv:
             stamps = list(self._arrivals)
@@ -599,8 +740,16 @@ class MyriadClient:
             stderr=None,            # server diagnostics stream to our terminal
             start_new_session=True, # so we can kill the whole group (docker too)
         )
-        note("inference backend: %s ir=%s device=%s (server pid %d)"
-             % (backend, ir, device, self.proc.pid))
+        # The request payload is 602112 B but a fresh Linux pipe holds only
+        # 64 KiB, so a client write blocks until the server has drained most of
+        # it - and a serial server does that only after answering the previous
+        # request.  The transfer then sits on the critical path however deep the
+        # client queues, so throughput stops at 1/(compute+transfer).  Growing
+        # the pipe to fit a whole request is what makes depth > 1 pay off.
+        self.pipe_bytes = pipe_capacity(self.proc.stdin, INPUT_BYTES + 4096)
+        note("inference backend: %s ir=%s device=%s (server pid %d, request pipe "
+             "%.0f KiB)" % (backend, ir, device, self.proc.pid,
+                            self.pipe_bytes / 1024.0))
 
     def _stdin_closed_message(self):
         code = self.proc.poll()
@@ -629,18 +778,46 @@ class MyriadClient:
             buf += chunk
         return bytes(buf)
 
-    def infer(self, tensor):
-        data = tensor.tobytes()
-        if len(data) != INPUT_BYTES:
+    def send(self, tensor):
+        """Write one request tensor to the server without waiting for a reply.
+
+        Split out of infer() so a pipeline thread can queue the next payload
+        while an earlier response is still outstanding.  The server loop is
+        strictly serial (read a whole request, compute it, write the logits),
+        so a client that writes and then reads inline leaves the server idle
+        for exactly as long as it takes the client to capture, preprocess and
+        hand over the following frame.
+
+        The payload goes out with os.write() over a memoryview rather than
+        stdin.write(tensor.tobytes()).  A 602112 B request copied through the
+        GIL costs about as much as the inference itself, and every server
+        shares this process's GIL, so that copy - not the devices - caps
+        throughput once there is more than one server.  os.write() releases the
+        GIL while the kernel does the copy, and skipping tobytes() drops an
+        allocation and a memcpy per request.
+        """
+        view = memoryview(tensor).cast("B")
+        if view.nbytes != INPUT_BYTES:
             raise AssertionError("tensor is %d bytes, expected %d"
-                                 % (len(data), INPUT_BYTES))
+                                 % (view.nbytes, INPUT_BYTES))
+        if not view.c_contiguous:
+            raise AssertionError("tensor must be C-contiguous to send")
+        fd = self.proc.stdin.fileno()
+        off = 0
         try:
-            self.proc.stdin.write(data)
-            self.proc.stdin.flush()
+            while off < view.nbytes:
+                off += os.write(fd, view[off:])
         except (BrokenPipeError, OSError) as e:
             raise RuntimeError(self._stdin_closed_message()) from e
+
+    def recv(self):
+        """Read one response (1000 float32 logits) and return it as an array."""
         raw = self._read_exact(OUTPUT_BYTES)
         return np.frombuffer(raw, dtype="<f4")
+
+    def infer(self, tensor):
+        self.send(tensor)
+        return self.recv()
 
     def close(self):
         stop_server(self.proc)
@@ -649,3 +826,229 @@ class MyriadClient:
                 stream.close()
             except Exception:
                 pass
+
+
+class InferPipeline:
+    """Keep requests queued at the server so it never waits on the client.
+
+    A synchronous client spends the whole round trip idle and the server
+    spends the whole client-side prep idle.  Two daemon threads break that
+    ping-pong: a writer pushes queued tensors to stdin in submission order and
+    a reader collects logits as they come back, so up to `depth` requests are
+    parked in the pipe.  That removes the round-trip bubble but adds no CPU
+    parallelism - the server still computes one request at a time, so scaling
+    past one request's worth of cores means more server processes, not a deeper
+    queue.
+
+    Usage::
+
+        pipe = InferPipeline(client, depth=2)
+        pipe.submit(tensor)               # returns as soon as it is queued
+        logits, infer_ms = pipe.get()     # oldest result, blocks until ready
+    """
+
+    def __init__(self, client, depth=2):
+        self._client = client
+        self._depth = max(1, int(depth))
+        self._queued = queue.Queue(maxsize=self._depth)
+        self._done = queue.Queue()
+        self._sent = deque()
+        self._lock = threading.Lock()
+        self._error = None
+        self._stop = threading.Event()
+        self._in_flight = 0
+        self._writer = threading.Thread(target=self._write_loop, daemon=True)
+        self._reader = threading.Thread(target=self._read_loop, daemon=True)
+        self._writer.start()
+        self._reader.start()
+
+    # ------------------------------------------------------------- threads
+    def _fail(self, exc):
+        if self._stop.is_set():
+            return
+        with self._lock:
+            if self._error is None:
+                self._error = exc
+
+    def _raise(self):
+        with self._lock:
+            err = self._error
+        if err is not None:
+            raise RuntimeError("inference pipeline failed: %s" % err) from err
+
+    def _write_loop(self):
+        while not self._stop.is_set():
+            try:
+                tensor = self._queued.get(timeout=0.1)
+            except queue.Empty:
+                continue
+            try:
+                self._client.send(tensor)
+            except Exception as exc:
+                self._fail(exc)
+                return
+            with self._lock:
+                self._sent.append(time.monotonic())
+
+    def _read_loop(self):
+        while not self._stop.is_set():
+            try:
+                logits = self._client.recv()
+            except Exception as exc:
+                self._fail(exc)
+                return
+            with self._lock:
+                t_sent = self._sent.popleft() if self._sent else None
+            infer_s = (time.monotonic() - t_sent) if t_sent else 0.0
+            self._done.put((logits, infer_s * 1000.0))
+
+    # ------------------------------------------------------------ public
+    def submit(self, tensor):
+        """Queue *tensor* for inference; blocks only when `depth` are parked."""
+        self._raise()
+        with self._lock:
+            self._in_flight += 1
+        self._queued.put(tensor)          # back-pressure: keeps depth honoured
+
+    def poll(self, timeout=None):
+        """Like get(), but return None when nothing finished within `timeout`.
+
+        Lets a supervising thread wait without confusing "still busy" with
+        "server died": a real failure raises here rather than looking like an
+        empty result.
+        """
+        try:
+            result = self._done.get(timeout=timeout)
+        except queue.Empty:
+            self._raise()               # surface a writer/reader failure
+            return None
+        with self._lock:
+            self._in_flight -= 1
+        return result
+
+    def get(self, timeout=None):
+        """Return the oldest finished (logits, infer_ms), blocking until ready.
+
+        infer_ms spans from the moment this request was written to the server
+        until its logits come back.  The server computes one request at a time,
+        so with depth > 1 that includes the queue wait behind whichever request
+        it caught - a deeper queue raises throughput and per-request latency
+        together.  Use depth=1 when the number has to be a pure round trip.
+        """
+        if timeout is None:
+            timeout = self._client.request_timeout
+        result = self.poll(timeout)
+        if result is None:
+            raise RuntimeError("no inference response within %.0f s" % timeout)
+        return result
+
+    @property
+    def in_flight(self):
+        """Submitted but not yet collected requests."""
+        with self._lock:
+            return self._in_flight
+
+    @property
+    def depth(self):
+        return self._depth
+
+    @property
+    def request_timeout(self):
+        """The per-request budget of the client behind this pipeline."""
+        return self._client.request_timeout
+
+    def close(self):
+        self._stop.set()
+        for thread in (self._writer, self._reader):
+            thread.join(timeout=1.0)
+
+class ServerPool:
+    """Spread requests over several server processes, each with its own pipeline.
+
+    One server computes one request at a time, so a deeper queue in front of it
+    cannot raise throughput past 1/compute - the only way to use more of a many
+    core CPU is more servers.  Requests go to whichever server has the least
+    outstanding, and a collector thread per pipeline funnels results into one
+    queue, so get() returns whatever finished first regardless of which server
+    did it (results are not tied to a specific frame in a live stream, exactly
+    as with a single overlapped pipeline).
+
+    Presents the same submit()/get()/in_flight/close() face as InferPipeline,
+    so callers use one or the other interchangeably.
+
+    On a single MYRIAD stick more servers contend for the same device rather
+    than adding throughput - this is for CPU backends.
+    """
+
+    def __init__(self, clients, depth=1, name=None):
+        self._pipes = [InferPipeline(client, depth=depth) for client in clients]
+        self._out = queue.Queue()
+        self._stop = threading.Event()
+        self._lock = threading.Lock()
+        self._in_flight = 0
+        self._error = None
+        self._collectors = []
+        for index, pipe in enumerate(self._pipes):
+            thread = threading.Thread(target=self._collect, args=(index, pipe),
+                                      daemon=True)
+            thread.start()
+            self._collectors.append(thread)
+
+    def _fail(self, exc):
+        with self._lock:
+            if self._error is None:
+                self._error = exc
+
+    def _raise(self):
+        with self._lock:
+            err = self._error
+        if err is not None:
+            raise RuntimeError("inference pool failed: %s" % err) from err
+
+    def _collect(self, index, pipe):
+        while not self._stop.is_set():
+            try:
+                result = pipe.poll(0.5)
+            except Exception as exc:          # server died / protocol failure
+                self._fail(exc)
+                return
+            if result is not None:
+                self._out.put(result)
+
+    def submit(self, tensor):
+        """Queue *tensor* on the least-loaded server (blocks when all are full)."""
+        self._raise()
+        pipe = min(self._pipes, key=lambda p: p.in_flight)
+        pipe.submit(tensor)
+        with self._lock:
+            self._in_flight += 1
+
+    def get(self, timeout=None):
+        """Oldest finished (logits, infer_ms) across every server."""
+        if timeout is None:
+            timeout = self._pipes[0].request_timeout
+        try:
+            result = self._out.get(timeout=timeout)
+        except queue.Empty:
+            self._raise()
+            raise RuntimeError("no inference response within %.0f s" % timeout)
+        with self._lock:
+            self._in_flight -= 1
+        self._raise()
+        return result
+
+    @property
+    def in_flight(self):
+        with self._lock:
+            return self._in_flight
+
+    @property
+    def servers(self):
+        return len(self._pipes)
+
+    def close(self):
+        self._stop.set()
+        for thread in self._collectors:
+            thread.join(timeout=1.5)
+        for pipe in self._pipes:
+            pipe.close()

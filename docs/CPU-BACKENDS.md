@@ -396,3 +396,66 @@ CPU     : infer-*-server.sh docker CPU      (arm64: ORT for webcam,
 
 Report fps + ms/frame for each; the ratio MYRIAD/CPU answers "is the stick
 worth it".
+
+## 14. CPU thread placement: why the CPU backend would not scale past ~190 fps
+
+Investigated 2026-09-26 on the amd64 host (32 logical cores), MobileNet v2 FP32
+IR, `mobilenet_server --device CPU`.
+
+**Symptom.** `--bench` throughput sat at ~180-190 inferences/s no matter how the
+client was arranged: queue depth 1/2/4/8 made no difference, and neither did
+running 4 separate server processes - latency grew in proportion to the server
+count while the aggregate rate stayed flat.  Whole-tree CPU was ~1.05 cores, so
+the machine looked 97 % idle and the inference path looked under-loaded.
+
+**What it was not.**  Each of these was measured and rejected: the capture rate
+(bench mode uses no camera), the client (0.03 cores, and `tobytes()`-free
+`os.write()` changed nothing), the GIL (`sys.setswitchinterval()` 5 ms → 50 µs:
+187.9 / 188.4 / 188.3 fps), a cgroup CPU limit (`cpu.max` = `max 100000`, i.e.
+none), disk (server `read_bytes` = 0, `majflt` = 0), and process affinity
+(`taskset` reported 0-31).  Control: four plain CPU-burn processes did reach
+4.00 cores, so the box was not the limit.
+
+**Cause.**  The OpenVINO 2020.3 CPU plugin binds its inference worker thread per
+`CPU_BIND_THREAD`, default `YES` (`inference-engine/include/ie_plugin_config.hpp`:
+`YES` pins threads to cores, "best for static benchmarks"; `NO` disables it).
+The binding is **per thread**, invisible in the process mask, and every process
+picks the *same* core - `/proc/<pid>/task/<tid>/status` showed the plugin's
+worker with `Cpus_allowed_list: 0` in all four servers.  So N servers queue on
+CPU 0 and the workload is capped at one core's worth of inference.
+
+**Fix.**  `cpu_threading.hpp` (shared, like `device_probe.hpp`) sets
+`CPU_BIND_THREAD=NO` for CPU devices in `mobilenet_server`, `ssd_detect` and
+`seg_detect`; each logs what it applied (`mobilenet_server: CPU_BIND_THREAD=NO`).
+`mobilenet_server` also takes `--bind-thread yes|no|numa`, `--streams N|auto`
+and `--threads N`.  Verified with `scripts/cpu-parity-webcam.sh`: PASS, max
+|Δlogit| 0.000022, identical top-5.
+
+**Measured** (`--depth 2`, 800-1200 inferences per run, same host):
+
+| `--servers` | before (pinned) | after (unpinned) | cores used after |
+|---|---|---|---|
+| 1 | ~181 fps | ~151 fps | 1.02 |
+| 2 | ~190 fps | ~296 fps | 2.05 |
+| 4 | ~190 fps | ~565 fps | 4.09 |
+| 8 | ~190 fps | ~1027 fps | 8.15 |
+| 12 | ~190 fps | ~1324 fps | 12.03 |
+
+**Caveats worth remembering.**
+
+* One lone server is *slower* unpinned (~181 → ~151 fps): its thread loses core
+  affinity and cache locality.  The fix pays off only when several inferences
+  run at once, which is the point of `--servers`.
+* Unpinning does not make a single inference use several cores.  That needs
+  `CPU_THROUGHPUT_STREAMS` plus multiple `InferRequest`s; the servers keep one
+  request each, so `--servers` is the scaling axis, not `--depth`.
+* A **live** run is client-bound: on the video path it caps near ~118 fps
+  whatever `--servers` says, because decode plus preprocessing happens in the
+  client's single Python thread.  Use `--bench` to measure the inference path
+  alone.
+* The arm64 CPU servers (`mobilenet_cpu_server.py` ONNX Runtime, the TF servers)
+  were not touched - their threading knobs are different and they were not
+  measurable here.
+* Numbers recorded earlier in this document were taken with the pin in place, so
+  treat any CPU-throughput figure predating this section as measured under a
+  one-core ceiling.

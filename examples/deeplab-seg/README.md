@@ -108,16 +108,21 @@ residual flips are ArgMax ties between the two FP32 backends).
 
 ### Capture options
 
-`seg_stream.py` accepts `--camera`, `--camera-fps` and `--camera-fourcc`, and
-its geometry can be spelled either way: `--width`/`--height` (historical, default
-640×480) or `--camera-width`/`--camera-height`, which are aliases for the same
-value.
+`seg_stream.py` accepts `--camera`, `--camera-fps`, `--camera-fourcc` and
+`--fresh-frame`, and its geometry can be spelled either way: `--width`/`--height`
+(historical, default 640×480) or `--camera-width`/`--camera-height`, which are
+aliases for the same value.
 
-As in the webcam example, the capture rate - not inference - often sets the loop
-rate: `LatestFrame.read()` consumes its slot, so each iteration blocks for a
-brand-new frame. Ask for the rate you want, e.g. `--camera-fps 60` on a 640×480
-PS3 Eye, and check the `camera N: ...` line it prints at startup: the driver's
-accepted format/size/rate are read back, so you see what it really gave you.
+The capture does not pace the loop by default: `LatestFrame.read()` hands out the
+newest frame without consuming it, so an iteration never blocks waiting for the
+camera and the `fps` column is completed segments per wall-clock second (it
+agrees with `t=` rather than being derived from request durations).  Here
+segmentation is the slow side anyway (~100 ms/frame on CPU against a 30-60 fps
+camera), so each iteration still tends to get a genuinely newer frame.
+`--fresh-frame` waits for a capture the run has not seen - the true camera rate.  Ask for the
+rate you want, e.g. `--camera-fps 60` on a 640×480 PS3 Eye, and check the
+`camera N: ...` line printed at startup: the driver's accepted format/size/rate
+are read back, so you see what it really gave you.
 
 ## Streaming protocol (`seg_detect --stdin`)
 

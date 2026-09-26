@@ -165,17 +165,20 @@ server -> client:  "FRAME <w> <h> <infer_ms>"
 The client needs `numpy` + `opencv-python(-headless)` (pip; the runtime
 image deliberately ships no Python libraries).  Options mirror the single-
 image mode (`--min-conf`, `--backend`, `--device`) plus `--camera`,
-`--camera-width/-height`, `--camera-fps`, `--camera-fourcc`, `--file`,
-`--video`, `--frames`, `--request-timeout`.
+`--camera-width/-height`, `--camera-fps`, `--camera-fourcc`, `--fresh-frame`,
+`--file`, `--video`, `--frames`, `--request-timeout`.
 
-As in the webcam example, the capture rate - not inference - often sets the
-loop rate: `LatestFrame.read()` consumes its slot, so each iteration blocks
-for a brand-new frame, and a webcam left at OpenCV's default is frequently
-1280x720 YUYV, which is USB-bandwidth bound at ~9 fps.  Use
-`--camera-fourcc MJPG --camera-fps 30` (or a smaller `--camera-width/-height`)
-to raise it; `v4l2-ctl --list-formats-ext -d /dev/videoN` lists the real rates.
-Note that the `fps` column here times only `client.detect()`, so it excludes
-the wait for the camera and can read well above the true end-to-end rate.
+The capture does not pace this loop by default: `LatestFrame.read()` keeps the
+newest frame in one slot without consuming it, so if detection outruns the camera
+the same frame is detected again and the `fps` column is detection throughput
+(`cam=` in the startup line is the device rate).  `--fresh-frame` waits for a
+capture the run has not seen, which is the honest end-to-end camera rate.  The
+camera rate is worth raising on its own for what you see: a webcam left at
+OpenCV's default is frequently 1280x720 YUYV, USB-bandwidth bound at ~9 fps, so
+use `--camera-fourcc MJPG --camera-fps 30` (or a smaller
+`--camera-width/-height`); `v4l2-ctl --list-formats-ext -d /dev/videoN` lists
+the real rates.  `fps` is now completed detections per wall-clock second, so it
+agrees with the `t=` column instead of being derived from request durations.
 
 ## Verified results (MA2450, amd64 image)
 

@@ -13,6 +13,12 @@ vendor/
 work/
 examples/accuracy-test/images/
 
+# Local Python virtualenvs.  The supported host venv lives under work/
+# (work/venv-cpu, already ignored above); a venv created anywhere else - e.g.
+# examples/webcam/venv - is the same kind of scratch and must not be committed.
+venv/
+.venv/
+
 # Python bytecode
 __pycache__/
 *.pyc

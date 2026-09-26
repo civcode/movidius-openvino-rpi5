@@ -79,21 +79,27 @@ are classified in order and the run stops at the end of the video
 (`--frames N` cuts the pass short).  A short sample clip is vendored at
 `vendor/models/images/sample_640x360.mp4` (Big Buck Bunny, 640×360, ~13 s, 0.6 MB).
 
-The `fps` column is the steady-state rate over the last 10 classified
-frames; the first classified frame prints `fps= warm` because its
+The `fps` column is the steady-state rate over the last 10 completed
+iterations; the first classified frame prints `fps= warm` because its
 round-trip includes the one-time MYRIAD compile (reported on a separate
-`warmup:` line and excluded from the average).
+`warmup:` line and excluded from the average).  It is counted as completed
+iterations per wall-clock second, so it cannot drift away from the `t=` column.
 
-**The camera, not inference, often sets that rate.** `LatestFrame.read()`
-consumes its slot, so every loop iteration has to block for a brand-new
-capture - the loop can never run faster than the device delivers frames.  A
-webcam left at OpenCV's default is frequently 1280x720 **YUYV**, which is
-USB-bandwidth bound at ~9 fps (the same device typically does 640x480@30 in
-YUYV and 720p@60 in MJPG), so `fps~10` with an idle-looking CPU usually means
-the capture rate is the ceiling rather than the backend.  The status line
-reports the measured device rate as `cam=...`, and after 5 steady frames a
-one-time note states whether the run is camera-bound or inference-bound.
-To raise it:
+**By default the camera does not set that rate.** `LatestFrame.read()` keeps the
+newest capture in one slot and does **not** consume it, so when inference
+outruns the device the same frame is classified again instead of the loop
+blocking for the next capture; the `fps` you see is then the inference path's
+throughput, and `cam=` beside it is the real device rate.  After a few steady
+frames a one-time note says which of the two the run is doing, and how many
+times on average each capture was classified.  Pass `--fresh-frame` to go back
+to one iteration per capture - that is the honest end-to-end camera rate, and
+it is the number to compare against a `cam=` reading.
+
+The device still matters for what you *see*: a webcam left at OpenCV's default
+is frequently 1280x720 **YUYV**, which is USB-bandwidth bound at ~9 fps (the
+same device typically does 640x480@30 in YUYV and 720p@60 in MJPG), so without
+`--fresh-frame` a stale frame just gets re-classified many times.  To raise the
+capture rate itself:
 
 ```bash
 # compressed format: far higher rates than bandwidth-bound YUYV
@@ -125,10 +131,47 @@ default `examples/webcam/infer-server.sh`):
 | `--ir fp16\|fp32` | auto (fp32 with `--device CPU`, else fp16) | model precision; auto because the 2020.3 CPU plugin cannot take FP16 inputs |
 | `--device NAME` | MYRIAD | `MYRIAD` (default) or `CPU`.  CPU per target: amd64 = OpenVINO CPU (FP32 IR); arm64 = Python ONNX Runtime server `mobilenet_cpu_server.py` (host needs `pip install onnxruntime`; docker uses the in-image copy); armv7 = not supported (error).  See `docs/CPU-BACKENDS.md` |
 | `--topk N` | 5 | classes to report / draw |
-| `--every N` | 1 | classify every Nth frame |
+| `--every N` | 1 | classify every Nth frame (implies `--fresh-frame`: skipping only counts against real captures) |
+| `--fresh-frame` | off | pace the loop to the camera: wait for a capture this run has not seen. Off by default, where the newest frame is served repeatedly - see "Frame rate" above and "Measuring throughput" below |
+| `--depth N` | 2 | inference requests kept outstanding, so frame N+1's capture/preprocessing overlaps frame N's compute. The server still runs one request at a time, so this hides latency, it does not add cores |
+| `--servers N` | 1 | run N server processes in parallel. This is what actually uses more cores for a small model; each costs a model load |
+| `--bench N` | 0 (off) | replay one prepared tensor through the pipeline N times with no capture and no drawing, then report max inference throughput, latency spread and CPU cores busy |
 | `--max-fps F` | 0 (off) | throttle the loop |
 | `--request-timeout S` | 60 | wait budget per inference (first frame includes the stick boot) |
 | `--headless` | off | command-line output only, no window |
+
+## Measuring throughput
+
+`--bench` measures the inference path on its own - no camera, no window, one
+frame replayed - so the number is comparable between backends and machines:
+
+```bash
+python3 examples/webcam/webcam_mobilenet.py --headless --device CPU \
+    --video vendor/models/images/sample_640x360.mp4 --bench 800
+# bench:  151.5 fps over 800 inferences in 5.28 s | infer_ms p50=13.0 ... | cpu=1.02 of 32 cores
+```
+
+Scale it with `--servers` (one server computes one request at a time, so more
+servers is how you use more cores). Measured on a 32-core amd64 host, FP32 IR,
+`--depth 2`, 800-1200 inferences per run:
+
+| `--servers` | throughput before the thread-placement fix | after |
+|---|---|---|
+| 1 | ~181 fps | ~151 fps |
+| 2 | ~190 fps | ~296 fps |
+| 4 | ~190 fps | ~565 fps |
+| 8 | ~190 fps | ~1027 fps |
+| 12 | ~190 fps | ~1324 fps |
+
+The flat "before" column was OpenVINO's `CPU_BIND_THREAD=YES` pinning every
+server's inference thread to the same core - see `docs/CPU-BACKENDS.md` and
+`cpu_threading.hpp`; the small dip at one server is that thread losing core
+affinity. `cpu=` in the output is client+server cores over the steady window.
+
+One caveat: a **live** run is not bench-limited. On the video path this client
+caps around ~118 fps no matter how many servers run, because decoding and
+preprocessing happen in the client's single Python thread - that is the next
+thing to parallelise if a live rate matters more than an inference number.
 
 The first frame is slow (~1.7 s: USB stick boot + VPU compile), then the
 loop runs at the device rate.

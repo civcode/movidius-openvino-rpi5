@@ -63,7 +63,7 @@ from mobilenet_client import (            # noqa: E402
     server_exit_meaning,
     stop_server,
     wait_alive,
-    windowed_fps,
+    windowed_rate,
     WindowWatcher,
 )
 
@@ -365,7 +365,7 @@ def main():
         stopping["flag"] = True
     signal.signal(signal.SIGINT, on_sigint)
 
-    frame_times = []
+    stamps = []
     warmup_s = None
     try:
         if args.file:
@@ -391,9 +391,9 @@ def main():
                     note("warmup: first segmentation %.0f ms (includes device "
                          "compile); excluded from fps" % (warmup_s * 1000))
                 else:
-                    frame_times.append(elapsed)
+                    stamps.append(time.monotonic())
                 n += 1
-                fps_str = "%5.1f" % windowed_fps(frame_times) if frame_times else " warm"
+                fps_str = "%5.1f" % windowed_rate(stamps) if len(stamps) > 1 else " warm"
                 print("[frame %d] %dx%d %5s fps total %6.0f ms (infer %5.0f ms): "
                       % (n, w, h, fps_str, total_ms, infer_ms)
                       + ", ".join("%s %.1f%%" % (name, 100.0 * px / (w * h))
@@ -438,9 +438,10 @@ def main():
                         "v4l2-ctl --list-devices" % (args.camera, cv2.__version__))
                 note_camera_settings(args.camera, accepted, want_fourcc,
                                      args.camera_fps, (args.width, args.height))
-            # Drain the capture in a thread and keep only the freshest frame.
-            # This does NOT decouple the loop from the device rate: read()
-            # consumes the slot, so every iteration needs a brand-new capture.
+            # The capture thread keeps the newest frame in one slot and read()
+            # does not consume it, so the loop is not paced by the device: when
+            # inference outruns the camera the same frame is segmented again.
+            # --fresh-frame restores one iteration per capture.
             source = LatestFrame(cap) if not is_video else None
             last_mask = None
             last_dims = None
@@ -460,7 +461,7 @@ def main():
                         if not ok:
                             break  # end of video - clean stop
                     else:
-                        frame = source.read()
+                        frame = source.read(fresh=args.fresh_frame)
                         if frame is None:
                             die("camera stream ended")
                     video_frames += 1
@@ -475,9 +476,9 @@ def main():
                              "device compile); excluded from fps"
                              % (warmup_s * 1000))
                     else:
-                        frame_times.append(elapsed)
-                    fps_str = ("%5.1f" % windowed_fps(frame_times)
-                               if frame_times else " warm")
+                        stamps.append(time.monotonic())
+                    fps_str = ("%5.1f" % windowed_rate(stamps)
+                               if len(stamps) > 1 else " warm")
                     last_mask = mask
                     last_dims = (w, h)
                     if args.headless:
@@ -517,7 +518,7 @@ def main():
             except Exception:
                 pass
         client.close()
-        frames_done = len(frame_times) + (1 if warmup_s is not None else 0)
+        frames_done = len(stamps) + (1 if warmup_s is not None else 0)
         note("bye (%d frame%s read)"
              % (frames_done, "s" if frames_done != 1 else ""))
     return 0
