@@ -64,6 +64,7 @@ from mobilenet_client import (            # noqa: E402
     LatestFrame,
     ProcCpu,
     RequestPool,
+    resolve_servers,
     spawn_servers,
     write_all,
     add_camera_capture_args,
@@ -288,11 +289,13 @@ def frame_source(args):
     # the device delivers a new one, so a frame is never detected twice and
     # --servers splits up distinct frames.  A faster loop drops frames instead.
     src = LatestFrame(cap)
+    n = 0
     try:
-        while True:
+        while args.frames == 0 or n < args.frames:
             frame = src.read()
             if frame is None:
                 die("camera stream ended")
+            n += 1
             yield cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     finally:
         src.close()
@@ -323,8 +326,10 @@ def main():
                          "single pass, ends at the end of the video (OpenCV must be able "
                          "to decode the codec)")
     ap.add_argument("--frames", type=int, default=0,
-                    help="in --file/--video mode, stop after N frames "
-                         "(0 = loop the image forever / whole video)")
+                    help="stop after N frames read (0 = loop the image forever, "
+                         "the whole video, or run until quit for a live/fake "
+                         "camera).  Applies to every source, so a camera run can "
+                         "be bounded for testing")
     ap.add_argument("--backend", choices=["auto", "host", "docker"], default="auto",
                     help="where ssd_detect runs")
     ap.add_argument("--device", default="MYRIAD",
@@ -347,7 +352,7 @@ def main():
     clients = spawn_servers(
         lambda: SsdClient(args.infer_server, args.backend, args.device,
                           args.min_conf, args.request_timeout),
-        args.servers)
+        resolve_servers(args.servers, args.device))
     client = clients[0]
     if len(clients) > 1:
         note("inference servers: %d x %s in parallel, one request each"

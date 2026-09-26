@@ -32,6 +32,20 @@ except ImportError:
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(HERE, ".."))
+
+# CPU affinity as this process started, captured before any imaging library is
+# imported.  Some OpenCV wheels call sched_setaffinity() during import and leave
+# the process pinned to a single core - measured with opencv-python 4.6.0 on a
+# 32-core host: `import cv2` cut the mask from 32 cpus to [0], while the 5.0.0
+# wheel left it alone.  Children inherit the mask, so every inference server the
+# client spawns ends up on that one core: four servers then deliver one server's
+# throughput at ~2.4x the reported per-request time, which looks exactly like a
+# scaling bug in the pipeline (10.5 vs 23.4 fps on seg_stream).
+_ENTRY_CPUS = None
+try:
+    _ENTRY_CPUS = os.sched_getaffinity(0)
+except (OSError, AttributeError):
+    pass
 INFER_SERVER = os.path.join(HERE, "webcam", "infer-server.sh")
 DEFAULT_LABELS = os.path.join(REPO_ROOT, "vendor/models/labels/synset.txt")
 
@@ -430,6 +444,86 @@ def wait_alive(proc, timeout=2.5):
         time.sleep(0.05)
 
 
+def _parent_cpuset():
+    """The CPU list this process's parent may use, or None if unreadable.
+
+    The launcher (shell, tmux, systemd) hands python its allowed CPUs, so a
+    library that narrows the mask during import shows up as child < parent.
+    If the parent is equally narrow the restriction came from outside -
+    `taskset -c 0`, a cpuset cgroup - and must be respected, which is what
+    reading it here buys without depending on import order.
+    """
+    try:
+        with open("/proc/%d/status" % os.getppid()) as fh:
+            spec = None
+            for line in fh:
+                if line.startswith("Cpus_allowed_list:"):
+                    spec = line.split(":", 1)[1].strip()
+                    break
+        if spec is None:
+            return None
+        out = set()
+        for part in spec.split(","):
+            if "-" in part:
+                lo, hi = part.split("-")
+                out.update(range(int(lo), int(hi) + 1))
+            elif part.isdigit():
+                out.add(int(part))
+        return out or None
+    except (OSError, ValueError):
+        return None
+
+
+def restore_entry_affinity():
+    """Undo a library narrowing this process's CPU affinity.  Only ever widens.
+
+    Returns a printable note when it changed something, else None.  The target is
+    the union of the mask seen when this module was imported and the parent's
+    mask: the first catches an import that ran after us, the second catches the
+    common case where a cv2 wheel pins the process before anything of ours loads.
+    Neither overrides a deliberate taskset/cpuset limit, because the parent
+    would carry that too.
+    """
+    try:
+        cur = os.sched_getaffinity(0)
+    except (OSError, AttributeError):
+        return None
+    want = set(cur)
+    for cand in (_ENTRY_CPUS, _parent_cpuset()):
+        if cand:
+            want |= set(cand)
+    if not want or want == set(cur):
+        return None
+    try:
+        os.sched_setaffinity(0, want)
+    except OSError:
+        return None                          # not permitted; leave it alone
+    shown = ",".join(str(c) for c in sorted(cur)[:4]) + ("..." if len(cur) > 4 else "")
+    return ("CPU affinity had been narrowed to %d core(s) [%s] during imports; "
+            "restored to %d, so the servers are not confined to one core"
+            % (len(cur), shown, len(want)))
+
+
+def resolve_servers(requested, device):
+    """How many server processes `device` can actually use.
+
+    A CPU backend scales with processes.  One Movidius stick does not: it is a
+    single device, so a second server either fails to find it (after `waitDevice`
+    has retried for ~12 s, which looks like a hang) or the two contend on the
+    same mvnc/XLink session - and a wedged stick needs unplugging.  Requesting
+    more is therefore clamped to one with a note, not attempted.
+    """
+    want = max(1, int(requested))
+    dev = (device or "").upper()
+    if want > 1 and dev != "CPU":
+        note("note: --servers %d ignored for %s - one stick is one device, so "
+             "extra servers would contend for it (or fail to find it after "
+             "waitDevice retries) and can wedge it until it is replugged; "
+             "running a single server" % (want, device))
+        return 1
+    return want
+
+
 def spawn_servers(factory, count, startup_window=2.5):
     """Start `count` servers so their model loads overlap, then fail fast on death.
 
@@ -442,6 +536,12 @@ def spawn_servers(factory, count, startup_window=2.5):
 
     factory() must return an object exposing .proc (the subprocess.Popen).
     """
+    # Repair affinity first: servers inherit the parent's CPU mask, so a library
+    # that pinned this process during import would confine every server to that
+    # same core (see restore_entry_affinity()).
+    fixed = restore_entry_affinity()
+    if fixed:
+        note("note: " + fixed)
     servers = [factory() for _ in range(max(1, int(count)))]
     deadline = time.monotonic() + startup_window
     while time.monotonic() < deadline:

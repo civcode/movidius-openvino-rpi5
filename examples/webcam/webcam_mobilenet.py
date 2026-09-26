@@ -72,6 +72,7 @@ from mobilenet_client import (            # noqa: E402
     MyriadClient,
     ProcCpu,
     RequestPool,
+    resolve_servers,
     spawn_servers,
     bench_processes,
     add_camera_capture_args,
@@ -236,14 +237,14 @@ def main():
     # needs several processes - that is what --servers buys.  A single MYRIAD
     # stick stays one device however many processes hold it, so extra servers
     # contend there instead of scaling.
-    if args.servers > 1 and args.device.upper() != "CPU":
-        note("note: --servers %d scales a CPU backend; one %s device is still one "
-             "device, so these servers will contend rather than add throughput"
-             % (args.servers, args.device.upper()))
+    # A CPU backend scales with processes - that is what --servers buys.  One
+    # MYRIAD stick is a single device however many processes hold it, so
+    # resolve_servers() clamps non-CPU devices to one instead of contending.
+    nservers = resolve_servers(args.servers, args.device)
     clients = spawn_servers(
         lambda: MyriadClient(args.backend, ir, args.device, args.request_timeout,
                              server_script=args.server_script),
-        args.servers)
+        nservers)
     client = clients[0]
     if len(clients) > 1:
         note("inference servers: %d x %s in parallel"
@@ -377,12 +378,12 @@ def main():
 
             try:
                 agg, span, cores, total = bench_processes(make_client, tensor,
-                                                          args.servers, args.bench)
+                                                          nservers, args.bench)
             except RuntimeError as ex:
                 die("bench: %s" % ex)
             print("bench: %6.1f fps aggregate from %d servers x %d inferences in "
                   "%.2f s | %5.1f fps per server | cpu=%s of %d cores"
-                  % (agg, args.servers, args.bench, span, agg / args.servers,
+                  % (agg, nservers, args.bench, span, agg / nservers,
                      "%.2f" % cores if cores is not None else "?",
                      os.cpu_count() or 1),
                   flush=True)

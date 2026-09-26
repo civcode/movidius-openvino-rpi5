@@ -61,6 +61,7 @@ from mobilenet_client import (            # noqa: E402
     ProcCpu,
     DisplayPump,
     RequestPool,
+    resolve_servers,
     spawn_servers,
     write_all,
     add_camera_capture_args,
@@ -335,9 +336,10 @@ def main():
     ap.add_argument("--servers", type=int, default=1,
                     help="run N inference server processes in parallel, one request "
                          "in flight each; this model is ~100 ms/frame on CPU, so "
-                         "several servers is how to use more than one core.  With "
-                         "N>1 the window overlay can show a mask from a different "
-                         "frame, since results return in completion order")
+                         "several servers is how to use more than one core.  Clamped "
+                         "to 1 for MYRIAD (one stick is one device).  With N>1 the "
+                         "window overlay can show a mask from a different frame, "
+                         "since results return in completion order")
     ap.add_argument("--file", default=None,
                     help="read frames from this image file (.ppm/.jpg/.png) instead of the webcam "
                          "(image kept at its native resolution)")
@@ -345,8 +347,10 @@ def main():
                     help="process this video file (.mp4/.avi/.mkv/.mov) instead of the webcam "
                          "(single pass, ends at the end of the video; frames kept at native size)")
     ap.add_argument("--frames", type=int, default=0,
-                    help="in --file/--video mode, stop after N frames "
-                         "(0 = loop the image forever / whole video)")
+                    help="stop after N frames read (0 = loop the image forever, "
+                         "the whole video, or run until quit for a live/fake "
+                         "camera).  Applies to every source, so a camera run can "
+                         "be bounded for testing")
     ap.add_argument("--headless", action="store_true",
                     help="no GUI window; results are printed to stdout")
     ap.add_argument("--window-size", default=None, metavar="WxH",
@@ -374,7 +378,7 @@ def main():
     clients = spawn_servers(
         lambda: SegClient(args.server_cmd, args.backend, args.device,
                           args.request_timeout),
-        args.servers)
+        resolve_servers(args.servers, args.device))
     client = clients[0]
     if len(clients) > 1:
         note("inference servers: %d x %s in parallel, one request each"
@@ -516,9 +520,8 @@ def main():
                     nonlocal video_frames
                     if stopping["flag"]:
                         return None
-                    if (is_video or is_fake) and args.frames \
-                            and video_frames >= args.frames:
-                        return None
+                    if args.frames and video_frames >= args.frames:
+                        return None      # --frames bounds any source, camera too
                     if is_video or is_fake:
                         ok, frame = cap.read()
                         if not ok:
