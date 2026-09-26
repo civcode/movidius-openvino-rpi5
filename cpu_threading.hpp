@@ -20,12 +20,12 @@
 // above that.  Servers therefore ask for NO by default and print what they set.
 // MYRIAD has no such option and is left untouched.
 //
-// Lifting the pin removed only the FIRST of two ceilings.  A single client
-// process still caps the request rate at about one server's throughput - its GIL
-// serialises the per-request work however many worker threads share it - so the
-// scaling rows above come from one client process per server; see
-// bench_processes() in examples/mobilenet_client.py and docs/CPU-BACKENDS.md
-// section 14 for both sets of numbers.
+// Lifting the pin removed only the FIRST of two ceilings.  The second was in the
+// clients: they submitted one request and immediately collected it, so one
+// request was ever outstanding and extra servers idled.  With the pool kept full
+// a single client process scales near-linearly (148/310/617/1001/1355 fps at
+// 1/2/4/8/12 servers on this host).  It was NOT the GIL, which an earlier
+// revision of these notes claimed; see docs/CPU-BACKENDS.md section 14.
 //
 // Override per server with --bind-thread yes|no|numa (mobilenet_server), or by
 // editing the call site.  Note this is about *thread placement*: it does not make

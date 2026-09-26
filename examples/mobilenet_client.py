@@ -198,7 +198,7 @@ def windowed_fps(times, n=10):
     return len(tail) / total if total > 0 else 0.0
 
 
-def windowed_rate(stamps, n=10):
+def windowed_rate(stamps, n=50):
     """Completions per second over the last n wall-clock completion stamps.
 
     Counts actual finished iterations against the elapsed span between them, so
@@ -207,6 +207,12 @@ def windowed_rate(stamps, n=10):
     values taken as each iteration finished, oldest first (a list - it is
     tail-sliced, not copied, because measuring at a few hundred fps means this
     runs on every frame).
+
+    The window is deliberately wide: with several servers in flight results come
+    back in bursts (one per server, then a gap while they all compute again), and
+    a 10-sample window can sit entirely inside a burst and read far above the
+    true average - measured as 41 fps on a 30 fps camera.  50 completions spans
+    several bursts for any realistic server count.
     """
     if len(stamps) < 2:
         return 0.0
@@ -366,6 +372,24 @@ def topk_probs(logits, labels, k):
             cid, name = labels[idx]
         out.append((float(probs[idx]), cid, name))
     return out
+
+
+def write_all(fd, data):
+    """Write every byte of a bytes-like to *fd*, one syscall at a time.
+
+    Used instead of a buffered file object for request payloads: it writes
+    straight from the caller's buffer, so a frame is copied once into the pipe
+    instead of once by numpy and again by the BufferedWriter, and os.write()
+    drops the GIL for the duration.  Both matter - a seg/ssd frame is ~0.9 MB,
+    and the per-request client work is what limits how many servers one process
+    can keep busy.
+    """
+    view = memoryview(data)
+    if view.itemsize != 1 or view.ndim != 1:
+        view = view.cast("B")
+    off = 0
+    while off < view.nbytes:
+        off += os.write(fd, view[off:])
 
 
 def pipe_capacity(stream, want=0):

@@ -61,6 +61,7 @@ from mobilenet_client import (            # noqa: E402
     ProcCpu,
     RequestPool,
     spawn_servers,
+    write_all,
     add_camera_capture_args,
     add_fake_camera_args,
     fourcc_from_tag,
@@ -164,9 +165,9 @@ class SegClient:
         """Send one RGB frame; returns (classes, mask_bytes, total_ms,
         infer_ms) where classes is a list of (id, name, pixels)."""
         try:
-            self.proc.stdin.write(struct.pack("<II", w, h))
-            self.proc.stdin.write(np.ascontiguousarray(rgb, dtype=np.uint8).tobytes())
-            self.proc.stdin.flush()
+            fd = self.proc.stdin.fileno()
+            write_all(fd, struct.pack("<II", w, h))
+            write_all(fd, np.ascontiguousarray(rgb, dtype=np.uint8))
         except (BrokenPipeError, OSError) as e:
             code = self.proc.poll()
             if code is None:
@@ -379,7 +380,11 @@ def main():
              % (len(clients), args.device.upper()))
     # One worker thread per server, each doing a whole request/response on its
     # own connection: a server is serial, so N servers is the way to use N cores.
-    pool = RequestPool([(lambda p, c=cli: c.segment(*p)) for cli in clients],
+    # The BGR->RGB flip happens here, inside the worker, and the payload travels
+    # back out with the result so the overlay is drawn on the frame that made it.
+    pool = RequestPool([(lambda p, c=cli:
+                         (c.segment(p[0][:, :, ::-1], p[1], p[2]), p))
+                        for cli in clients],
                        default_timeout=args.request_timeout)
     cpu = ProcCpu([os.getpid()] + [c.proc.pid for c in clients])
 
@@ -491,24 +496,41 @@ def main():
                 show_window(win, None, args.window_size)  # resizable from frame one
                 watcher = WindowWatcher(win)
             try:
-                while True:
+                def _grab():
+                    """Next (frame, w, h) payload, or None at end of stream."""
+                    nonlocal video_frames
                     if stopping["flag"]:
-                        break
-                    if (is_video or is_fake) and args.frames and video_frames >= args.frames:
-                        break
+                        return None
+                    if (is_video or is_fake) and args.frames \
+                            and video_frames >= args.frames:
+                        return None
                     if is_video or is_fake:
                         ok, frame = cap.read()
                         if not ok:
-                            break  # end of video - clean stop
+                            return None          # end of video - clean stop
                     else:
                         frame = source.read()
                         if frame is None:
                             die("camera stream ended")
                     video_frames += 1
                     h, w = frame.shape[:2]
-                    rgb = frame[:, :, ::-1]
-                    pool.submit((rgb, w, h))
-                    (classes, mask, total_ms, infer_ms), elapsed_ms = pool.get()
+                    return (frame, w, h)
+
+                # Prime one request per server, then refill after each collect:
+                # getting the result immediately after submitting leaves all but
+                # one server idle, which is why a larger pool changed nothing.
+                live = 0
+                while live < len(clients):
+                    payload = _grab()
+                    if payload is None:
+                        break
+                    pool.submit(payload)
+                    live += 1
+
+                while live:
+                    ((classes, mask, total_ms, infer_ms), (frame, w, h)), \
+                        elapsed_ms = pool.get()
+                    live -= 1
                     if warmup_s is None:
                         warmup_s = elapsed_ms / 1000.0
                         note("warmup: first segmentation %.0f ms (includes "
@@ -544,6 +566,11 @@ def main():
                                 or (watcher.closed() if watcher else False) \
                                 or cv2.getWindowProperty(win, cv2.WND_PROP_VISIBLE) < 1:
                             break
+                    # refill after collecting, so `servers` requests stay in flight
+                    payload = _grab()
+                    if payload is not None:
+                        pool.submit(payload)
+                        live += 1
             finally:
                 if source is not None:
                     source.close()

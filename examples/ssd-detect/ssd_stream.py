@@ -65,6 +65,7 @@ from mobilenet_client import (            # noqa: E402
     ProcCpu,
     RequestPool,
     spawn_servers,
+    write_all,
     add_camera_capture_args,
     add_fake_camera_args,
     fourcc_from_tag,
@@ -121,9 +122,9 @@ class SsdClient:
         detections: [(label, score, x1, y1, x2, y2), ...] in image pixels."""
         h, w = rgb.shape[:2]
         try:
-            self.proc.stdin.write(struct.pack("<II", w, h))
-            self.proc.stdin.write(np.ascontiguousarray(rgb, dtype=np.uint8).tobytes())
-            self.proc.stdin.flush()
+            fd = self.proc.stdin.fileno()
+            write_all(fd, struct.pack("<II", w, h))
+            write_all(fd, np.ascontiguousarray(rgb, dtype=np.uint8))
         except (BrokenPipeError, OSError) as e:
             code = self.proc.poll()
             if code is None:
@@ -310,9 +311,9 @@ def main():
                     help="run N inference server processes in parallel, one request "
                          "in flight each.  A server computes one request at a time, "
                          "so this is how to use more than one core; each extra "
-                         "server costs a model load.  Note a single Python client "
-                         "process tops out near 180 inferences/s on its GIL, so "
-                         "rates above that need several client processes")
+                         "server costs a model load.  Against a live camera the "
+                         "source caps distinct frames - use --fake-camera to "
+                         "measure the servers alone")
     ap.add_argument("infer_server", nargs="?", default=INFER_SERVER,
                     help="server script to run for inference (see examples/ssd-detect/README.md)")
     ap.add_argument("--file", default=None,
@@ -377,11 +378,23 @@ def main():
     stamps = []
     warmup_s = None
     try:
-        for rgb in frame_source(args):
+        frames = frame_source(args)
+        # Keep one request in flight per server.  Collecting immediately after
+        # submitting leaves the pool with a single outstanding request however
+        # many servers --servers started, which is exactly why a bigger pool
+        # changed nothing: the extra servers just sat idle.
+        live = 0
+        while live < len(clients):
+            payload = next(frames, None)
+            if payload is None:
+                break
+            pool.submit(payload)
+            live += 1
+        while live:
             if stopping["flag"]:
                 break
-            pool.submit(rgb)
             (result, rgb), elapsed_ms = pool.get()
+            live -= 1
             w, h, infer_ms, dets = result
             frame_no += 1
             elapsed = elapsed_ms / 1000.0
@@ -426,6 +439,11 @@ def main():
                         or (watcher.closed() if watcher else False) \
                         or cv2.getWindowProperty(window, cv2.WND_PROP_VISIBLE) < 1:
                     break
+            # refill after collecting, so `servers` requests stay outstanding
+            payload = next(frames, None)
+            if payload is not None:
+                pool.submit(payload)
+                live += 1
     except RuntimeError as ex:
         die("inference failure: %s" % ex)
     finally:

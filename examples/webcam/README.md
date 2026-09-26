@@ -168,12 +168,15 @@ Measured on a 32-core amd64 host, FP32 IR, 500-600 inferences per server:
 
 Two things to know about reading these numbers:
 
-* **`--bench` uses one client process per server above `--servers 1`, and it has
-  to.** A single Python process serialises its per-request work on the GIL, so a
-  thread-pooled `--servers` plateaus near one server's rate (~150-180 fps here)
-  however many servers it drives; four separate client+server pairs reach
-  ~550/s.  In a *live* run `--servers N` is still worth something up to about
-  that plateau, and the tool says so when it starts.
+* **The pool has to be kept full.** Submitting one request and immediately
+  collecting it leaves a single request outstanding no matter how many servers
+  `--servers` starts - the extra servers idle, and a live run shows no gain at
+  all.  The examples now prime one request per server and refill after each
+  collect.  Measured with `--fake-camera --fake-camera-fps 0` from **one** client
+  process: 148 / 310 / 617 / 1001 / 1355 fps at 1 / 2 / 4 / 8 / 12 servers
+  (cpu 1.0 / 2.0 / 4.0 / 7.9 / 11.6 cores).  `--bench` with `--servers` still
+  uses one client process per server (`bench_processes`), which is a useful
+  cross-check but no longer the only way to scale.
 * The older flat column in `docs/CPU-BACKENDS.md` (1-12 servers all ~190 fps)
   was OpenVINO's `CPU_BIND_THREAD=YES` pinning every server's inference thread
   to the same core - see `cpu_threading.hpp`.  The small drop at one server

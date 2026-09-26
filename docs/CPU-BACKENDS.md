@@ -435,28 +435,28 @@ and `--threads N`.  Verified with `scripts/cpu-parity-webcam.sh`: PASS, max
 sufficient: with the pin gone, *one* client process still cannot push more than
 about one server's worth of requests, whatever `--servers` says.
 
-| `--servers` | one client process, pooled threads | one client process per server |
+| `--servers` | pool left one-request-in-flight | pool kept full |
 |---|---|---|
-| 1 | ~146 fps | ~146 fps |
-| 2 | ~155 fps | ~277 fps (139 each) |
-| 4 | ~152 fps | ~521 fps (130 each) |
-| 8 | ~137 fps | ~950 fps (119 each) |
-| 12 | - | ~1235 fps (103 each) |
+| 1 | ~146 fps | ~148 fps (1.00 cores) |
+| 2 | ~155 fps | ~310 fps (2.00 cores) |
+| 4 | ~152 fps | ~617 fps (3.98 cores) |
+| 8 | ~137 fps | ~1001 fps (7.91 cores) |
+| 12 | - | ~1355 fps (11.61 cores) |
 
-The flat second column is the GIL again: each request costs this interpreter
-queue handoffs, response parsing and syscall setup, so those costs serialise no
-matter which worker thread pays them.  The measurement path therefore runs one
-client process per server (`bench_processes()` in `examples/mobilenet_client.py`)
-- the third column.  A live `--servers N` pool still helps up to roughly one
-server's rate, and the tool says so when it starts.
+Both columns are one client process, driven by the same `--fake-camera
+--fake-camera-fps 0` source.  The flat one was **not** the GIL as first
+assumed: the examples submitted a request and immediately collected it, so only
+one request was ever outstanding and the extra servers idled.  Priming one
+request per server and refilling after each collect gives the third column.
+`bench_processes()` (a client process per server) remains as a cross-check and
+measures ~521/950/1235 fps at 4/8/12 - close to, and slightly below, the
+in-process pool once startup skew is counted.
 
 So the "~190 fps regardless of servers" reading had two independent causes, the
-first hiding the second: `CPU_BIND_THREAD=YES` put every server on one core, and
-the client process caps the request rate at about one server's throughput.  Only
-the first is fixed in the server; the second is a property of a
-single-Python-client design, and an earlier version of the table above claimed
-~565 fps from one client process with four servers, which a repeat run did not
-reproduce.
+first hiding the second: `CPU_BIND_THREAD=YES` pinned every server's worker to
+one core, and the client only ever kept one request in flight.  The first is
+fixed in the server, the second in the example loops; neither was a GIL limit,
+which an earlier revision of this section wrongly blamed on the client design.
 
 **Caveats worth remembering.**
 

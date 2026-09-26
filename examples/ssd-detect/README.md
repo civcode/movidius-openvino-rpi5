@@ -179,9 +179,9 @@ split up different frames instead of duplicating one.
 
 To probe the throughput ceiling without a camera, drive one static image at any
 rate: `--fake-camera --fake-camera-fps 0` (unbounded) or a chosen rate, with
-`--servers N`.  One client process is GIL-limited to roughly one server's rate,
-so large server counts only pay off with a client process per server - see
-`examples/webcam/README.md` for the measured numbers.
+`--servers N`.  Measured on a 32-core amd64 host with the fake camera at full
+tilt, one client process scales near-linearly: 148 / 310 / 617 / 1001 / 1355
+inferences/s at 1 / 2 / 4 / 8 / 12 servers (see `examples/webcam/README.md`).
 
 A webcam left at OpenCV's default is frequently 1280x720 YUYV, USB-bandwidth
 bound at ~9 fps, which caps how many distinct images exist: use

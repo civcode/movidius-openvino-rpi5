@@ -248,9 +248,10 @@ def main():
     if len(clients) > 1:
         note("inference servers: %d x %s in parallel"
              % (len(clients), args.device.upper()))
-        note("note: this client process has one GIL, so a live --servers pool "
-             "stays near one server's rate; --bench N with --servers N measures "
-             "the real ceiling with one client process per server")
+        note("note: the pool keeps one request in flight per server.  Against a "
+             "live camera the source caps distinct frames, so extra servers only "
+             "help when inference is the slow side; --fake-camera "
+             "--fake-camera-fps 0 removes the camera to measure the servers alone")
 
     stopping = {"flag": False}
 
@@ -445,31 +446,36 @@ def main():
         stamps.append(time.monotonic())
 
         while not stopping["flag"]:
-            # --- feed: hand the newest capture to the pipeline ------------
-            # submit() returns once the request is queued, so the writer thread
-            # can already be handing the server its next payload while this
-            # thread captures and preprocesses; it blocks only when `depth`
-            # requests are outstanding.  That is what keeps both processes busy
-            # instead of trading one request per round trip.
-            nxt = _read_frame() if _budget_left() else None
-            if nxt is not None and args.every > 1:
-                # --every only means something against real captures, so
-                # _read_frame() paces itself to the device in that case.
-                while nxt is not None and frame_no % args.every != 0:
-                    if not args.headless and _show(
-                            nxt.copy(), last_probs,
-                            time.monotonic() - t_start, fps_str, last_infer_ms):
-                        stopping["flag"] = True
+            # --- feed: keep one request in flight per server ---------------
+            # Submitting exactly one frame per collected result would leave the
+            # pool with a single outstanding request no matter how many servers
+            # --servers started, so top the pool up instead of trading one for
+            # one.  submit() blocks only when every server is already busy.
+            fed = 0
+            while pipeline.in_flight < len(clients):
+                nxt = _read_frame() if _budget_left() else None
+                if nxt is not None and args.every > 1:
+                    # --every only means something against real captures, so
+                    # _read_frame() paces itself to the device in that case.
+                    while nxt is not None and frame_no % args.every != 0:
+                        if not args.headless and _show(
+                                nxt.copy(), last_probs,
+                                time.monotonic() - t_start, fps_str, last_infer_ms):
+                            stopping["flag"] = True
+                            break
+                        nxt = _read_frame() if _budget_left() else None
+                    if stopping["flag"]:
                         break
-                    nxt = _read_frame() if _budget_left() else None
-                if stopping["flag"]:
-                    break
-            if nxt is not None:
+                if nxt is None:
+                    break                          # stream ended / budget spent
                 pipeline.submit(_payload(nxt))
                 frame = nxt
                 classified_no += 1
-            elif pipeline.in_flight == 0:
-                break                              # stream ended, nothing queued
+                fed += 1
+            if stopping["flag"]:
+                break
+            if fed == 0 and pipeline.in_flight == 0:
+                break                              # nothing queued and none left
 
             # --- collect the oldest finished result -----------------------
             logits, last_infer_ms = pipeline.get()
