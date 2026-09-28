@@ -46,12 +46,12 @@ input (x/127.5−1, x/128−1, x/255−1) collapses to 100 % background.
 
 ## Run
 
-Single image (console histogram, `--mask-out` writes a class-map PPM):
+Single image (console histogram, `--mask-out` writes a class-map PGM):
 
 ```
 ./run.sh seg --image /models/images/dog_ssd.ppm
 # or inside the image / host runtime:
-seg_detect --model ... --weights ... --labels ... --image img.ppm [--device MYRIAD] [--mask-out mask.ppm]
+seg_detect --model ... --weights ... --labels ... --image img.ppm [--device MYRIAD] [--mask-out mask.pgm]
 ```
 
 Streaming (webcam or video):
@@ -61,7 +61,7 @@ python3 examples/deeplab-seg/seg_stream.py --headless          # terminal stats
 python3 examples/deeplab-seg/seg_stream.py                     # GUI overlay
 python3 examples/deeplab-seg/seg_stream.py --file img.ppm      # single image, no camera
 python3 examples/deeplab-seg/seg_stream.py --video vendor/models/images/sample_640x360.mp4
-python3 examples/deeplab-seg/seg_stream.py --mask-out mask.ppm # also save the class map
+python3 examples/deeplab-seg/seg_stream.py --mask-out mask.pgm # also save the class map
 
 # same pipeline on the host CPU (amd64/arm64 images; arm64 = Python full-TensorFlow server):
 python3 examples/deeplab-seg/seg_stream.py --headless --device CPU \
