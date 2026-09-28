@@ -9,12 +9,22 @@ command -v python3 >/dev/null || { echo "python3 is required" >&2; exit 1; }
 command -v ldconfig >/dev/null && { ldconfig -p 2>/dev/null | grep -q 'libusb-1.0.so.0' || echo "warning: libusb-1.0 runtime not visible in ldconfig" >&2; }
 if (( CHECK )); then "$ROOT/verify.sh" --static; exit $?; fi
 if (( ! SKIP_PY )); then
-  for env in apps mo-onnx mo-tensorflow; do
-    req="$ROOT/requirements/$env.txt"; wheels="$ROOT/wheelhouse/$env"
+  envs=(apps)
+  if [[ "${MODEL_OPTIMIZER_INCLUDED:-0}" == 1 ]]; then
+    envs+=(mo-onnx mo-tensorflow)
+  fi
+  for env in "${envs[@]}"; do
+    req="$ROOT/requirements/$env.txt"
+    wheels="$ROOT/wheelhouse/$env"
     [[ -f "$req" ]] || continue
     python3 -m venv "$ROOT/.envs/$env"
     pip=("$ROOT/.envs/$env/bin/python" -m pip install)
-    if [[ -d "$wheels" && -n "$(find "$wheels" -type f -print -quit 2>/dev/null)" ]]; then "${pip[@]}" --no-index --find-links "$wheels" -r "$req"; else echo "warning: no offline wheelhouse for $env; installing from configured pip indexes" >&2; "${pip[@]}" -r "$req"; fi
+    if [[ -d "$wheels" && -n "$(find "$wheels" -type f -print -quit 2>/dev/null)" ]]; then
+      "${pip[@]}" --no-index --find-links "$wheels" -r "$req"
+    else
+      echo "warning: no offline wheelhouse for $env; installing from configured pip indexes" >&2
+      "${pip[@]}" -r "$req"
+    fi
   done
 fi
 if (( UDEV )); then
