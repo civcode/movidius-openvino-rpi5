@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; export OV_STANDALONE_ROOT="$ROOT"
+PY="$ROOT/.envs/mo-onnx/bin/python"; [[ -x "$PY" ]] || PY="${PYTHON:-python3}"
+exec "$PY" "$ROOT/tools/mo-launcher.py" --framework onnx "$@"
