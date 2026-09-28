@@ -71,7 +71,7 @@ DOCKER_ARGS=(--rm --platform linux/arm/v7 --name "ov203-refcheck-$$"
              -v "${REF_DIR}:/ov:ro"
              -v "${NGRAPH_DIR}:/ng:ro"
              -v "${ROOT}/smoke-test:/work/smoke:ro"
-             -v "${ROOT}/half.hpp:/work/half.hpp:ro"
+             -v "${ROOT}/include:/work/include:ro"
              -v "${ROOT}/work/reference-check:/out")
 # USB requirements, measured on this Pi 5 (see README "USB access" section):
 #   --network=host            libusb refreshes its device list from kernel uevents;
@@ -104,7 +104,7 @@ docker run "${DOCKER_ARGS[@]}" "${IMAGE}" bash -c '
     export LD_LIBRARY_PATH=/ov/lib/armv7l:/ng/lib
     # -linference_engine_legacy: Data::setPrecision and the legacy CNNNetwork
     # symbols live in that library in 2020.3.
-    g++ -std=c++14 -O1 -I/ov/include -I/ng/include /work/smoke/main.cpp \
+    g++ -std=c++14 -O1 -I/ov/include -I/ng/include -I/work/include /work/smoke/main.cpp \
         -o /out/hello_myriad_ref -L/ov/lib/armv7l -L/ng/lib \
         -linference_engine -linference_engine_legacy \
         -linference_engine_transformations -linference_engine_lp_transformations \
