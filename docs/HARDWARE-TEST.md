@@ -15,7 +15,7 @@ The source/build refactor supports three targets. `arm64` is the preferred nativ
 | At least 20 inference iterations in one run | Required | Required | Required |
 | Stop/start container without replug | Required | Required | Required |
 | Host-native extracted runtime | Required | Required | Required |
-| Logs retained under target directory | Required | Required | Required |
+| Validation output captured locally or as CI artifacts | Required | Required | Required |
 
 ## Recommended procedure
 
@@ -24,6 +24,7 @@ Install the udev rule described in the main README, unplug/replug the stick, the
 Preferred Pi 5 native ARM64 path:
 
 ```bash
+mkdir -p logs/rpi5-arm64
 ./build.sh --platform arm64
 ./scripts/verify.sh --platform arm64 2>&1 | tee logs/rpi5-arm64/verify.log
 ```
@@ -31,6 +32,7 @@ Preferred Pi 5 native ARM64 path:
 Legacy/known-good Pi ARMv7 fallback:
 
 ```bash
+mkdir -p logs/rpi5-armv7
 ./build.sh --platform armv7
 ./scripts/verify.sh --platform armv7 2>&1 | tee logs/rpi5-armv7/verify.log
 ```
@@ -38,9 +40,13 @@ Legacy/known-good Pi ARMv7 fallback:
 Ubuntu x86_64:
 
 ```bash
+mkdir -p logs/ubuntu-amd64
 ./build.sh --platform amd64
 ./scripts/verify.sh --platform amd64 2>&1 | tee logs/ubuntu-amd64/verify.log
 ```
+
+The `logs/` directory is ignored by Git; keep validation output locally or
+publish it as a CI/workflow artifact rather than committing generated logs.
 
 If the MobileNet corpus is absent, prepare it first with `./scripts/prepare-mobilenet.sh`.
 
