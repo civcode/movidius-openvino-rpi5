@@ -48,3 +48,28 @@ inline bool waitDevice(const InferenceEngine::Core& ie,
     }
     return false;
 }
+
+inline bool waitPhysicalDevices(const InferenceEngine::Core& ie,
+                                const std::vector<std::string>& required,
+                                std::vector<std::string>& have,
+                                int retries = 11, int delayMs = 1000) {
+    for (int attempt = 0; attempt <= retries; ++attempt) {
+        have = ie.GetAvailableDevices();
+        bool all = true;
+        for (const auto& device : required) {
+            if (std::find(have.begin(), have.end(), device) == have.end()) {
+                all = false;
+                break;
+            }
+        }
+        if (all) return true;
+        if (attempt < retries) {
+            std::fprintf(stderr,
+                         "required device(s) not visible yet (attempt %d/%d), retrying in %d ms\n",
+                         attempt + 1, retries + 1, delayMs);
+            std::fflush(stderr);
+            std::this_thread::sleep_for(std::chrono::milliseconds(delayMs));
+        }
+    }
+    return false;
+}
