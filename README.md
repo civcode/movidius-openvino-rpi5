@@ -415,9 +415,9 @@ MobileNet checks.
 `scripts/validate-reference.sh` is intentionally ARMv7-only. It uses Intel's
 official Raspbian runtime as a historical/reference sanity check. For the ARM64 and amd64 self-built images use `scripts/verify.sh --platform arm64` or `--platform amd64`.
 
-The files under `logs/` are retained as historical evidence from the original
-Pi implementation. They should not be interpreted as native ARM64 or amd64 validation results.
-Record new hardware results separately by platform.
+Build and validation logs are generated artifacts and are not tracked in the
+source tree. CI uploads its logs as workflow artifacts; hardware validation
+results should be captured locally per target when needed.
 
 ## Project layout
 
@@ -443,7 +443,6 @@ examples/webcam/                   live webcam classifier (Python + inference se
 examples/ssd-detect/               SSDLite-MobileNetV2 COCO detector
 examples/deeplab-seg/              DeepLabV3 Pascal VOC segmenter
 toolchain/armv7-native.toolchain.cmake
-logs/                              historical Pi build/runtime evidence
 ```
 
 ## Troubleshooting
@@ -483,5 +482,4 @@ The source tree now contains all three target paths and static checks. Physical
 hardware validation still has to be run on the actual systems after the port:
 full source build on each host, MA2450 boot/re-enumeration, tiny inference,
 MobileNet reference comparison and repeated-run stability. See
-`IMPLEMENTATION_NOTES.md` and `MULTI_PLATFORM_TODO.md` for the remaining
-hardware gates.
+`docs/HARDWARE-TEST.md` for the remaining hardware gates.
