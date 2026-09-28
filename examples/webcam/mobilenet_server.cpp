@@ -25,10 +25,10 @@
 #include <string>
 #include <vector>
 
-#include "half.hpp"  // shared IEEE-754 f16<->f32 conversion (unit-tested in examples/webcam/test_half.cpp)
-#include "device_probe.hpp"  // shared MYRIAD device probe with retry
-#include "cpu_threading.hpp"
-#include "include/ov203/device_spec.hpp"
+#include <ov203/half.hpp>  // shared IEEE-754 f16<->f32 conversion (unit-tested in examples/webcam/test_half.cpp)
+#include <ov203/device_probe.hpp>  // shared MYRIAD device probe with retry
+#include <ov203/cpu_threading.hpp>
+#include <ov203/device_spec.hpp>
 #include "include/ov203/wire.hpp"
 using namespace InferenceEngine;
 
