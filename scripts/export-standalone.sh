@@ -16,6 +16,10 @@ cp "$ROOT/examples/mobilenet_client.py" "$OUTPUT/apps/mobilenet_client.py"
 cp -a "$ROOT/examples/webcam" "$OUTPUT/apps/classification"
 cp -a "$ROOT/examples/ssd-detect" "$OUTPUT/apps/detection"
 cp -a "$ROOT/examples/deeplab-seg" "$OUTPUT/apps/segmentation"
+rm -f "$OUTPUT/apps/classification/infer-server.sh" \
+      "$OUTPUT/apps/detection/infer-ssd-server.sh" \
+      "$OUTPUT/apps/segmentation/infer-seg-server.sh"
+find "$OUTPUT/apps" -type f -name '*.py' -exec sed -i 's#vendor/models/#models/#g' {} +
 rm -rf "$OUTPUT/apps"/*/__pycache__ "$OUTPUT/python"/*/__pycache__
 cp "$ROOT/scripts/99-movidius.rules" "$OUTPUT/udev/99-movidius.rules"
 cp -a "$ROOT/requirements/." "$OUTPUT/requirements/"
