@@ -61,7 +61,7 @@ from ov203.camera import (
 )
 from ov203.device import resolve_servers
 from ov203.display import DisplayPump, WindowWatcher
-from ov203.process import ProcCpu, server_exit_meaning, spawn_servers, stop_server, wait_alive
+from ov203.process import ProcCpu, spawn_servers, wait_alive
 from ov203.protocol import SegPipeClient as SegClient
 from ov203.request_pool import RequestPool
 from ov203.util import windowed_rate
