@@ -92,6 +92,12 @@ if [[ ! -f "${IE_LIB}/libmyriadPlugin.so" || ! -f "${IE_LIB}/usb-ma2450.mvcmd" ]
 fi
 
 mkdir -p "${BIN}"
+if [[ "${TARGET}" == armv7 ]]; then
+    SYSROOT="${RT}/sysroot"
+    LD="${SYSROOT}/lib/ld-linux-armhf.so.3"
+    [[ -x "${LD}" ]] || { echo "ARMHF loader missing: ${LD}; rerun pull-runtime.sh" >&2; exit 1; }
+    LP="${SYSROOT}/lib/arm-linux-gnueabihf:${SYSROOT}/usr/lib/arm-linux-gnueabihf:${LP}"
+fi
 ov_run() {
     runtime_exec_openvino "${TARGET}" "${RT}" "${OV}" "$@"
 }
