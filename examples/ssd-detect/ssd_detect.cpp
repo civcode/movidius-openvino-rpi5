@@ -39,12 +39,12 @@
 #include <vector>
 
 #include "half.hpp"
-#include "device_probe.hpp"  // shared MYRIAD device probe with retry
-#include "cpu_threading.hpp"
-#include "include/ov203/device_spec.hpp"
-#include "include/ov203/cli.hpp"
-#include "include/ov203/wire.hpp"
-#include "frame_utils.hpp"   // shared PPM I/O + bilinear resize
+#include <ov203/device_probe.hpp>  // shared MYRIAD device probe with retry
+#include <ov203/cpu_threading.hpp>
+#include <ov203/device_spec.hpp>
+#include <ov203/cli.hpp>
+#include <ov203/wire.hpp>
+#include <ov203/frame_utils.hpp>   // shared PPM I/O + bilinear resize
 #include "ssd_postprocess.hpp"
 
 #include "inference_engine.hpp"
