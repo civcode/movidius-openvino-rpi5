@@ -32,6 +32,11 @@ except ImportError:
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(HERE, ".."))
+PYTHON_ROOT = os.path.join(REPO_ROOT, "python")
+if PYTHON_ROOT not in sys.path:
+    sys.path.insert(0, PYTHON_ROOT)
+from ov203.request_pool import RequestPool
+from ov203.device import resolve_servers as _resolve_servers_shared
 
 # CPU affinity as this process started, captured before any imaging library is
 # imported.  Some OpenCV wheels call sched_setaffinity() during import and leave
@@ -505,23 +510,7 @@ def restore_entry_affinity():
 
 
 def resolve_servers(requested, device):
-    """How many server processes `device` can actually use.
-
-    A CPU backend scales with processes.  One Movidius stick does not: it is a
-    single device, so a second server either fails to find it (after `waitDevice`
-    has retried for ~12 s, which looks like a hang) or the two contend on the
-    same mvnc/XLink session - and a wedged stick needs unplugging.  Requesting
-    more is therefore clamped to one with a note, not attempted.
-    """
-    want = max(1, int(requested))
-    dev = (device or "").upper()
-    if want > 1 and dev != "CPU":
-        note("note: --servers %d ignored for %s - one stick is one device, so "
-             "extra servers would contend for it (or fail to find it after "
-             "waitDevice retries) and can wedge it until it is replugged; "
-             "running a single server" % (want, device))
-        return 1
-    return want
+    return _resolve_servers_shared(requested, device)
 
 
 def spawn_servers(factory, count, startup_window=2.5):
@@ -1093,108 +1082,6 @@ class MyriadClient:
                 stream.close()
             except Exception:
                 pass
-
-class RequestPool:
-    """Run several inference servers in parallel off one shared request queue.
-
-    Each worker thread owns exactly one server connection and performs the whole
-    round trip on it.  A server is strictly serial - read a request, compute it,
-    answer - so one outstanding request per server is all it can use: the server
-    count is the scaling axis, not queue depth.  Measured on a 32-core amd64
-    host with MobileNet v2 FP32 on the CPU device, one server ran at ~180 fps
-    for depth 1/2/4/8 within noise, while four servers reached ~565 fps once the
-    OpenVINO thread pinning was lifted (docs/CPU-BACKENDS.md, section 14).
-
-    submit() returns as soon as the payload is queued, so the caller's capture
-    and preprocessing overlap compute on every server.  get() hands back
-    (result, infer_ms) in completion order - with several servers a later frame
-    can finish first, which is what a live view wants and what keeps every
-    server's work distinct now that the source delivers each frame only once.
-    infer_ms is submit-to-completion, so it includes any wait for a free server.
-
-    handler(payload) -> result is protocol-specific (logits for mobilenet,
-    detections for ssd, a mask for seg), so one pool serves all three examples.
-    """
-
-    def __init__(self, handlers, queue_limit=None, default_timeout=None):
-        self._handlers = list(handlers)
-        if not self._handlers:
-            raise ValueError("RequestPool needs at least one handler")
-        self._default_timeout = default_timeout
-        self._todo = queue.Queue(maxsize=(queue_limit if queue_limit
-                                          else 2 * len(self._handlers)))
-        self._done = queue.Queue()
-        self._stop = threading.Event()
-        self._lock = threading.Lock()
-        self._error = None
-        self._in_flight = 0
-        self._threads = [threading.Thread(target=self._work, args=(handler,),
-                                          daemon=True)
-                         for handler in self._handlers]
-        for thread in self._threads:
-            thread.start()
-
-    def _fail(self, exc):
-        with self._lock:
-            if self._error is None:
-                self._error = exc
-
-    def _raise(self):
-        with self._lock:
-            err = self._error
-        if err is not None:
-            raise RuntimeError("inference failed: %s" % err) from err
-
-    def _work(self, handler):
-        while not self._stop.is_set():
-            try:
-                payload, t_send = self._todo.get(timeout=0.1)
-            except queue.Empty:
-                continue
-            try:
-                result = handler(payload)
-            except Exception as exc:            # a dead server is fatal: report it
-                self._fail(exc)
-                return
-            self._done.put((result, (time.monotonic() - t_send) * 1000.0))
-
-    # ------------------------------------------------------------ public
-    def submit(self, payload):
-        """Queue *payload*; blocks only when every server is busy and queued."""
-        self._raise()
-        with self._lock:
-            self._in_flight += 1
-        self._todo.put((payload, time.monotonic()))     # back-pressure
-
-    def get(self, timeout=None):
-        """Return the next finished (result, infer_ms), blocking until ready."""
-        timeout = timeout if timeout is not None else self._default_timeout
-        try:
-            result = self._done.get(timeout=timeout)
-        except queue.Empty:
-            self._raise()
-            raise RuntimeError("no inference response within %.0f s" % (timeout or 0))
-        with self._lock:
-            self._in_flight -= 1
-        self._raise()
-        return result
-
-    @property
-    def servers(self):
-        """Server connections this pool spreads requests over."""
-        return len(self._handlers)
-
-    @property
-    def in_flight(self):
-        """Submitted but not yet collected requests."""
-        with self._lock:
-            return self._in_flight
-
-    def close(self):
-        self._stop.set()
-        for thread in self._threads:
-            thread.join(timeout=1.5)
-
 
 def bench_processes(client_factory, payload, workers, iters, progress_every=1.0):
     """Measure N servers, each driven by its own client process.
