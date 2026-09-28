@@ -22,10 +22,7 @@
 #   IE_LIBDIR          directory holding libinference_engine.so
 #   ov_link_libs       the full 5-library link group
 #   ov_rpath_use       rpath (build dirs, or the OV_RUNTIME_PREFIX layout)
-#   SHARED_INCLUDE_DIR the directory holding the repo-root shared headers
-#                       (half.hpp, device_probe.hpp, frame_utils.hpp) -
-#                       add it to each target so #include "half.hpp" etc.
-#                       resolve in both the checkout and the Docker layout.
+#   SHARED_INCLUDE_DIR the include root containing ov203/*.hpp.
 # ---------------------------------------------------------------------------
 
 if(NOT DEFINED OV_ROOT)
@@ -88,17 +85,16 @@ else()
     set(ov_rpath_use "${ov_rpath_build}")
 endif()
 
-# Shared headers (half.hpp, device_probe.hpp, frame_utils.hpp) live next to
-# the app directory in the Docker build (/work/<app> + /work/half.hpp) and in
-# the repository root in a checkout (examples/<app> or <app> + <root>/half.hpp).
-# Auto-detect so #include "half.hpp" resolves in both layouts.
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../half.hpp")
-    set(SHARED_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../..")
-elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../half.hpp")
-    set(SHARED_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/..")
+# Shared project headers live under include/ov203.  Resolve the include root
+# in both source-checkout layouts (examples/<app>) and Docker build layouts
+# (/work/<app> with /work/include copied alongside it).
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../include/ov203/half.hpp")
+    set(SHARED_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../include")
+elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../include/ov203/half.hpp")
+    set(SHARED_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../include")
 else()
     message(FATAL_ERROR
-            "shared header half.hpp not found (expected in the repository root)")
+            "shared headers not found (expected include/ov203 below repository/build root)")
 endif()
 
 
