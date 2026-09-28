@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <istream>
@@ -7,6 +8,48 @@
 #include <stdexcept>
 
 namespace ov203 {
+
+inline bool hostIsLittleEndian() {
+    const uint16_t value = 1;
+    return *reinterpret_cast<const unsigned char*>(&value) == 1;
+}
+
+inline uint32_t byteSwap32(uint32_t value) {
+    return ((value & 0x000000ffu) << 24) |
+           ((value & 0x0000ff00u) << 8) |
+           ((value & 0x00ff0000u) >> 8) |
+           ((value & 0xff000000u) >> 24);
+}
+
+// A bulk MobileNet request is read directly into float storage. On little-endian
+// hosts (all currently supported targets) this is a no-op; on a big-endian host
+// it converts the protocol's little-endian IEEE-754 bytes in place.
+inline void littleEndianFloat32ToNativeInPlace(float* values, std::size_t count) {
+    if (hostIsLittleEndian()) return;
+    for (std::size_t i = 0; i < count; ++i) {
+        uint32_t bits = 0;
+        std::memcpy(&bits, values + i, sizeof(bits));
+        bits = byteSwap32(bits);
+        std::memcpy(values + i, &bits, sizeof(bits));
+    }
+}
+
+inline void nativeFloat32ToLittleEndianBytes(const float* values,
+                                              unsigned char* out,
+                                              std::size_t count) {
+    if (hostIsLittleEndian()) {
+        std::memcpy(out, values, count * sizeof(float));
+        return;
+    }
+    for (std::size_t i = 0; i < count; ++i) {
+        uint32_t bits = 0;
+        std::memcpy(&bits, values + i, sizeof(bits));
+        out[4 * i + 0] = static_cast<unsigned char>(bits & 0xffu);
+        out[4 * i + 1] = static_cast<unsigned char>((bits >> 8) & 0xffu);
+        out[4 * i + 2] = static_cast<unsigned char>((bits >> 16) & 0xffu);
+        out[4 * i + 3] = static_cast<unsigned char>((bits >> 24) & 0xffu);
+    }
+}
 
 inline uint16_t readLe16(std::istream& in) {
     unsigned char b[2];
