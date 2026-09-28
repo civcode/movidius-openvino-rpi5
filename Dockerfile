@@ -248,6 +248,7 @@ ARG USE_CMAKE_TOOLCHAIN=1
 ARG EXPECTED_ELF_CLASS=ELF32
 ARG EXPECTED_ELF_MACHINE_REGEX=ARM
 COPY smoke-test /work/smoke
+COPY include /work/include
 COPY half.hpp /work/half.hpp
 COPY cmake /work/cmake
 
@@ -281,6 +282,7 @@ ARG USE_CMAKE_TOOLCHAIN=1
 ARG EXPECTED_ELF_CLASS=ELF32
 ARG EXPECTED_ELF_MACHINE_REGEX=ARM
 COPY mobilenet-test /work/mnb
+COPY include /work/include
 COPY half.hpp /work/half.hpp
 COPY cmake /work/cmake
 
@@ -313,6 +315,7 @@ ARG USE_CMAKE_TOOLCHAIN=1
 ARG EXPECTED_ELF_CLASS=ELF32
 ARG EXPECTED_ELF_MACHINE_REGEX=ARM
 COPY examples/webcam /work/webcam
+COPY include /work/include
 COPY half.hpp /work/half.hpp
 COPY device_probe.hpp /work/device_probe.hpp
 COPY cpu_threading.hpp /work/cpu_threading.hpp
@@ -348,6 +351,7 @@ ARG USE_CMAKE_TOOLCHAIN=1
 ARG EXPECTED_ELF_CLASS=ELF32
 ARG EXPECTED_ELF_MACHINE_REGEX=ARM
 COPY examples/ssd-detect /work/ssd
+COPY include /work/include
 COPY half.hpp /work/half.hpp
 COPY device_probe.hpp /work/device_probe.hpp
 COPY cpu_threading.hpp /work/cpu_threading.hpp
@@ -384,6 +388,7 @@ ARG USE_CMAKE_TOOLCHAIN=1
 ARG EXPECTED_ELF_CLASS=ELF32
 ARG EXPECTED_ELF_MACHINE_REGEX=ARM
 COPY examples/deeplab-seg /work/seg
+COPY include /work/include
 COPY half.hpp /work/half.hpp
 COPY device_probe.hpp /work/device_probe.hpp
 COPY cpu_threading.hpp /work/cpu_threading.hpp
