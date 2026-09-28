@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+[[ -f "$ROOT/MANIFEST.env" ]] && cat "$ROOT/MANIFEST.env"
+echo "BUNDLE_ROOT=$ROOT"
