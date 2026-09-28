@@ -25,25 +25,7 @@ foreach(_cand "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake"
     endif()
 endforeach()
 
-add_executable(hello_myriad main.cpp)
-target_include_directories(hello_myriad PRIVATE
-    "${OV_ROOT}/include"
-    "${SHARED_INCLUDE_DIR}")
-if(EXISTS "${NGRAPH_ROOT}/include")
-    target_include_directories(hello_myriad PRIVATE "${NGRAPH_ROOT}/include")
-endif()
-target_link_libraries(hello_myriad PRIVATE
-    "-Wl,--start-group" ${ov_link_libs} "-Wl,--end-group" dl)
-
-if(OV_RUNTIME_PREFIX)
-    set_target_properties(hello_myriad PROPERTIES
-        BUILD_WITH_INSTALL_RPATH ON
-        INSTALL_RPATH "${ov_rpath_use}")
-else()
-    set_target_properties(hello_myriad PROPERTIES
-        BUILD_RPATH "${ov_rpath_use}"
-        INSTALL_RPATH "${ov_rpath_use}")
-endif()
+ov203_add_inference_executable(hello_myriad main.cpp)
 
 message(STATUS "hello_myriad: linking ${ov_link_libs}")
 message(STATUS "hello_myriad: rpath ${ov_rpath_use}")
