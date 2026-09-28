@@ -52,30 +52,21 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # (the script must be mode 755, like the other launchers)
 DEFAULT_SERVER_CMD = os.path.join(HERE, "infer-seg-server.sh")
 
-sys.path.insert(0, os.path.dirname(HERE))  # examples/ (shared client helpers)
-from mobilenet_client import (            # noqa: E402
-    REPO_ROOT,
-    FakeCamera,
-    LinePipe,
-    LatestFrame,
-    ProcCpu,
-    DisplayPump,
-    RequestPool,
-    resolve_servers,
-    spawn_servers,
-    write_all,
-    add_camera_capture_args,
-    add_fake_camera_args,
-    fourcc_from_tag,
-    load_static_image,
-    note_camera_settings,
-    open_camera,
-    server_exit_meaning,
-    stop_server,
-    wait_alive,
-    windowed_rate,
-    WindowWatcher,
+REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
+PYTHON_ROOT = os.path.join(REPO_ROOT, "python")
+if PYTHON_ROOT not in sys.path:
+    sys.path.insert(0, PYTHON_ROOT)
+
+from ov203.camera import (
+    FakeCamera, LatestFrame, add_camera_capture_args, add_fake_camera_args,
+    fourcc_from_tag, load_static_image, note_camera_settings, open_camera,
 )
+from ov203.device import resolve_servers
+from ov203.display import DisplayPump, WindowWatcher
+from ov203.process import ProcCpu, server_exit_meaning, spawn_servers, stop_server, wait_alive
+from ov203.protocol import LinePipe, write_all
+from ov203.request_pool import RequestPool
+from ov203.util import windowed_rate
 
 import numpy as np
 
