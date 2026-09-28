@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; source "$ROOT/bin/ov-env"
+usage(){ echo "usage: compile-model MODEL.xml --output MODEL.blob [--device MYRIAD] [-- <extra compile_tool args>]"; }
+MODEL=""; OUTPUT=""; DEVICE="MYRIAD"; EXTRA=()
+while [[ $# -gt 0 ]]; do case "$1" in -o|--output) [[ $# -ge 2 ]]||{ usage >&2; exit 2;}; OUTPUT="$2"; shift 2;; --device) DEVICE="$2"; shift 2;; --) shift; EXTRA+=("$@"); break;; -h|--help) usage; exit 0;; -*) EXTRA+=("$1"); shift;; *) [[ -z "$MODEL" ]] || { echo "unexpected argument: $1" >&2; exit 2;}; MODEL="$1"; shift;; esac; done
+[[ -n "$MODEL" && -n "$OUTPUT" ]] || { usage >&2; exit 2; }
+[[ "$MODEL" == *.xml && -f "$MODEL" ]] || { echo "IR XML not found: $MODEL" >&2; exit 1; }
+[[ -f "${MODEL%.xml}.bin" ]] || { echo "IR weights not found: ${MODEL%.xml}.bin" >&2; exit 1; }
+COMPILER="$OV_IE_LIB/compile_tool"; [[ -x "$COMPILER" ]] || COMPILER="$OV_IE_LIB/myriad_compile"
+[[ -x "$COMPILER" ]] || { echo "MYRIAD compiler missing from $OV_IE_LIB" >&2; exit 1; }
+mkdir -p "$(dirname "$OUTPUT")"
+"$COMPILER" -m "$MODEL" -d "$DEVICE" -o "$OUTPUT" "${EXTRA[@]}"
+[[ -s "$OUTPUT" ]] || { echo "compiler returned without producing $OUTPUT" >&2; exit 1; }
+echo "$OUTPUT"
