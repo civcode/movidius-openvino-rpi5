@@ -4,7 +4,7 @@
 // MYRIAD (MA2450) on OpenVINO 2020.3.2.
 //
 //   seg_detect --model M --weights W --labels L [--image img.ppm]
-//               [--device MYRIAD] [--mask-out mask.ppm] [--debug]
+//               [--device MYRIAD] [--mask-out mask.pgm] [--debug]
 //   seg_detect --model M --weights W --labels L --stdin
 //
 // The IR (vendor/models/deeplabv3/openvino/, produced by
@@ -45,7 +45,9 @@
 
 #include "half.hpp"
 #include "device_probe.hpp"  // shared MYRIAD device probe with retry
-#include "cpu_threading.hpp"  // shared CPU plugin thread-placement fix
+#include "cpu_threading.hpp"
+#include "include/ov203/device_spec.hpp"
+#include "include/ov203/wire.hpp"
 #include "frame_utils.hpp"   // shared PPM I/O + bilinear resize
 #include "seg_postprocess.hpp"
 
@@ -132,12 +134,12 @@ std::string dimsToString(const SizeVector& dims) {
     return oss.str();
 }
 
-// Write a class map as a single-channel P6 PPM (class id = pixel value).
-int writeMaskPpm(const std::string& path, const seg::ClassMap& m) {
+// Write a class map as a single-channel P5 PGM (class id = pixel value).
+int writeMaskPgm(const std::string& path, const seg::ClassMap& m) {
     std::ofstream out(path, std::ios::binary);
     if (!out)
         return -1;
-    out << "P6\n" << m.w << " " << m.h << "\n255\n";
+    out << "P5\n" << m.w << " " << m.h << "\n255\n";
     out.write((const char*)m.ids.data(), (std::streamsize)m.ids.size());
     return out ? 0 : -1;
 }
@@ -167,8 +169,9 @@ int main(int argc, char** argv) {
 
     try {
         Core ie;
+        const ov203::DeviceSpec deviceSpec = ov203::parseDeviceSpec(a.device);
         std::vector<std::string> devices;
-        if (!waitDevice(ie, a.device, devices)) {
+        if (!waitPhysicalDevices(ie, deviceSpec.physicalDevices, devices)) {
             // whole message on stderr: in stream mode stdout is the frame protocol
             std::cerr << "device " << a.device << " not available (have: ";
             for (size_t i = 0; i < devices.size(); ++i)
@@ -200,15 +203,15 @@ int main(int argc, char** argv) {
         }
         const std::string inputName = inputs.begin()->first;
         const SizeVector inputDims = inputs.begin()->second->getInputData()->getDims();
-        const auto inPrec = inputs.begin()->second->getPrecision();
         // The MYRIAD VPU only accepts FP16 inputs; the CPU plugin of this
         // OpenVINO release rejects FP16 ("Input image format FP16 is not
         // supported yet"), so keep the IR's native precision elsewhere - the
         // launchers feed the FP32 IRs when the device is CPU.
-        if (a.device == "MYRIAD")
+        if (deviceSpec.usesMyriad)
             inputs.begin()->second->setPrecision(Precision::FP16);
         inputs.begin()->second->setLayout(Layout::NCHW);
-        const char* inPrecStr = inPrec == Precision::FP16 ? "FP16" : inPrec == Precision::FP32 ? "FP32" : "other";
+        const auto configuredPrecision = inputs.begin()->second->getPrecision();
+        const char* inPrecStr = configuredPrecision == Precision::FP16 ? "FP16" : configuredPrecision == Precision::FP32 ? "FP32" : "other";
         info << "model input     : " << inputName << " [" << dimsToString(inputDims)
              << "] " << inPrecStr
              << " (raw 0-255 BGR; the channel swap, resize and (x/127.5)-1 are inside the graph)\n";
@@ -340,14 +343,9 @@ int main(int argc, char** argv) {
             uint32_t fw = 0, fh = 0;
             std::vector<uint8_t> frame;
             std::size_t frameNo = 0;
-            while (true) {
-                uint8_t hdr[8];
-                if (!std::cin.read((char*)hdr, 8))
-                    break;
-                fw = (uint32_t)hdr[0] | ((uint32_t)hdr[1] << 8) |
-                     ((uint32_t)hdr[2] << 16) | ((uint32_t)hdr[3] << 24);
-                fh = (uint32_t)hdr[4] | ((uint32_t)hdr[5] << 8) |
-                     ((uint32_t)hdr[6] << 16) | ((uint32_t)hdr[7] << 24);
+            while (std::cin.peek() != std::char_traits<char>::eof()) {
+                fw = ov203::readLe32(std::cin);
+                fh = ov203::readLe32(std::cin);
                 if (fw == 0 || fh == 0 || fw > 8192 || fh > 8192)
                     throw std::runtime_error("frame header out of range: " +
                                              std::to_string(fw) + "x" +
@@ -380,10 +378,9 @@ int main(int argc, char** argv) {
                               << seg::labelFor(labels, cc.id) << " "
                               << cc.pixels << "\n";
                 }
-                std::vector<uint16_t> mask16(big.ids.begin(), big.ids.end());
                 std::cout << "MASK " << fw << " " << fh << "\n";
-                std::cout.write((const char*)mask16.data(),
-                                (std::streamsize)mask16.size() * 2);
+                for (uint8_t id : big.ids)
+                    ov203::writeLe16(std::cout, static_cast<uint16_t>(id));
                 std::cout << "END\n";
                 std::cout.flush();
             }
@@ -429,7 +426,7 @@ int main(int argc, char** argv) {
         if (a.debug)
             info << "mask: " << hist.size() << " classes present\n";
 
-        if (!a.maskOut.empty() && writeMaskPpm(a.maskOut, big) != 0) {
+        if (!a.maskOut.empty() && writeMaskPgm(a.maskOut, big) != 0) {
             std::cerr << "failed to write mask to " << a.maskOut << "\n";
             return 1;
         }
