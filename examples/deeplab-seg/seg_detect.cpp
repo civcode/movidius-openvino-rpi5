@@ -4,7 +4,7 @@
 // MYRIAD (MA2450) on OpenVINO 2020.3.2.
 //
 //   seg_detect --model M --weights W --labels L [--image img.ppm]
-//               [--device MYRIAD] [--mask-out mask.pgm] [--debug]
+//               [--device DEVICE] [--mask-out mask.pgm] [--debug]
 //   seg_detect --model M --weights W --labels L --stdin
 //
 // The IR (vendor/models/deeplabv3/openvino/, produced by
@@ -106,7 +106,7 @@ int parseArgs(int argc, char** argv, Args& a) {
             a.debug = true;
         } else if (s == "-h" || s == "--help") {
             std::cout << "seg_detect --model <ir.xml> --weights <ir.bin> --labels <voc.txt>\n"
-                        << "            --image <photo.ppm> [--device MYRIAD] [--mask-out m.ppm] [--debug]\n"
+                        << "            --image <photo.ppm> [--device DEVICE] [--mask-out m.pgm] [--debug]\n"
                         << "            --stdin   (stream mode: frames on stdin, see header)\n\n"
                         << "Exit codes: 0 ok, 1 runtime failure, 2 device/CLI error, 3 model/shape error.\n";
             a.help = true;
