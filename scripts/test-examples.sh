@@ -23,6 +23,7 @@
 #   scripts/test-examples.sh [--no-gui] [--only webcam,ssd,seg]
 #                            [--backend docker,host] [--device MYRIAD,CPU]
 #                            [--timeout 300]
+#                            [--require-host] [--require-docker] [--require-myriad]
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -33,6 +34,9 @@ VENV_PY="examples/webcam/venv/bin/python"
 VIDEO="examples/webcam/sample_640x360.mp4"
 
 TIMEOUT=300
+REQUIRE_HOST=0
+REQUIRE_DOCKER=0
+REQUIRE_MYRIAD=0
 ONLY="webcam,ssd,seg"
 BACKENDS="docker,host"
 DEVICES="MYRIAD,CPU"
@@ -45,6 +49,9 @@ while [[ $# -gt 0 ]]; do
         --backend)   BACKENDS="${2:?}"; shift ;;
         --device)    DEVICES="${2:?}"; shift ;;
         --timeout)   TIMEOUT="${2:?}"; shift ;;
+        --require-host) REQUIRE_HOST=1 ;;
+        --require-docker) REQUIRE_DOCKER=1 ;;
+        --require-myriad) REQUIRE_MYRIAD=1 ;;
         *) echo "unknown option: $1 (see header)" >&2; exit 2 ;;
     esac
     shift
@@ -242,12 +249,25 @@ fi
 # ------------------------------------------------------------------ summary
 fails=0
 skips=0
+passes=0
+required_skips=0
 for r in "${result[@]}"; do
     status="${r#*|}"; status="${status%%|*}"
+    [[ "${status}" == PASS ]] && passes=$((passes + 1))
     [[ "${status}" == FAIL ]] && fails=$((fails + 1))
-    [[ "${status}" == SKIP ]] && skips=$((skips + 1))
+    if [[ "${status}" == SKIP ]]; then
+        skips=$((skips + 1))
+        name="${r%%|*}"
+        if (( REQUIRE_HOST )) && [[ "${name}" == *-host-* ]]; then required_skips=$((required_skips + 1)); fi
+        if (( REQUIRE_DOCKER )) && [[ "${name}" == *-docker-* ]]; then required_skips=$((required_skips + 1)); fi
+        if (( REQUIRE_MYRIAD )) && [[ "${name}" == *-MYRIAD-* ]]; then required_skips=$((required_skips + 1)); fi
+    fi
 done
-echo "summary: ${#result[@]} cells, ${skips} skipped, ${fails} failed"
+echo "summary: ${#result[@]} cells, ${passes} passed, ${skips} skipped, ${fails} failed"
+if (( required_skips > 0 )); then
+    echo "required capability skipped in ${required_skips} selected cell(s)" >&2
+    fails=$((fails + required_skips))
+fi
 if [[ ${fails} -gt 0 ]]; then
     echo "MATRIX_RESULT=FAIL"
     exit 1
