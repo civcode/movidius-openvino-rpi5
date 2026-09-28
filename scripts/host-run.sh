@@ -29,6 +29,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/platform.sh
 source "${ROOT}/scripts/platform.sh"
+# shellcheck source=scripts/lib/runtime.sh
+source "${ROOT}/scripts/lib/runtime.sh"
 
 TARGET_REQUEST="$(platform_default_request)"
 IMAGE_OVERRIDE="${IMAGE:-}"
@@ -49,16 +51,11 @@ done
 platform_load "${TARGET_REQUEST}"
 IMAGE="${IMAGE_OVERRIDE:-${DEFAULT_IMAGE}}"
 
-case "${TARGET}:$(uname -m)" in
-    armv7:aarch64|armv7:arm64|armv7:armv7l|armv7:armv7*) ;;
-    arm64:aarch64|arm64:arm64) ;;
-    amd64:x86_64|amd64:amd64) ;;
-    *)
-        echo "host-native target mismatch: selected ${TARGET}, host is $(uname -m)" >&2
-        echo "use Docker via ./run.sh for cross-architecture execution" >&2
-        exit 1
-        ;;
-esac
+if ! runtime_target_can_run_host "${TARGET}"; then
+    echo "host-native target mismatch: selected ${TARGET}, host is $(uname -m)" >&2
+    echo "use Docker via ./run.sh for cross-architecture execution" >&2
+    exit 1
+fi
 
 RT="${ROOT}/work/host-runtime/${TARGET}"
 OV="${RT}/openvino"
@@ -75,7 +72,7 @@ if [[ "${manifest_target}" != "${TARGET}" ]]; then
     exit 1
 fi
 
-IE_LIB="$(platform_find_ie_libdir "${OV}/inference_engine")"
+IE_LIB="$(runtime_find_ie_libdir "${OV}")"
 if (( VERBOSE )); then
     echo '--- host runtime manifest ---'
     cat "${manifest}"
@@ -95,15 +92,9 @@ if [[ ! -f "${IE_LIB}/libmyriadPlugin.so" || ! -f "${IE_LIB}/usb-ma2450.mvcmd" ]
 fi
 
 mkdir -p "${BIN}"
-if [[ "${TARGET}" == armv7 ]]; then
-    SYSROOT="${RT}/sysroot"
-    LD="${SYSROOT}/lib/ld-linux-armhf.so.3"
-    [[ -x "${LD}" ]] || { echo "ARMHF loader missing: ${LD}; rerun pull-runtime.sh" >&2; exit 1; }
-    LP="${SYSROOT}/lib/arm-linux-gnueabihf:${SYSROOT}/usr/lib/arm-linux-gnueabihf:${LP}"
-    ov_run() { "${LD}" --library-path "${LP}" "$@"; }
-else
-    ov_run() { env LD_LIBRARY_PATH="${LP}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" "$@"; }
-fi
+ov_run() {
+    runtime_exec_openvino "${TARGET}" "${RT}" "${OV}" "$@"
+}
 
 # Regenerate convenient wrappers for interactive shell mode.
 rm -f "${BIN}"/* 2>/dev/null || true
@@ -125,21 +116,7 @@ EOF_WRAP
     chmod +x "${BIN}/${name}"
 done
 
-# mvnc's global lock is a fixed path, open()ed with O_CREAT by whoever gets
-# there first.  With fs.protected_regular != 0 (Debian: 2) a file created by
-# another user in world-writable /tmp is not openable - even by root - and
-# mvnc aborts with "global mutex initialization failed".  Warn instead of
-# exiting(1).
-mutex="${MVNC_MUTEX:-/tmp/mvnc.mutex}"
-if [[ -e "${mutex}" ]]; then
-    owner="$(stat -c '%u %a' "${mutex}")"
-    mode="${owner##* }"
-    other_bit=$(( 8#${mode: -1} & 4 ))
-    if [[ "${owner%% *}" != "$(id -u)" && ${other_bit} -eq 0 ]]; then
-        echo "WARNING: ${mutex} is owned by uid ${owner%% *} mode ${mode}; mvnc may fail to initialize its global mutex." >&2
-        echo "fix: remove ${mutex}, use one user consistently, or chmod 0666 ${mutex}" >&2
-    fi
-fi
+runtime_warn_mvnc_mutex || true
 
 MODE="${1:-list}"; shift || true
 case "${MODE}" in
