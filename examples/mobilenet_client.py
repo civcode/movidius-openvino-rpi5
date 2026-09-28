@@ -37,6 +37,7 @@ if PYTHON_ROOT not in sys.path:
     sys.path.insert(0, PYTHON_ROOT)
 from ov203.request_pool import RequestPool
 from ov203.device import resolve_servers as _resolve_servers_shared
+from ov203.protocol import LinePipe, pipe_capacity, write_all
 
 # CPU affinity as this process started, captured before any imaging library is
 # imported.  Some OpenCV wheels call sched_setaffinity() during import and leave
@@ -83,115 +84,6 @@ def server_exit_meaning(code):
         3: "model or IO failure",
         4: "bad command line",
     }.get(code, "unknown")
-
-
-class LinePipe:
-    """Line/binary reader over a server's stdout file descriptor.
-
-    Keeps a per-instance remainder buffer so a chunk read can end in the
-    middle of a line or a binary payload.  `readline(timeout)` returns text
-    lines (raising TimeoutError if the server is silent past `timeout`),
-    and `read_exact(n, timeout)` returns exactly n bytes (for binary
-    payloads such as the seg MASK body); any bytes that arrive past the
-    payload stay in the internal buffer for the next readline/read_exact.
-    When a subprocess is attached, an exited server is detected and the
-    pipe drained before the failure is reported (one drain fill per
-    readline is enough here because each server flushes a complete response
-    per frame).
-
-    Shared by the ssd/seg stream clients so the line/binary buffering has
-    one tested implementation.
-    """
-
-    def __init__(self, fd, proc=None):
-        self.fd = fd
-        self.proc = proc
-        self.buf = bytearray()
-
-    def _fill(self):
-        try:
-            chunk = os.read(self.fd, 65536)
-        except OSError:
-            chunk = b""
-        self.buf += chunk
-        return chunk
-
-    def readline(self, timeout=None):
-        """Return the next line (no newline) as text, or None on clean EOF.
-
-        Note: with an attached `proc` (all real uses), a server that has
-        exited raises RuntimeError instead of returning None; the None-EOF
-        return applies to a plain fd with no process to report."""
-        deadline = None if timeout is None else time.monotonic() + timeout
-        while True:
-            pos = self.buf.find(b"\n")
-            if pos != -1:
-                line, self.buf = self.buf[:pos], self.buf[pos + 1:]
-                return line.decode("utf-8", "replace")
-            if self.proc is not None and self.proc.poll() is not None:
-                # server exited: drain whatever is left in the pipe
-                self._fill()
-                pos = self.buf.find(b"\n")
-                if pos == -1:
-                    if self.buf:
-                        line, self.buf = bytes(self.buf), bytearray()
-                        return line.decode("utf-8", "replace")
-                    raise RuntimeError(
-                        "inference server exited with code %s before the "
-                        "response was complete (see its diagnostics above)"
-                        % self.proc.returncode)
-                line, self.buf = self.buf[:pos], self.buf[pos + 1:]
-                return line.decode("utf-8", "replace")
-            if deadline is not None and time.monotonic() >= deadline:
-                raise TimeoutError("no server response within %.0f s" % timeout)
-            if deadline is not None:
-                ready, _, _ = select.select([self.fd], [], [],
-                                            max(0.001, deadline - time.monotonic()))
-                if not ready:
-                    continue
-            if not self._fill():
-                # EOF.  With an attached process, give it a moment to be
-                # reaped so the exit code (a far better diagnostic than a
-                # bare EOF) can be reported deterministically.
-                if self.proc is not None:
-                    if self.proc.poll() is None:
-                        try:
-                            self.proc.wait(timeout=1)
-                        except subprocess.TimeoutExpired:
-                            pass
-                    if self.proc.returncode is not None:
-                        raise RuntimeError(
-                            "inference server exited with code %s before the "
-                            "response was complete (see its diagnostics above)"
-                            % self.proc.returncode)
-                line, self.buf = bytes(self.buf), bytearray()
-                return line.decode("utf-8", "replace") if line else None
-
-    def read_exact(self, n, timeout=None):
-        """Return exactly n bytes, drawing on any buffered remainder first.
-
-        Never reads more than the remaining payload count, so protocol
-        lines that follow the payload in the same pipe write stay in the
-        buffer (or in the pipe) for the next readline.  Optional timeout
-        like readline's, so a server that announces a MASK and then hangs
-        fails with TimeoutError instead of blocking forever."""
-        out = bytearray(self.buf[:n])
-        self.buf = self.buf[n:]
-        deadline = None if timeout is None else time.monotonic() + timeout
-        while len(out) < n:
-            if deadline is not None:
-                remaining = deadline - time.monotonic()
-                if remaining <= 0.0:
-                    raise TimeoutError("no server payload within %.0f s" % timeout)
-                ready, _, _ = select.select([self.fd], [], [],
-                                            max(0.001, remaining))
-                if not ready:
-                    continue
-            chunk = os.read(self.fd, n - len(out))
-            if not chunk:
-                raise RuntimeError("server closed while reading a binary payload")
-            out += chunk
-        return bytes(out)
 
 
 def windowed_fps(times, n=10):
@@ -391,44 +283,6 @@ def topk_probs(logits, labels, k):
             cid, name = labels[idx]
         out.append((float(probs[idx]), cid, name))
     return out
-
-
-def write_all(fd, data):
-    """Write every byte of a bytes-like to *fd*, one syscall at a time.
-
-    Used instead of a buffered file object for request payloads: it writes
-    straight from the caller's buffer, so a frame is copied once into the pipe
-    instead of once by numpy and again by the BufferedWriter, and os.write()
-    drops the GIL for the duration.  Both matter - a seg/ssd frame is ~0.9 MB,
-    and the per-request client work is what limits how many servers one process
-    can keep busy.
-    """
-    view = memoryview(data)
-    if view.itemsize != 1 or view.ndim != 1:
-        view = view.cast("B")
-    off = 0
-    while off < view.nbytes:
-        off += os.write(fd, view[off:])
-
-
-def pipe_capacity(stream, want=0):
-    """Return the byte capacity of the pipe behind *stream*, growing it to `want`.
-
-    A fresh Linux pipe is only 64 KiB (16 pages), which is smaller than one
-    inference request, so a writer blocks until the reader drains it.  Raising
-    the capacity is what lets a client hand the server its next whole request
-    while the server is still computing the current one.  Best effort by
-    design: F_SETPIPE_SZ is refused above /proc/sys/fs/pipe-max-size, needs
-    Linux, and an unenlarged pipe is merely slower, not wrong - so 0 (unknown)
-    or the previous size is always a safe answer.
-    """
-    try:
-        fd = stream.fileno()
-        if want:
-            fcntl.fcntl(fd, fcntl.F_SETPIPE_SZ, int(want))
-        return fcntl.fcntl(fd, fcntl.F_GETPIPE_SZ)
-    except (OSError, AttributeError, ValueError):
-        return 0
 
 
 def wait_alive(proc, timeout=2.5):
