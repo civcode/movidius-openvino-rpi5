@@ -1,0 +1,4 @@
+# ARM64 CPU fallback for SSD/DeepLab servers.
+numpy>=1.23,<2
+opencv-python>=4.6,<5
+tensorflow>=2.12,<2.17
