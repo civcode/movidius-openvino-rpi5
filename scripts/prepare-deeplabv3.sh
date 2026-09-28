@@ -51,18 +51,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-MO_SRC=vendor/openvino-2020.3.2/model-optimizer
-MO_STAGE=work/mo-2020.3
+MO_STAGE=work/model-optimizer
 MODELS=vendor/models
 MODEL_DIR="$MODELS/deeplabv3"
 SRC_DIR="$MODEL_DIR/source"
 OUT_DIR="$MODEL_DIR/openvino"
 MODEL_NAME=deeplabv3
-# The converter runs natively on the host with a modern TensorFlow 2.x wheel
-# (no Docker, no emulation): work/venv-cpu when present (this project's
-# CPU-server venv), else any python3 with tensorflow, else a fresh venv.
-MO_VENV=work/venv-cpu
-
 # The TF model zoo release (the Open Model Zoo mirrors the identical file;
 # both URLs are tried).  The OMZ model.yml documents the integrity check as a
 # 96-hex-digit SHA-384 (not sha256): checksum and size (23882985) below are
@@ -129,50 +123,27 @@ cat > "$MODELS/labels/pascal_voc.txt" <<'EOF'
 EOF
 echo "    21 classes -> $MODELS/labels/pascal_voc.txt"
 
-# ------------------- 3. Model Optimizer 2020.3.2 (vendored, staged)
+# ------------------- 3. Model Optimizer 2020.3.2 (shared staged runner)
 echo
-echo "== Model Optimizer 2020.3.2 (vendored, staged without unit tests) =="
-if [[ -f "$MO_STAGE/.staged" && "$(cat "$MO_STAGE/.staged")" == "$(find "$MO_SRC" -name '*.py' | sort | sha256sum | cut -d' ' -f1)" ]]; then
-	echo "    already staged (work/mo-2020.3)"
-else
-	rm -rf "$MO_STAGE"; mkdir -p "$MO_STAGE"
-	rsync -a --exclude='*_test.py' --exclude='automation/' --exclude='install_prerequisites/' \
-		"$MO_SRC/" "$MO_STAGE/"
-	find "$MO_SRC" -name '*.py' | sort | sha256sum | cut -d' ' -f1 > "$MO_STAGE/.staged"
-fi
+echo "== Model Optimizer 2020.3.2 (shared staged runner) =="
+"$ROOT/scripts/prepare-model-optimizer.sh"
 printf '    staged %s python files\n' "$(find "$MO_STAGE" -name '*.py' | wc -l)"
-
-# ------------------------- 4. resolve the host python for the MO front-end
-echo
-echo "== resolving host python (TF 2.x, native - no Docker) =="
-if [[ -x "$MO_VENV/bin/python" ]] && "$MO_VENV/bin/python" -c 'import tensorflow' >/dev/null 2>&1; then
-	MO_PY="$MO_VENV/bin/python"
-elif python3 -c 'import tensorflow' >/dev/null 2>&1; then
-	MO_PY=python3
-else
-	echo "    no local TensorFlow - creating $MO_VENV (pip downloads ~1 GB)"
-	python3 -m venv "$MO_VENV"
-	"$MO_VENV/bin/pip" install -q --disable-pip-version-check \
-		tensorflow networkx==2.6.3 defusedxml==0.7.1
-	MO_PY="$MO_VENV/bin/python"
-fi
-echo "    MO python: $MO_PY ($("$MO_PY" -c 'import sys, tensorflow as tf; print(sys.version.split()[0] + " TF " + tf.__version__)'))"
 
 # The amd64 runtime's CPU plugin (OpenVINO 2020.3) does not accept FP16 input
 # tensors ("Input image format FP16 is not supported yet"), so --device CPU
 # runs against the FP32 variant; the launchers select it automatically.
 mo_convert() {  # $1 = --data_type, $2 = output dir (relative to vendor/models)
-	echo "    converting --data_type $1 -> vendor/models/$MODEL_NAME/$2"
-	"$MO_PY" scripts/mo_compat_run.py \
-		--input_model "$SRC_DIR/frozen_inference_graph.pb" \
-		--reverse_input_channels \
-		--input=ImageTensor \
-		--input_shape=[1,513,513,3] \
-		--output=ArgMax \
-		--data_type "$1" \
-		--output_dir "$MODELS/$MODEL_NAME/$2" \
-		--model_name "$MODEL_NAME" 2>&1 \
-		| grep -E '\[ (SUCCESS|ERROR) \]|Elapsed time'
+    echo "    converting --data_type $1 -> vendor/models/$MODEL_NAME/$2"
+    "$ROOT/scripts/run-mo.sh" --framework tf -- \
+        --input_model "$SRC_DIR/frozen_inference_graph.pb" \
+        --reverse_input_channels \
+        --input=ImageTensor \
+        --input_shape=[1,513,513,3] \
+        --output=ArgMax \
+        --data_type "$1" \
+        --output_dir "$MODELS/$MODEL_NAME/$2" \
+        --model_name "$MODEL_NAME" 2>&1 \
+        | grep -E '\\[ (SUCCESS|ERROR) \\]|Elapsed time'
 }
 
 echo
