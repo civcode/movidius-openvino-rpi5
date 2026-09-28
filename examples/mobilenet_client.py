@@ -47,9 +47,10 @@ from ov203.process import (
 from ov203.protocol import LinePipe, pipe_capacity, write_all
 from ov203.request_pool import RequestPool
 from ov203.util import windowed_rate
+from ov203.runtime import models_root
 
 INFER_SERVER = os.path.join(HERE, "webcam", "infer-server.sh")
-DEFAULT_LABELS = os.path.join(REPO_ROOT, "vendor/models/labels/synset.txt")
+DEFAULT_LABELS = str(models_root(__file__) / "labels" / "synset.txt")
 
 INPUT_SHAPE = (1, 3, 224, 224)          # what the IR expects
 INPUT_BYTES = 224 * 224 * 3 * 4         # float32 tensor, 602112 bytes
