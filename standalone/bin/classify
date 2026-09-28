@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; source "$ROOT/bin/ov-env"
+PY="$ROOT/.envs/apps/bin/python"; [[ -x "$PY" ]] || PY=python3
+exec "$PY" "$ROOT/apps/classification/webcam_mobilenet.py" "$ROOT/bin/infer-mobilenet-server" --backend host "$@"
