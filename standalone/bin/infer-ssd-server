@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; source "$ROOT/bin/ov-env"
+BACKEND="${1:-host}"; DEVICE="${2:-MYRIAD}"; MINCONF="${3:-0.5}"
+case "$BACKEND" in auto|host) ;; *) echo "standalone backend must be host|auto" >&2; exit 2;; esac
+if [[ "$DEVICE" == CPU && "$(uname -m)" =~ ^(aarch64|arm64)$ ]]; then
+  PY="$ROOT/.envs/apps/bin/python"; [[ -x "$PY" ]] || PY=python3
+  MODEL="${OV_SSD_CPU_MODEL:-$OV_MODELS_DIR/ssdlite_mobilenet_v2/source/frozen_inference_graph.pb}"
+  exec "$PY" "$ROOT/apps/detection/ssd_cpu_server.py" --model "$MODEL" --labels "$OV_MODELS_DIR/labels/coco.txt" --min-conf "$MINCONF"
+fi
+DIR=openvino; [[ "$DEVICE" == CPU ]] && DIR=openvino_fp32
+XML="$OV_MODELS_DIR/ssdlite_mobilenet_v2/$DIR/ssdlite_mobilenet_v2.xml"; BIN="${XML%.xml}.bin"; LABELS="$OV_MODELS_DIR/labels/coco.txt"
+[[ -f "$XML" && -f "$BIN" && -f "$LABELS" ]] || { echo "SSDLite model/labels missing below $OV_MODELS_DIR" >&2; exit 1; }
+exec "$OV_ROOT/bin/ssd_detect" --model "$XML" --weights "$BIN" --labels "$LABELS" --stdin --device "$DEVICE" --min-conf "$MINCONF"
