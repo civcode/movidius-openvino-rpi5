@@ -30,7 +30,7 @@ import os, sys
 work = sys.argv[1]
 
 with open(os.path.join(work, "tiny.ppm"), "wb") as f:
-    f.write(b"P6\n2 2\n255\n" + bytes(range(12)))
+    f.write(b"P5\n2 2\n255\n" + bytes(range(12)))
 
 # ssd fake: multi-word label, multi-frame capable
 open(os.path.join(work, "fake_ssd.py"), "w").write('''#!/usr/bin/env python3
@@ -282,14 +282,14 @@ pass "ssd_stream server-exit diagnostics"
 # ------------------------------------------------------------------ seg_stream e2e
 out="$("$PY" examples/deeplab-seg/seg_stream.py "$WORK/fake_seg.py" \
         --file "$WORK/tiny.ppm" --frames 2 --headless --request-timeout 5 \
-        --mask-out "$WORK/mask.ppm" 2>/dev/null)"
+        --mask-out "$WORK/mask.pgm" 2>/dev/null)"
 nframes="$(grep -c '^\[frame ' <<<"$out")"
 [[ "$nframes" == 2 ]] || fail "seg_stream: expected 2 frame lines, got $nframes"
 grep -q 'dog 50.0%' <<<"$out" || fail "seg_stream: CLASS line not parsed"
 grep -q 'dining table 25.0%' <<<"$out" || fail "seg_stream: multi-word CLASS name not parsed"
 grep -q ' warm fps' <<<"$out" || fail "seg_stream: first frame not labeled warm"
 sed -n '2p' <<<"$out" | grep -Eq '[0-9.]+ fps' || fail "seg_stream: frame 2 fps not numeric: $(sed -n '2p' <<<"$out")"
-"$PY" - "$WORK/mask.ppm" <<'PYEOF'
+"$PY" - "$WORK/mask.pgm" <<'PYEOF'
 import sys
 data = open(sys.argv[1], "rb").read()
 assert data[:11] == b"P6\n2 2\n255\n", data[:16]
