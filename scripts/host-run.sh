@@ -22,8 +22,8 @@
 #   arm64  native AArch64 host; the binaries run directly, no loader.
 #   amd64  native x86_64 host; the binaries run directly, no loader.
 #
-# See logs/HOST-RUN.md for the two host-side requirements (USB node
-# permissions, /tmp/mvnc.mutex ownership).
+# See HOWTO-HOST-RUN.md and README.md for USB permissions and
+# /tmp/mvnc.mutex troubleshooting.
 # ---------------------------------------------------------------------------
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
