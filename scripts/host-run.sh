@@ -99,7 +99,7 @@ if [[ "${TARGET}" == armv7 ]]; then
     LP="${SYSROOT}/lib/arm-linux-gnueabihf:${SYSROOT}/usr/lib/arm-linux-gnueabihf:${LP}"
 fi
 ov_run() {
-    runtime_exec_openvino "${TARGET}" "${RT}" "${OV}" "$@"
+    runtime_run_openvino "${TARGET}" "${RT}" "${OV}" "$@"
 }
 
 # Regenerate convenient wrappers for interactive shell mode.
