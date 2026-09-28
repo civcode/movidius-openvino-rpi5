@@ -370,7 +370,7 @@ full-TF NMS), INT8, armv7 CPU from source (TFLite), HETERO:MYRIAD,CPU.
   0.72); seg full-TF ~1.07 s/frame + ~1.07 s post (5 classes). One TF 2.21 /
   numpy 2 compatibility fix in `ssd_cpu_server.py`: `num_detections` is a
   rank-1 tensor, so `int(num_dets)` needed a `[0]` fallback.
-- `device_probe.hpp`: the MYRIAD probe window grew from 3 s to 12 s
+- `include/ov203/device_probe.hpp`: the MYRIAD probe window grew from 3 s to 12 s
   (11 x 1 s) so a cell can start while the stick is still re-enumerating
   after the previous cell's shutdown.
 - Client shutdown (`mobilenet_client.py`): `stop_server` now closes the
@@ -424,7 +424,7 @@ picks the *same* core - `/proc/<pid>/task/<tid>/status` showed the plugin's
 worker with `Cpus_allowed_list: 0` in all four servers.  So N servers queue on
 CPU 0 and the workload is capped at one core's worth of inference.
 
-**Fix.**  `cpu_threading.hpp` (shared, like `device_probe.hpp`) sets
+**Fix.**  `include/ov203/cpu_threading.hpp` (shared, like `include/ov203/device_probe.hpp`) sets
 `CPU_BIND_THREAD=NO` for CPU devices in `mobilenet_server`, `ssd_detect` and
 `seg_detect`; each logs what it applied (`mobilenet_server: CPU_BIND_THREAD=NO`).
 `mobilenet_server` also takes `--bind-thread yes|no|numa`, `--streams N|auto`
