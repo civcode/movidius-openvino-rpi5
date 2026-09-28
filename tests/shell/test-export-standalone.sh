@@ -35,6 +35,18 @@ grep -q '^CPU_FALLBACK_INCLUDED=1$' "$runtime_out/MANIFEST.env"
 [[ ! -e "$runtime_out/bin/build-model" ]]
 [[ -x "$runtime_out/bin/classify" ]]
 [[ -x "$runtime_out/setup.sh" ]]
+[[ ! -e "$runtime_out/apps/classification/infer-server.sh" ]]
+[[ ! -e "$runtime_out/apps/detection/infer-ssd-server.sh" ]]
+[[ ! -e "$runtime_out/apps/segmentation/infer-seg-server.sh" ]]
+if grep -R -n 'vendor/models/' "$runtime_out/apps" --include='*.py' >/dev/null 2>&1; then
+    echo "FAIL: exported Python app text still contains source-tree vendor/models paths" >&2
+    exit 1
+fi
+if grep -R -n -E 'work/host-runtime|work/mo-2020\.3|vendor/openvino|/opt/openvino-demo' \
+     "$runtime_out/bin" "$runtime_out/python" "$runtime_out/setup.sh" "$runtime_out/verify.sh" >/dev/null 2>&1; then
+    echo "FAIL: active runtime bundle contains source/container-only path references" >&2
+    exit 1
+fi
 (cd "$runtime_out" && sha256sum -c SHA256SUMS >/dev/null)
 
 relocated="$TMP/path with spaces/runtime bundle"
