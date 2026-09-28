@@ -249,7 +249,6 @@ ARG EXPECTED_ELF_CLASS=ELF32
 ARG EXPECTED_ELF_MACHINE_REGEX=ARM
 COPY smoke-test /work/smoke
 COPY include /work/include
-COPY half.hpp /work/half.hpp
 COPY cmake /work/cmake
 
 RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
@@ -283,7 +282,6 @@ ARG EXPECTED_ELF_CLASS=ELF32
 ARG EXPECTED_ELF_MACHINE_REGEX=ARM
 COPY mobilenet-test /work/mnb
 COPY include /work/include
-COPY half.hpp /work/half.hpp
 COPY cmake /work/cmake
 
 RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
@@ -316,9 +314,6 @@ ARG EXPECTED_ELF_CLASS=ELF32
 ARG EXPECTED_ELF_MACHINE_REGEX=ARM
 COPY examples/webcam /work/webcam
 COPY include /work/include
-COPY half.hpp /work/half.hpp
-COPY device_probe.hpp /work/device_probe.hpp
-COPY cpu_threading.hpp /work/cpu_threading.hpp
 COPY cmake /work/cmake
 
 RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
@@ -352,10 +347,6 @@ ARG EXPECTED_ELF_CLASS=ELF32
 ARG EXPECTED_ELF_MACHINE_REGEX=ARM
 COPY examples/ssd-detect /work/ssd
 COPY include /work/include
-COPY half.hpp /work/half.hpp
-COPY device_probe.hpp /work/device_probe.hpp
-COPY cpu_threading.hpp /work/cpu_threading.hpp
-COPY frame_utils.hpp /work/frame_utils.hpp
 COPY cmake /work/cmake
 
 RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
@@ -389,10 +380,6 @@ ARG EXPECTED_ELF_CLASS=ELF32
 ARG EXPECTED_ELF_MACHINE_REGEX=ARM
 COPY examples/deeplab-seg /work/seg
 COPY include /work/include
-COPY half.hpp /work/half.hpp
-COPY device_probe.hpp /work/device_probe.hpp
-COPY cpu_threading.hpp /work/cpu_threading.hpp
-COPY frame_utils.hpp /work/frame_utils.hpp
 COPY cmake /work/cmake
 
 RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
