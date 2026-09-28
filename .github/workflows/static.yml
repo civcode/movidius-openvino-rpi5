@@ -16,3 +16,17 @@ jobs:
         run: ./ci/verify-static.sh
       - name: Selected target
         run: ./build.sh --platform "${{ matrix.target }}" --print-platform
+
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install device-free test dependencies
+        run: python -m pip install --upgrade pip numpy
+      - name: Run bounded unit and refactor tests
+        run: bash scripts/test-refactor.sh
+
