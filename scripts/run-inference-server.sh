@@ -215,7 +215,6 @@ host_backend() {
 }
 
 docker_backend() {
-    check_model_file "$CPU_SOURCE_MODEL" 2>/dev/null || true
     local name="ov203-${APP}-$$"
     if (( CPU_PY )); then
         check_model_file "$CPU_SOURCE_MODEL"
