@@ -72,6 +72,6 @@ the same model and preprocessing scored 81.3% on CPU.  Instrumenting the
 server showed every *negative* value in the input tensor arriving at the
 network **positive**: a copy of `floatToHalf` in `mobilenet_server.cpp`
 was missing the sign bit in two return paths.  The conversion now lives in
-the repo-root `half.hpp` (shared, with a device-free unit test
+`include/ov203/half.hpp` (shared, with a device-free unit test
 `examples/webcam/test_half.cpp` that runs in the Docker build stage), and
 the MYRIAD accuracy above was measured with the fix in place.
