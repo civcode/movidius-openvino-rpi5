@@ -8,18 +8,13 @@
 #
 #   * the ONNX model and its reference tensors come from the ONNX model zoo
 #     (commit-pinned URLs + sha256),
-#   * the conversion runs the vendored OpenVINO 2020.3.2 Model Optimizer from
-#     vendor/openvino-2020.3.2/model-optimizer, staged into work/mo-2020.3 without
-#     its unit tests (mo/utils/import_extensions.py imports every .py file it sees,
-#     and those tests import a test-only helper that is not part of the tree),
-#   * Model Optimizer itself runs in a native python:3.8-slim container matching
-#     the host architecture: MO is pure Python and the IR it emits is
-#     architecture-independent, so no emulation is needed anywhere.  Inference
-#     still runs in the OpenVINO container built by ./build.sh for the target.
+#   * conversion uses the shared staged OpenVINO 2020.3.2 Model Optimizer in
+#     work/model-optimizer and a dedicated work/venv-mo-onnx environment,
+#   * MO runs natively; the IR it emits is architecture-independent. Inference
+#     still runs in the selected OpenVINO runtime target.
 #
 # Usage:
 #   ./scripts/prepare-mobilenet.sh
-#   MO_IMAGE=python:3.9-slim ./scripts/prepare-mobilenet.sh
 #
 set -euo pipefail
 
@@ -38,23 +33,9 @@ while [[ $# -gt 0 ]]; do
 done
 platform_load "$TARGET_REQUEST"
 
-MO_SRC=vendor/openvino-2020.3.2/model-optimizer
-MO_STAGE=work/mo-2020.3
+MO_STAGE=work/model-optimizer
 MODELS=vendor/models
 MODEL_NAME=mobilenet-v2-ov203
-MO_IMAGE="${MO_IMAGE:-python:3.8-slim}"
-# The converter runs natively on the host (override with MO_PLATFORM=... if you
-# want to convert under emulation instead).
-if [[ -z "${MO_PLATFORM:-}" ]]; then
-	case "$(uname -m)" in
-		x86_64|amd64)  MO_PLATFORM=linux/amd64 ;;
-		aarch64|arm64) MO_PLATFORM=linux/arm64 ;;
-		armv7l)        MO_PLATFORM=linux/arm/v7 ;;
-		*)             MO_PLATFORM="linux/$(uname -m)" ;;
-	esac
-fi
-export MO_PLATFORM
-PIP_PINS='numpy==1.21.6 networkx==2.6.3 protobuf==3.19.6 defusedxml==0.7.1 onnx==1.12.0'
 
 # The legacy S3 bucket (download.onnx) now answers 403; the same artifact is
 # hosted in the onnx/models repo (Git LFS, fetched via the media endpoint).
@@ -115,25 +96,20 @@ printf '    %s lines\n' "$(wc -l < "$MODELS/labels/synset.txt")"
 
 # ------------------------------------------------ 3. Model Optimizer 2020.3.2
 echo
-echo "== Model Optimizer 2020.3.2 (vendored, staged without unit tests) =="
-echo "    project target: $TARGET; MO host platform: $MO_PLATFORM"
-rm -rf "$MO_STAGE"; mkdir -p "$MO_STAGE"
-rsync -a --exclude='*_test.py' --exclude='automation/' --exclude='install_prerequisites/' \
-	"$MO_SRC/" "$MO_STAGE/"
-printf '    staged %s python files (source tree has %s)\n' \
-	"$(find "$MO_STAGE" -name '*.py' | wc -l)" "$(find "$MO_SRC" -name '*.py' | wc -l)"
+echo "== Model Optimizer 2020.3.2 (shared staged runner) =="
+"$ROOT/scripts/prepare-model-optimizer.sh"
 
 mo_convert() {  # $1 = --data_type, $2 = output subdirectory
-	mkdir -p "$MODELS/$MODEL_NAME/$2"
-	echo "    converting --data_type $1 -> $MODELS/$MODEL_NAME/$2"
-	docker run --rm --platform "$MO_PLATFORM" \
-		-v "$PWD/$MO_STAGE:/mo:ro" -v "$PWD/$MODELS:/models" \
-		-e PYTHONDONTWRITEBYTECODE=1 "$MO_IMAGE" bash -lc \
-		"pip install --no-cache-dir -q $PIP_PINS 2>&1 | tail -1
-		 python /mo/mo.py --input_model /models/onnx/mobilenetv2-7.onnx \
-			--output_dir /models/$MODEL_NAME/$2 --model_name $MODEL_NAME \
-			--data_type $1 2>&1 | grep -E '\[ (SUCCESS|ERROR) \]|Elapsed|execution time'"
-	ls -l "$MODELS/$MODEL_NAME/$2/${MODEL_NAME}.xml" "$MODELS/$MODEL_NAME/$2/${MODEL_NAME}.bin"
+    mkdir -p "$MODELS/$MODEL_NAME/$2"
+    echo "    converting --data_type $1 -> $MODELS/$MODEL_NAME/$2"
+    "$ROOT/scripts/run-mo.sh" --framework onnx -- \
+        --input_model "$MODELS/onnx/mobilenetv2-7.onnx" \
+        --output_dir "$MODELS/$MODEL_NAME/$2" \
+        --model_name "$MODEL_NAME" \
+        --data_type "$1" 2>&1 \
+        | grep -E '\\[ (SUCCESS|ERROR) \\]|Elapsed|execution time'
+    ls -l "$MODELS/$MODEL_NAME/$2/$MODEL_NAME.xml" \
+          "$MODELS/$MODEL_NAME/$2/$MODEL_NAME.bin"
 }
 mo_convert FP32 fp32
 mo_convert FP16 fp16
@@ -141,17 +117,21 @@ mo_convert FP16 fp16
 # ------------------------- 4. official test tensors -> raw little-endian float32
 echo
 echo "== reference tensors from the model zoo (test_data_set_0) =="
-docker run --rm --platform "$MO_PLATFORM" -v "$PWD/$MODELS/test_data:/td" "$MO_IMAGE" bash -lc \
-	"pip install --no-cache-dir -q 'numpy==1.19.5' 'onnx==1.12.0' 2>&1 | tail -1
-	 python -c \"
-import onnx, numpy as np
+MO_PY="$ROOT/work/venv-mo-onnx/bin/python"
+"$MO_PY" - "$MODELS/test_data" <<'PYEOF'
+import os, sys
+import onnx
+import numpy as np
 from onnx import numpy_helper
+
+root = sys.argv[1]
 for nm in ('input_0', 'output_0'):
-    t = onnx.load_tensor('/td/test_data_set_0/' + nm + '.pb')
-    a = numpy_helper.to_array(t)
-    print('   ', nm, t.name, a.shape, a.dtype, 'min', a.min(), 'max', a.max())
-    a.astype('<f4').tofile('/td/' + nm + '.f32')
-\""
+    tensor = onnx.load_tensor(os.path.join(root, 'test_data_set_0', nm + '.pb'))
+    arr = numpy_helper.to_array(tensor)
+    print('   ', nm, tensor.name, arr.shape, arr.dtype,
+          'min', arr.min(), 'max', arr.max())
+    arr.astype('<f4').tofile(os.path.join(root, nm + '.f32'))
+PYEOF
 
 # --------------------------------------------------- 5. photos -> 224x224 PPMs
 echo
