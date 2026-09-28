@@ -27,7 +27,8 @@
 
 #include "half.hpp"  // shared IEEE-754 f16<->f32 conversion (unit-tested in examples/webcam/test_half.cpp)
 #include "device_probe.hpp"  // shared MYRIAD device probe with retry
-#include "cpu_threading.hpp"  // shared CPU plugin thread-placement fix
+#include "cpu_threading.hpp"
+#include "include/ov203/device_spec.hpp"
 using namespace InferenceEngine;
 
 namespace {
@@ -80,8 +81,9 @@ int main(int argc, char** argv) {
 
     try {
         Core ie;
+        const ov203::DeviceSpec deviceSpec = ov203::parseDeviceSpec(device);
         std::vector<std::string> devices;
-        if (!waitDevice(ie, device, devices)) {
+        if (!waitPhysicalDevices(ie, deviceSpec.physicalDevices, devices)) {
             std::fprintf(stderr, "device %s not available (have: ", device.c_str());
             for (size_t i = 0; i < devices.size(); ++i) {
                 std::fprintf(stderr, "%s%s", i ? ", " : "", devices[i].c_str());
@@ -109,11 +111,16 @@ int main(int argc, char** argv) {
         if (inputs.size() != 1) { std::fprintf(stderr, "expected exactly one input\n"); return 3; }
         const std::string inputName = inputs.begin()->first;
         const SizeVector inputDims = inputs.begin()->second->getInputData()->getDims();
+        if (inputDims.size() != 4 || inputDims[0] != 1 || inputDims[1] != 3) {
+            std::fprintf(stderr, "expected NCHW [1,3,H,W] input, got [%s]\n",
+                         dimsToString(inputDims).c_str());
+            return 3;
+        }
         // The MYRIAD VPU only accepts FP16 inputs; the CPU plugin of this
         // OpenVINO release rejects FP16 ("Input image format FP16 is not
         // supported yet"), so keep the IR's native precision elsewhere - the
         // client selects the fp32 IRs when the device is CPU.
-        if (device == "MYRIAD")
+        if (deviceSpec.usesMyriad)
             inputs.begin()->second->setPrecision(Precision::FP16);
         inputs.begin()->second->setLayout(Layout::NCHW);
         const size_t inElems = static_cast<size_t>(inputDims[1]) * inputDims[2] * inputDims[3];
@@ -121,7 +128,19 @@ int main(int argc, char** argv) {
         OutputsDataMap outputs = network.getOutputsInfo();
         if (outputs.size() != 1) { std::fprintf(stderr, "expected exactly one output\n"); return 3; }
         const std::string outputName = outputs.begin()->first;
-        const size_t outElems = outputs.begin()->second->getDims().back();
+        const SizeVector outputDims = outputs.begin()->second->getDims();
+        if (outputDims.empty()) {
+            std::fprintf(stderr, "output tensor has no dimensions\n");
+            return 3;
+        }
+        size_t outElems = 1;
+        for (size_t d : outputDims) outElems *= d;
+        if (outElems != 1000) {
+            std::fprintf(stderr,
+                         "mobilenet stream protocol expects 1000 logits, got %zu\n",
+                         outElems);
+            return 3;
+        }
 
         ExecutableNetwork executable = ie.LoadNetwork(network, device);
         InferRequest request = executable.CreateInferRequest();
