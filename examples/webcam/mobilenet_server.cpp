@@ -29,6 +29,7 @@
 #include "device_probe.hpp"  // shared MYRIAD device probe with retry
 #include "cpu_threading.hpp"
 #include "include/ov203/device_spec.hpp"
+#include "include/ov203/wire.hpp"
 using namespace InferenceEngine;
 
 namespace {
@@ -189,6 +190,8 @@ int main(int argc, char** argv) {
             }
             if (eof) break;
 
+            ov203::littleEndianFloat32ToNativeInPlace(requestTensor.data(), inElems);
+
             if (inElemBytes == 2)
                 for (size_t i = 0; i < inElems; ++i) inHalf[i] = floatToHalf(requestTensor[i]);
             else
@@ -221,13 +224,14 @@ int main(int argc, char** argv) {
                 return 3;
             }
 
+            std::vector<unsigned char> outputWire(outBytes);
+            ov203::nativeFloat32ToLittleEndianBytes(logits.data(), outputWire.data(), outElems);
             size_t sent = 0;
             while (sent < outBytes) {
-                const size_t w = std::fwrite(logits.data() + sent / 4, 4, (outBytes - sent) / 4,
-                                             stdout);
+                const size_t w = std::fwrite(outputWire.data() + sent, 1, outBytes - sent, stdout);
                 if (w == 0) { std::fprintf(stderr, "client gone (write failed), exiting\n");
                              return 3; }
-                sent += w * 4;
+                sent += w;
             }
             std::fflush(stdout);
         }
