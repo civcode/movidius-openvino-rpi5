@@ -37,8 +37,6 @@ Requires numpy + opencv:  pip3 install numpy opencv-python(-headless)
 import argparse
 import os
 import signal
-import struct
-import subprocess
 import sys
 import time
 # The aarch64 OpenCV wheel bundles no fonts, so Qt prints a QFontDatabase
@@ -64,7 +62,7 @@ from ov203.camera import (
 from ov203.device import resolve_servers
 from ov203.display import DisplayPump, WindowWatcher
 from ov203.process import ProcCpu, server_exit_meaning, spawn_servers, stop_server, wait_alive
-from ov203.protocol import LinePipe, write_all
+from ov203.protocol import SegPipeClient as SegClient
 from ov203.request_pool import RequestPool
 from ov203.util import windowed_rate
 
@@ -135,101 +133,6 @@ def read_ppm(path):
         raise ValueError("truncated PPM body: " + path)
     return np.frombuffer(body, dtype=np.uint8).reshape(h, w, 3)
 
-
-class SegClient:
-    """Drives the seg_detect --stdin child process over its stdin/stdout pipes."""
-
-    def __init__(self, server_cmd, backend, device, request_timeout):
-        self.request_timeout = request_timeout
-        # single executable path convention (same as ssd_stream.py): the
-        # launcher must be an executable script, invoked as <path> <backend> <device>
-        self.proc = subprocess.Popen(
-            [server_cmd, backend, device],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=None,            # server diagnostics stream to our terminal
-            start_new_session=True, # so we can kill the whole group (docker too)
-        )
-        self.pipe = LinePipe(self.proc.stdout.fileno(), self.proc)
-        note("inference backend: %s device=%s (server pid %d)"
-             % (backend, device, self.proc.pid))
-
-    def segment(self, rgb, w, h):
-        """Send one RGB frame; returns (classes, mask_bytes, total_ms,
-        infer_ms) where classes is a list of (id, name, pixels)."""
-        try:
-            fd = self.proc.stdin.fileno()
-            write_all(fd, struct.pack("<II", w, h))
-            write_all(fd, np.ascontiguousarray(rgb, dtype=np.uint8))
-        except (BrokenPipeError, OSError) as e:
-            code = self.proc.poll()
-            if code is None:
-                raise RuntimeError(
-                    "server closed its stdin pipe but has not exited yet "
-                    "(see its diagnostics above)") from e
-            raise RuntimeError(
-                "server closed its stdin pipe (exit code %s: %s)"
-                % (code, server_exit_meaning(code))) from e
-
-        classes = []
-        mask_bytes = None
-        total_ms = infer_ms = 0.0
-        while True:
-            line = self._readline()
-            if line is None:
-                raise RuntimeError("server closed stdout mid-frame")
-            if line.startswith("ERROR"):
-                raise RuntimeError("server reported: " + line[5:].strip())
-            tok = line.split()
-            if not tok:
-                continue
-            if tok[0] == "FRAME":
-                if len(tok) != 5:
-                    raise RuntimeError("unexpected server line: %r" % line)
-                try:
-                    total_ms = float(tok[3])
-                    infer_ms = float(tok[4])
-                except ValueError:
-                    raise RuntimeError("unexpected server line: %r" % line) from None
-            elif tok[0] == "CLASSES":
-                for _ in range(int(tok[1])):
-                    l = self._readline()
-                    if l is None:
-                        raise RuntimeError("server closed mid-CLASS")
-                    t = l.split()
-                    # CLASS <id> <name ...> <pixels>; the name may contain
-                    # spaces, so take the id first and the pixel count last
-                    if len(t) < 4 or t[0] != "CLASS":
-                        raise RuntimeError("unexpected server line: %r" % l)
-                    classes.append((int(t[1]), " ".join(t[2:-1]), int(t[-1])))
-            elif tok[0] == "MASK":
-                if len(tok) != 3:
-                    raise RuntimeError("unexpected server line: %r" % line)
-                fw, fh = int(tok[1]), int(tok[2])
-                if fw <= 0 or fh <= 0:
-                    raise RuntimeError("bad MASK dimensions: %r" % line)
-                try:
-                    mask_bytes = self.pipe.read_exact(fw * fh * 2,
-                                                      timeout=self.request_timeout)
-                except TimeoutError as ex:
-                    raise RuntimeError(str(ex)) from ex
-            elif tok[0] == "END":
-                return classes, mask_bytes, total_ms, infer_ms
-        # unreachable
-
-    def _readline(self):
-        try:
-            return self.pipe.readline(timeout=self.request_timeout)
-        except TimeoutError as ex:
-            raise RuntimeError(str(ex)) from ex
-
-    def close(self):
-        stop_server(self.proc)
-        for stream in (self.proc.stdin, self.proc.stdout):
-            try:
-                stream.close()
-            except Exception:
-                pass
 
 
 def overlay(frame_bgr, mask_u16, w, h, alpha=0.4):
