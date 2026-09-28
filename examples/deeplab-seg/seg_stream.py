@@ -10,7 +10,7 @@ Usage:
   python3 examples/deeplab-seg/seg_stream.py --headless       # CLI output only
   python3 examples/deeplab-seg/seg_stream.py --file dog_ssd.ppm --frames 1
   python3 examples/deeplab-seg/seg_stream.py --video vendor/models/images/sample_640x360.mp4
-  python3 examples/deeplab-seg/seg_stream.py --backend docker --mask-out mask.ppm
+  python3 examples/deeplab-seg/seg_stream.py --backend docker --mask-out mask.pgm
   python3 examples/deeplab-seg/seg_stream.py --window-size 960x540   # initial GUI window size
   python3 examples/deeplab-seg/seg_stream.py path/to/my-launcher.sh --backend host
 
@@ -27,7 +27,7 @@ The server protocol (see seg_detect.cpp):
        MASK   <w> <h>  + w*h uint16 LE class ids
        END
 
---mask-out writes the class map as a P6 PPM (1 byte/pixel, value = class
+--mask-out writes the class map as a P5 PGM (1 byte/pixel, value = class
 id 0..20); map it to colours with the PALETTE in this file or the
 seg_detect README.
 
@@ -255,11 +255,14 @@ def overlay(frame_bgr, mask_u16, w, h, alpha=0.4):
 
 
 def write_class_map(path, mask_u16, w, h):
-    """Write the class map as a 1-byte/pixel P6 PPM (value = class id 0..20)."""
-    m = np.frombuffer(mask_u16, dtype="uint16").reshape(h, w).astype("uint8")
+    """Write an 8-bit P5 PGM class map."""
+    m16 = np.frombuffer(mask_u16, dtype="<u2").reshape(h, w)
+    if m16.size and int(m16.max()) > 255:
+        raise ValueError("PGM class map supports class IDs 0..255")
+    m = m16.astype("uint8", copy=False)
     with open(path, "wb") as f:
-        f.write(b"P6\n%d %d\n255\n" % (w, h))
-        f.write(m.tobytes())
+        f.write(b"P5\n%d %d\n255\n" % (w, h))
+        f.write(m.tobytes(order="C"))
 
 
 def parse_window_size(spec):
@@ -358,8 +361,15 @@ def main():
                          "(the window is resizable either way; with this unset it "
                          "opens at the frame size)")
     ap.add_argument("--mask-out", default=None,
-                    help="write the class map of the last frame as a 1-byte/pixel P6 PPM")
+                    help="write the class map of the last frame as an 8-bit P5 PGM")
     args = ap.parse_args()
+
+    if args.servers < 1:
+        ap.error("--servers must be >= 1")
+    if args.frames < 0:
+        ap.error("--frames must be >= 0")
+    if args.request_timeout <= 0:
+        ap.error("--request-timeout must be > 0")
     win = "deeplab @ %s (q to quit)" % args.device.upper()
     try:
         win_size = parse_window_size(args.window_size)
@@ -425,6 +435,7 @@ def main():
                     warmup_s = elapsed
                     note("warmup: first segmentation %.0f ms (includes device "
                          "compile); excluded from fps" % (warmup_s * 1000))
+                    stamps.append(time.monotonic())  # steady-state rate origin
                 else:
                     stamps.append(time.monotonic())
                 n += 1
@@ -554,6 +565,7 @@ def main():
                         note("warmup: first segmentation %.0f ms (includes "
                              "device compile); excluded from fps"
                              % (warmup_s * 1000))
+                        stamps.append(time.monotonic())  # steady-state rate origin
                     else:
                         stamps.append(time.monotonic())
                     fps_str = ("%5.1f" % windowed_rate(stamps)
