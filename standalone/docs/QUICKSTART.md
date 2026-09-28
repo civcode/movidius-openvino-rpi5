@@ -2,7 +2,8 @@
 
 ```bash
 ./setup.sh --check
-./setup.sh
+./setup.sh                    # includes CPU fallback environments
+./setup.sh --skip-cpu-fallback # lighter MYRIAD-only Python setup
 ./setup.sh --install-udev   # optional, requires sudo
 ./verify.sh
 ./bin/ov-device-list
