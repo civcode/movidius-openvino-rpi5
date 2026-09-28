@@ -1,0 +1,4 @@
+# Runtime application environment. Resolve/download on the target architecture.
+numpy>=1.21,<2
+opencv-python>=4.6,<5
+onnxruntime>=1.14,<2
