@@ -344,6 +344,15 @@ def main():
                     help="no GUI window; results are printed to stdout")
     args = ap.parse_args()
 
+    if args.servers < 1:
+        ap.error("--servers must be >= 1")
+    if args.frames < 0:
+        ap.error("--frames must be >= 0")
+    if args.request_timeout <= 0:
+        ap.error("--request-timeout must be > 0")
+    if not 0.0 <= args.min_conf <= 1.0:
+        ap.error("--min-conf must be between 0 and 1")
+
     # GUI, webcam capture and --video need OpenCV; headless --file mode only
     # needs numpy (for .ppm)
     if cv2 is None and (args.video or not (args.headless and args.file)):
