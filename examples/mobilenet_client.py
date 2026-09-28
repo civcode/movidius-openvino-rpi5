@@ -13,14 +13,8 @@ mean [0.485, 0.456, 0.406], std [0.229, 0.224, 0.225], NCHW float32).
 """
 
 import argparse
-import fcntl
 import os
-import queue
-import select
-import signal
-import subprocess
 import sys
-import threading
 import time
 
 import numpy as np
@@ -39,14 +33,8 @@ from ov203.camera import (
     FakeCamera, LatestFrame, add_camera_capture_args, add_fake_camera_args,
     fourcc_from_tag, load_static_image, note_camera_settings, open_camera,
 )
-from ov203.device import resolve_servers
-from ov203.display import DisplayPump, WindowWatcher
-from ov203.process import (
-    ProcCpu, server_exit_meaning, spawn_servers, stop_server, wait_alive,
-)
+from ov203.process import ProcCpu
 from ov203.protocol import MobileNetPipeClient
-from ov203.request_pool import RequestPool
-from ov203.util import windowed_rate
 from ov203.runtime import models_root
 
 INFER_SERVER = os.path.join(HERE, "webcam", "infer-server.sh")
