@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+_ov_this="${BASH_SOURCE[0]}"
+_ov_bin="$(cd "$(dirname "$_ov_this")" && pwd)"
+OV_STANDALONE_ROOT="$(cd "$_ov_bin/.." && pwd)"
+export OV_STANDALONE_ROOT
+export OV_ROOT="$OV_STANDALONE_ROOT/runtime/openvino"
+_ie_plugin="$(find "$OV_ROOT/inference_engine/lib" -mindepth 2 -maxdepth 2 -name libmyriadPlugin.so -print -quit 2>/dev/null || true)"
+if [[ -z "$_ie_plugin" ]]; then echo "OpenVINO MYRIAD plugin not found under $OV_ROOT" >&2; return 1 2>/dev/null || exit 1; fi
+OV_IE_LIB="$(dirname "$_ie_plugin")"
+OV_NGRAPH_LIB="$OV_ROOT/ngraph/lib"
+export OV_IE_LIB OV_NGRAPH_LIB
+export LD_LIBRARY_PATH="$OV_IE_LIB:$OV_NGRAPH_LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export PATH="$OV_STANDALONE_ROOT/bin:$OV_ROOT/bin:$OV_IE_LIB:$PATH"
+export PYTHONPATH="$OV_STANDALONE_ROOT/python:$OV_STANDALONE_ROOT/apps${PYTHONPATH:+:$PYTHONPATH}"
+export OV_MODELS_DIR="${OV_MODELS_DIR:-$OV_STANDALONE_ROOT/models}"
+unset _ov_this _ov_bin _ie_plugin
