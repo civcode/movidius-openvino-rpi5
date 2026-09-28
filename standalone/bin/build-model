@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+usage(){ echo "usage: build-model SOURCE_MODEL --output-dir DIR [--name NAME] [--framework onnx|tf] [--precision FP16|FP32] [--mo-arg ARG] [--compile-arg ARG]"; }
+SRC=""; OUT=""; NAME=""; FRAMEWORK=""; PRECISION="FP16"; MO_ARGS=(); COMP_ARGS=()
+while [[ $# -gt 0 ]]; do case "$1" in --output-dir) OUT="$2"; shift 2;; --name) NAME="$2"; shift 2;; --framework) FRAMEWORK="$2"; shift 2;; --precision) PRECISION="${2^^}"; shift 2;; --mo-arg) MO_ARGS+=("$2"); shift 2;; --compile-arg) COMP_ARGS+=("$2"); shift 2;; -h|--help) usage; exit 0;; -*) echo "unknown option: $1" >&2; exit 2;; *) [[ -z "$SRC" ]] || { echo "unexpected argument: $1" >&2; exit 2;}; SRC="$1"; shift;; esac; done
+[[ -f "$SRC" && -n "$OUT" ]] || { usage >&2; exit 2; }
+[[ "$PRECISION" == FP16 || "$PRECISION" == FP32 ]] || { echo "precision must be FP16 or FP32" >&2; exit 2; }
+if [[ -z "$FRAMEWORK" ]]; then case "${SRC##*.}" in onnx) FRAMEWORK=onnx;; pb|pbtxt|meta) FRAMEWORK=tf;; *) echo "cannot infer framework from $SRC; pass --framework" >&2; exit 2;; esac; fi
+NAME="${NAME:-$(basename "${SRC%.*}")}"; mkdir -p "$OUT/source" "$OUT/ir" "$OUT/blob"; cp -f "$SRC" "$OUT/source/"
+MO="$ROOT/bin/mo-$FRAMEWORK"; [[ -x "$MO" ]] || { echo "unsupported framework: $FRAMEWORK" >&2; exit 2; }
+"$MO" --input_model "$SRC" --output_dir "$OUT/ir" --model_name "$NAME" --data_type "$PRECISION" "${MO_ARGS[@]}"
+XML="$OUT/ir/$NAME.xml"; [[ -f "$XML" ]] || { echo "Model Optimizer did not produce $XML" >&2; exit 1; }
+"$ROOT/bin/compile-model" "$XML" --output "$OUT/blob/$NAME.blob" -- "${COMP_ARGS[@]}"
+python3 - "$SRC" "$OUT" "$NAME" "$FRAMEWORK" "$PRECISION" <<'PY'
+import hashlib,json,pathlib,sys
+src,out,name,framework,precision=sys.argv[1:]
+h=hashlib.sha256(pathlib.Path(src).read_bytes()).hexdigest()
+pathlib.Path(out,"build-manifest.json").write_text(json.dumps({"source":str(pathlib.Path(src).resolve()),"source_sha256":h,"framework":framework,"precision":precision,"openvino_version":"2020.3.2","ir_xml":f"ir/{name}.xml","ir_bin":f"ir/{name}.bin","blob":f"blob/{name}.blob"},indent=2)+"\n")
+PY
+echo "built model in $OUT"
