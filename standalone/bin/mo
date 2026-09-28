@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; export OV_STANDALONE_ROOT="$ROOT"
+framework="${OV_MO_FRAMEWORK:-}"; args=("$@")
+for ((i=0;i<$#;i++)); do if [[ "${args[$i]}" == --framework && $((i+1)) -lt $# ]]; then framework="${args[$((i+1))]}"; fi; done
+envname="mo-onnx"; [[ "$framework" == tf || "$framework" == tensorflow ]] && envname="mo-tensorflow"
+PY="$ROOT/.envs/$envname/bin/python"; [[ -x "$PY" ]] || PY="${PYTHON:-python3}"
+exec "$PY" "$ROOT/tools/mo-launcher.py" "$@"
