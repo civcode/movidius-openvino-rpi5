@@ -163,6 +163,17 @@ def main():
                     help="no GUI window; results are printed to stdout")
     args = ap.parse_args()
 
+    for name in ("servers", "every", "report_every", "topk"):
+        if getattr(args, name) < 1:
+            ap.error("--%s must be >= 1" % name.replace("_", "-"))
+    for name in ("frames", "bench"):
+        if getattr(args, name) < 0:
+            ap.error("--%s must be >= 0" % name.replace("_", "-"))
+    if args.request_timeout <= 0:
+        ap.error("--request-timeout must be > 0")
+    if args.max_fps < 0:
+        ap.error("--max-fps must be >= 0")
+
     if cv2 is None:
         die("OpenCV is required: pip install opencv-python numpy "
             "(headless mode still needs it for the webcam capture)")
@@ -287,10 +298,6 @@ def main():
     # The inference path spans two processes, so the utilisation worth watching
     # is their total; the window is reset after warm-up below.
     cpu = ProcCpu([os.getpid()] + [c.proc.pid for c in clients])
-
-    def _budget_left():
-        """False once --frames has been reached in --video mode."""
-        return not (is_video and args.frames and frame_no >= args.frames)
 
     def _budget_left():
         """False once --frames has been reached (any source)."""
@@ -435,8 +442,10 @@ def main():
         if frame is None:
             die("camera stream ended")
 
-        pipeline.submit(_payload(frame))
-        logits, last_infer_ms = pipeline.get()
+        pipeline.submit(_payload(frame), context=frame)
+        warm_result = pipeline.get()
+        logits, last_infer_ms = warm_result
+        frame = warm_result.context
         last_probs = topk_probs(logits, labels, args.topk)
         classified_no = 1
         note("warmup: first classification %.0f ms (includes device compile); "
@@ -469,8 +478,7 @@ def main():
                         break
                 if nxt is None:
                     break                          # stream ended / budget spent
-                pipeline.submit(_payload(nxt))
-                frame = nxt
+                pipeline.submit(_payload(nxt), context=nxt)
                 classified_no += 1
                 fed += 1
             if stopping["flag"]:
@@ -479,7 +487,9 @@ def main():
                 break                              # nothing queued and none left
 
             # --- collect the oldest finished result -----------------------
-            logits, last_infer_ms = pipeline.get()
+            result = pipeline.get()
+            logits, last_infer_ms = result
+            frame = result.context
             # top-k is only needed for the line or the overlay about to be
             # drawn; sorting 1000 logits every frame is real work at a few
             # hundred fps, so skip it on frames that report nothing.
