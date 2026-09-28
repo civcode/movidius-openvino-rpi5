@@ -16,7 +16,7 @@ if os.environ.get("OV203_MO_ROOT"):
     candidates.append(Path(os.environ["OV203_MO_ROOT"]))
 if os.environ.get("OV_STANDALONE_ROOT"):
     candidates.append(Path(os.environ["OV_STANDALONE_ROOT"]) / "tools/model-optimizer")
-candidates += [repo / "work/model-optimizer", repo / "work/mo-2020.3"]
+candidates += [repo / "work/model-optimizer"]
 mo_root = next((p for p in candidates if (p / "mo.py").exists()), None)
 if mo_root is None:
     raise SystemExit("staged Model Optimizer not found; run scripts/prepare-model-optimizer.sh")
