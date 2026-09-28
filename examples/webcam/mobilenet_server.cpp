@@ -171,6 +171,7 @@ int main(int argc, char** argv) {
 
         std::vector<float> requestTensor(inElems);
         std::vector<float> logits(outElems);
+        std::vector<unsigned char> outputWire(outBytes);
         bool eof = false;
 
         while (!eof) {
@@ -224,7 +225,6 @@ int main(int argc, char** argv) {
                 return 3;
             }
 
-            std::vector<unsigned char> outputWire(outBytes);
             ov203::nativeFloat32ToLittleEndianBytes(logits.data(), outputWire.data(), outElems);
             size_t sent = 0;
             while (sent < outBytes) {
