@@ -56,7 +56,7 @@ namespace {
 void usage() {
     std::cout
         << "ssd_detect --model <ir.xml> --weights <ir.bin> --labels <coco.txt>\n"
-        << "            --image <photo.ppm> [--device MYRIAD] [--min-conf 0.5]\n"
+        << "            --image <photo.ppm> [--device DEVICE] [--min-conf 0.5]\n"
         << "            [--max-detections 10] [--iterations 1] [--debug]\n"
         << "            --stdin   (stream mode: frames on stdin, see header)\n\n"
         << "Exit codes: 0 ok, 1 runtime failure, 2 device/CLI error, 3 model/shape error.\n";
