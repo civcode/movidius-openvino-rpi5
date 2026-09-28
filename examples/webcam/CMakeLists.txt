@@ -26,25 +26,7 @@ endforeach()
 add_executable(test_half test_half.cpp)
 target_include_directories(test_half PRIVATE "${SHARED_INCLUDE_DIR}")
 
-add_executable(mobilenet_server mobilenet_server.cpp)
-target_include_directories(mobilenet_server PRIVATE
-    "${OV_ROOT}/include"
-    "${SHARED_INCLUDE_DIR}")
-if(EXISTS "${NGRAPH_ROOT}/include")
-    target_include_directories(mobilenet_server PRIVATE "${NGRAPH_ROOT}/include")
-endif()
-target_link_libraries(mobilenet_server PRIVATE
-    "-Wl,--start-group" ${ov_link_libs} "-Wl,--end-group" dl)
-
-if(OV_RUNTIME_PREFIX)
-    set_target_properties(mobilenet_server PROPERTIES
-        BUILD_WITH_INSTALL_RPATH ON
-        INSTALL_RPATH "${ov_rpath_use}")
-else()
-    set_target_properties(mobilenet_server PROPERTIES
-        BUILD_RPATH "${ov_rpath_use}"
-        INSTALL_RPATH "${ov_rpath_use}")
-endif()
+ov203_add_inference_executable(mobilenet_server mobilenet_server.cpp)
 
 message(STATUS "mobilenet_server: linking ${ov_link_libs}")
 message(STATUS "mobilenet_server: rpath ${ov_rpath_use}")
