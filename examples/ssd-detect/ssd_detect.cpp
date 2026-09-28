@@ -40,7 +40,10 @@
 
 #include "half.hpp"
 #include "device_probe.hpp"  // shared MYRIAD device probe with retry
-#include "cpu_threading.hpp"  // shared CPU plugin thread-placement fix
+#include "cpu_threading.hpp"
+#include "include/ov203/device_spec.hpp"
+#include "include/ov203/cli.hpp"
+#include "include/ov203/wire.hpp"
 #include "frame_utils.hpp"   // shared PPM I/O + bilinear resize
 #include "ssd_postprocess.hpp"
 
@@ -82,9 +85,9 @@ Options parseArgs(int argc, char** argv) {
         else if (a == "--image") o.image = next("--image");
         else if (a == "--labels") o.labels = next("--labels");
         else if (a == "--device") o.device = next("--device");
-        else if (a == "--min-conf") o.minConf = std::stof(next("--min-conf"));
-        else if (a == "--max-detections") o.maxDetections = std::stoi(next("--max-detections"));
-        else if (a == "--iterations") o.iterations = std::stoi(next("--iterations"));
+        else if (a == "--min-conf") o.minConf = ov203::parseProbability("--min-conf", next("--min-conf"));
+        else if (a == "--max-detections") o.maxDetections = ov203::parsePositiveInt("--max-detections", next("--max-detections"));
+        else if (a == "--iterations") o.iterations = ov203::parsePositiveInt("--iterations", next("--iterations"));
         else if (a == "--stdin") o.stdinStream = true;
         else if (a == "--debug") o.debug = true;
         else if (a == "--help" || a == "-h") { usage(); std::exit(0); }
@@ -124,8 +127,9 @@ int main(int argc, char** argv) {
 
     try {
         Core ie;
+        const ov203::DeviceSpec deviceSpec = ov203::parseDeviceSpec(opt.device);
         std::vector<std::string> devices;
-        if (!waitDevice(ie, opt.device, devices)) {
+        if (!waitPhysicalDevices(ie, deviceSpec.physicalDevices, devices)) {
             // whole message on stderr: in stream mode stdout is the frame protocol
             std::cerr << "device " << opt.device << " not available (have: ";
             for (size_t i = 0; i < devices.size(); ++i)
@@ -154,15 +158,15 @@ int main(int argc, char** argv) {
         if (inputs.size() != 1) { std::cerr << "expected exactly one input\n"; return 3; }
         const std::string inputName = inputs.begin()->first;
         const SizeVector inputDims = inputs.begin()->second->getInputData()->getDims();
-        const auto inPrec = inputs.begin()->second->getPrecision();
         // The MYRIAD VPU only accepts FP16 inputs; the CPU plugin of this
         // OpenVINO release rejects FP16 ("Input image format FP16 is not
         // supported yet"), so keep the IR's native precision elsewhere - the
         // launchers feed the FP32 IRs when the device is CPU.
-        if (opt.device == "MYRIAD")
+        if (deviceSpec.usesMyriad)
             inputs.begin()->second->setPrecision(Precision::FP16);
         inputs.begin()->second->setLayout(Layout::NCHW);
-        const char* inPrecStr = inPrec == Precision::FP16 ? "FP16" : inPrec == Precision::FP32 ? "FP32" : "other";
+        const auto configuredPrecision = inputs.begin()->second->getPrecision();
+        const char* inPrecStr = configuredPrecision == Precision::FP16 ? "FP16" : configuredPrecision == Precision::FP32 ? "FP32" : "other";
         info << "model input     : " << inputName << " [" << dimsToString(inputDims)
              << "] " << inPrecStr
              << " (raw 0-255 RGB; the 2/255 scale and -1 offset are inside the graph)\n";
@@ -273,8 +277,9 @@ int main(int argc, char** argv) {
                 uint32_t fw = 0, fh = 0;
                 std::vector<unsigned char> frame;
                 std::size_t frameNo = 0;
-                while (std::cin.read(reinterpret_cast<char*>(&fw), sizeof(fw)) &&
-                       std::cin.read(reinterpret_cast<char*>(&fh), sizeof(fh))) {
+                while (std::cin.peek() != std::char_traits<char>::eof()) {
+                    fw = ov203::readLe32(std::cin);
+                    fh = ov203::readLe32(std::cin);
                     if (fw == 0 || fh == 0 || fw > 8192 || fh > 8192)
                         throw std::runtime_error("frame header out of range: " +
                                                  std::to_string(fw) + "x" + std::to_string(fh));
