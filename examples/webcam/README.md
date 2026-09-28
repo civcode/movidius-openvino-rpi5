@@ -52,7 +52,7 @@ used by `mobilenet-test/main.cpp`: resize to 224x224 (area), BGR -> RGB,
     (it contains `mobilenet_server` in `/opt/openvino/bin`).
 * A webcam visible to the host (`/dev/videoN`, your user in the `video`
   group) and the MA2450 stick attached with the usual udev/permissions
-  setup (see `README.md` / `logs/HOST-RUN.md`).
+  setup (see `README.md` / `HOWTO-HOST-RUN.md`).
 
 ## Usage
 
@@ -179,7 +179,7 @@ Two things to know about reading these numbers:
   cross-check but no longer the only way to scale.
 * The older flat column in `docs/CPU-BACKENDS.md` (1-12 servers all ~190 fps)
   was OpenVINO's `CPU_BIND_THREAD=YES` pinning every server's inference thread
-  to the same core - see `cpu_threading.hpp`.  The small drop at one server
+  to the same core - see `include/ov203/cpu_threading.hpp`.  The small drop at one server
   (~181 to ~146 fps) is that thread losing core affinity.
 
 Queue depth is not a lever: measured at depth 1/2/4/8 a single server stayed
@@ -204,7 +204,7 @@ loop runs at the device rate.
 * `host runtime missing .../mobilenet_server` - rebuild the image and re-run
   `./scripts/pull-runtime.sh --platform <target>` (older pulls predate this
   example).
-* `mvnc ... global mutex initialization failed` - see `logs/HOST-RUN.md`
+* `mvnc ... global mutex initialization failed` - see `HOWTO-HOST-RUN.md`
   (`/tmp/mvnc.mutex` ownership).
 * No camera: `v4l2-ctl --list-devices`, or run the user as a member of
   `video`.
