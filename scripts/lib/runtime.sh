@@ -116,6 +116,30 @@ runtime_warn_mvnc_mutex() {
     fi
 }
 
+runtime_run_openvino() {
+    # Args: target runtime_root openvino_root executable [args...]
+    local target="$1" rt="$2" ov="$3" exe="$4"
+    shift 4
+    local ie lp loader sysroot
+    ie="$(runtime_find_ie_libdir "$ov")" || {
+        echo "cannot locate OpenVINO inference-engine libraries under $ov" >&2
+        return 1
+    }
+    lp="$ie:$ov/ngraph/lib"
+    if [[ "$target" == armv7 ]]; then
+        sysroot="$rt/sysroot"
+        loader="$sysroot/lib/ld-linux-armhf.so.3"
+        [[ -x "$loader" ]] || {
+            echo "ARMHF loader missing: $loader; rerun pull-runtime.sh" >&2
+            return 1
+        }
+        lp="$sysroot/lib/arm-linux-gnueabihf:$sysroot/usr/lib/arm-linux-gnueabihf:$lp"
+        "$loader" --library-path "$lp" "$exe" "$@"
+        return
+    fi
+    env LD_LIBRARY_PATH="$lp${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$exe" "$@"
+}
+
 runtime_exec_openvino() {
     # Args: target runtime_root openvino_root executable [args...]
     local target="$1" rt="$2" ov="$3" exe="$4"
