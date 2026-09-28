@@ -36,8 +36,6 @@ Usage:
 import argparse
 import os
 import signal
-import struct
-import subprocess
 import sys
 import time
 # The aarch64 OpenCV wheel bundles no fonts, so Qt prints a QFontDatabase
@@ -68,7 +66,7 @@ from ov203.camera import (
 from ov203.device import resolve_servers
 from ov203.display import WindowWatcher
 from ov203.process import ProcCpu, server_exit_meaning, spawn_servers, stop_server, wait_alive
-from ov203.protocol import LinePipe, write_all
+from ov203.protocol import SsdPipeClient as SsdClient
 from ov203.request_pool import RequestPool
 from ov203.util import windowed_rate
 
@@ -81,98 +79,6 @@ def die(msg, code=1):
     print("ssd_stream: " + msg, file=sys.stderr, flush=True)
     sys.exit(code)
 
-
-class SsdClient:
-    """Drives the ssd_detect --stdin child process over its stdin/stdout pipes.
-
-    The frame response is read with raw os.read on the pipe fd (never the
-    buffered reader), via the shared LinePipe, because mixing select() with
-    a buffered reader can leave whole responses sitting in the reader's
-    internal buffer while select() reports the fd as empty.
-    """
-
-    def __init__(self, server_cmd, backend, device, min_conf, request_timeout):
-        self.request_timeout = request_timeout
-        self.proc = subprocess.Popen(
-            [server_cmd, backend, device, str(min_conf)],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=None,            # server diagnostics stream to our terminal
-            start_new_session=True, # so we can kill the whole group (docker too)
-        )
-        self.pipe = LinePipe(self.proc.stdout.fileno(), self.proc)
-        note("inference backend: %s device=%s min-conf=%s (server pid %d)"
-             % (backend, device, min_conf, self.proc.pid))
-
-    def _readline(self):
-        try:
-            return self.pipe.readline(timeout=self.request_timeout)
-        except TimeoutError as ex:
-            raise RuntimeError(str(ex)) from ex
-
-    def detect(self, rgb):
-        """rgb: HxWx3 uint8 (RGB order); returns (w, h, infer_ms, detections).
-        detections: [(label, score, x1, y1, x2, y2), ...] in image pixels."""
-        h, w = rgb.shape[:2]
-        try:
-            fd = self.proc.stdin.fileno()
-            write_all(fd, struct.pack("<II", w, h))
-            write_all(fd, np.ascontiguousarray(rgb, dtype=np.uint8))
-        except (BrokenPipeError, OSError) as e:
-            code = self.proc.poll()
-            if code is None:
-                raise RuntimeError(
-                    "server closed its stdin pipe but has not exited yet "
-                    "(see its diagnostics above)") from e
-            raise RuntimeError(
-                "server closed its stdin pipe (exit code %s: %s)"
-                % (code, server_exit_meaning(code))) from e
-        line = self._readline()
-        if line is None:
-            raise RuntimeError("server closed the response pipe")
-        parts = line.split()
-        if parts[0] == "ERROR":
-            raise RuntimeError("server reported: " + line[5:].strip())
-        if parts[0] != "FRAME" or len(parts) != 4:
-            raise RuntimeError("unexpected server line: %r" % line)
-        try:
-            infer_ms = float(parts[3])
-        except ValueError:
-            raise RuntimeError("unexpected server line: %r" % line) from None
-        dets = []
-        while True:
-            line = self._readline()
-            if line is None:
-                raise RuntimeError("server closed the response before END")
-            if line == "END":
-                break
-            if line.startswith("ERROR"):
-                raise RuntimeError("server reported: " + line[5:].strip())
-            # The label may contain spaces (COCO has multi-word classes, e.g.
-            # 'fire hydrant'), so split off the five trailing numeric fields
-            # and treat everything between DET and them as the label.  The
-            # leading-token check keeps malformed lines a clean error instead
-            # of an IndexError.
-            if line.split(" ", 1)[0] != "DET":
-                raise RuntimeError("unexpected server line: %r" % line)
-            p = line.split("DET", 1)[1].rsplit(" ", 5)
-            if len(p) != 6:
-                raise RuntimeError("unexpected server line: %r" % line)
-            try:
-                det = (p[0].strip(), float(p[1]), int(p[2]), int(p[3]),
-                       int(p[4]), int(p[5]))
-            except ValueError:
-                raise RuntimeError("unexpected server line: %r" % line) from None
-            dets.append(det)
-        return w, h, infer_ms, dets
-
-    def close(self):
-        stop_server(self.proc)
-        for pipe in (self.proc.stdin, self.proc.stdout):
-            try:
-                pipe.close()
-            except (BrokenPipeError, OSError):
-                pass
 
 
 def read_ppm(path):
