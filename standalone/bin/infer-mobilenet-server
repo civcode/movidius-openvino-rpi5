@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; source "$ROOT/bin/ov-env"
+BACKEND="${1:-host}"; IR="${2:-fp16}"; DEVICE="${3:-MYRIAD}"
+case "$BACKEND" in auto|host) ;; docker) echo "Docker backend is not part of the standalone distribution" >&2; exit 2;; *) echo "backend must be host|auto" >&2; exit 2;; esac
+case "$IR" in fp16|fp32) ;; *) echo "IR must be fp16|fp32" >&2; exit 2;; esac
+if [[ "$DEVICE" == CPU && "$(uname -m)" =~ ^(aarch64|arm64)$ ]]; then
+  PY="$ROOT/.envs/apps/bin/python"; [[ -x "$PY" ]] || PY=python3
+  exec "$PY" "$ROOT/apps/classification/mobilenet_cpu_server.py" --model "$OV_MODELS_DIR/onnx/mobilenetv2-7.onnx"
+fi
+XML="$OV_MODELS_DIR/mobilenet-v2-ov203/$IR/mobilenet-v2-ov203.xml"; BIN="${XML%.xml}.bin"
+[[ -f "$XML" && -f "$BIN" ]] || { echo "MobileNet IR missing below $OV_MODELS_DIR" >&2; exit 1; }
+exec "$OV_ROOT/bin/mobilenet_server" --model "$XML" --weights "$BIN" --device "$DEVICE"
