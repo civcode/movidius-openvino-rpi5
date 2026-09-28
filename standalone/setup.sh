@@ -17,7 +17,7 @@ command -v ldconfig >/dev/null && { ldconfig -p 2>/dev/null | grep -q 'libusb-1.
 if (( CHECK )); then "$ROOT/verify.sh" --static; exit $?; fi
 if (( ! SKIP_PY )); then
   envs=(apps)
-  if (( ! SKIP_CPU )); then
+  if (( ! SKIP_CPU )) && [[ "${TARGET:-}" == arm64 ]]; then
     envs+=(cpu-tensorflow)
   fi
   if [[ "${MODEL_OPTIMIZER_INCLUDED:-0}" == 1 ]]; then
