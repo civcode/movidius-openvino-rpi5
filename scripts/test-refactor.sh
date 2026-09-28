@@ -2,8 +2,16 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; cd "$ROOT"
 find scripts examples standalone -name '*.sh' -type f -print0 | xargs -0 -n1 bash -n
+for cmd in standalone/bin/* standalone/setup.sh standalone/verify.sh; do
+    [[ -f "$cmd" ]] || continue
+    head -1 "$cmd" | grep -qE '(^#!.*(bash|sh))' || continue
+    bash -n "$cmd"
+done
 python3 -m compileall -q examples python tests standalone/tools scripts/mo_compat_run.py scripts/patch-model-optimizer.py
 python3 -m unittest discover -s tests/python -p 'test_*.py'
+timeout 10s python3 examples/webcam/webcam_mobilenet.py --help >/dev/null
+timeout 10s python3 examples/ssd-detect/ssd_stream.py --help >/dev/null
+timeout 10s python3 examples/deeplab-seg/seg_stream.py --help >/dev/null
 wire_test="$(mktemp)"
 device_test="$(mktemp)"
 trap 'rm -f "$wire_test" "$device_test"' EXIT
