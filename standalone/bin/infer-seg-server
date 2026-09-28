@@ -4,7 +4,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; source "$ROOT/bin/ov-en
 BACKEND="${1:-host}"; DEVICE="${2:-MYRIAD}"
 case "$BACKEND" in auto|host) ;; *) echo "standalone backend must be host|auto" >&2; exit 2;; esac
 if [[ "$DEVICE" == CPU && "$(uname -m)" =~ ^(aarch64|arm64)$ ]]; then
-  PY="$ROOT/.envs/apps/bin/python"; [[ -x "$PY" ]] || PY=python3
+  PY="$ROOT/.envs/cpu-tensorflow/bin/python"; [[ -x "$PY" ]] || PY=python3
   MODEL="${OV_SEG_CPU_MODEL:-$OV_MODELS_DIR/deeplabv3/source/frozen_inference_graph.pb}"
   exec "$PY" "$ROOT/apps/segmentation/seg_cpu_server.py" --model "$MODEL" --labels "$OV_MODELS_DIR/labels/pascal_voc.txt"
 fi
