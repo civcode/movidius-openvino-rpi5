@@ -62,33 +62,27 @@ import signal
 import sys
 import time
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from mobilenet_client import (            # noqa: E402
-    DEFAULT_LABELS,
-    OUTPUT_BYTES,
-    REPO_ROOT,
-    FakeCamera,
-    LatestFrame,
-    MyriadClient,
-    ProcCpu,
-    RequestPool,
-    resolve_servers,
-    spawn_servers,
-    bench_processes,
-    add_camera_capture_args,
-    add_fake_camera_args,
-    fourcc_from_tag,
-    load_labels,
-    load_static_image,
-    note,
-    note_camera_settings,
-    open_camera,
-    preprocess,
-    topk_probs,
-    wait_alive,
-    windowed_rate,
-    WindowWatcher,
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
+PYTHON_ROOT = os.path.join(REPO_ROOT, "python")
+EXAMPLES_ROOT = os.path.join(REPO_ROOT, "examples")
+for path in (PYTHON_ROOT, EXAMPLES_ROOT):
+    if path not in sys.path:
+        sys.path.insert(0, path)
+
+from mobilenet_client import (
+    DEFAULT_LABELS, OUTPUT_BYTES, MyriadClient, bench_processes,
+    load_labels, preprocess, topk_probs,
 )
+from ov203.camera import (
+    FakeCamera, LatestFrame, add_camera_capture_args, add_fake_camera_args,
+    fourcc_from_tag, load_static_image, note_camera_settings, open_camera,
+)
+from ov203.device import resolve_servers
+from ov203.display import WindowWatcher
+from ov203.process import ProcCpu, spawn_servers, wait_alive
+from ov203.request_pool import RequestPool
+from ov203.util import windowed_rate
 # The aarch64 OpenCV wheel bundles no fonts, so Qt prints a QFontDatabase
 # warning on every window operation.  The overlay uses OpenCV's own text
 # renderer, so the warning is pure noise; silence Qt warnings (override by
