@@ -39,3 +39,15 @@ if bash "$ROOT/scripts/run-inference-server.sh" --app mobilenet --backend nonsen
 fi
 
 echo "runtime shell tests: PASS"
+
+tmp_runtime="$(mktemp -d)"
+trap 'rm -rf "$tmp_runtime"' EXIT
+mkdir -p "$tmp_runtime/openvino/inference_engine/lib/test" "$tmp_runtime/openvino/ngraph/lib"
+: > "$tmp_runtime/openvino/inference_engine/lib/test/libinference_engine.so"
+cat > "$tmp_runtime/probe.sh" <<'EOF'
+#!/usr/bin/env bash
+echo runtime-run-ok
+EOF
+chmod +x "$tmp_runtime/probe.sh"
+eq "$(runtime_run_openvino amd64 "$tmp_runtime" "$tmp_runtime/openvino" "$tmp_runtime/probe.sh")" runtime-run-ok
+echo after-runtime-run >/dev/null
