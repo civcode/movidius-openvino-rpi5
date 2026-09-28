@@ -44,7 +44,7 @@ from ov203.display import DisplayPump, WindowWatcher
 from ov203.process import (
     ProcCpu, server_exit_meaning, spawn_servers, stop_server, wait_alive,
 )
-from ov203.protocol import LinePipe, pipe_capacity, write_all
+from ov203.protocol import MobileNetPipeClient
 from ov203.request_pool import RequestPool
 from ov203.util import windowed_rate
 from ov203.runtime import models_root
@@ -146,110 +146,19 @@ def topk_probs(logits, labels, k):
     return out
 
 
-class MyriadClient:
-    """Drives the mobilenet_server child process over its stdin/stdout pipes."""
+class MyriadClient(MobileNetPipeClient):
+    """Compatibility wrapper for the historical MobileNet client API."""
 
     def __init__(self, backend, ir, device, request_timeout, server_script=None):
-        self.request_timeout = request_timeout
-        self.proc = subprocess.Popen(
-            [server_script or INFER_SERVER, backend, ir, device],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=None,            # server diagnostics stream to our terminal
-            start_new_session=True, # so we can kill the whole group (docker too)
+        super().__init__(
+            server_script or INFER_SERVER,
+            backend,
+            ir,
+            device,
+            request_timeout,
+            input_bytes=INPUT_BYTES,
+            output_elements=OUTPUT_BYTES // 4,
         )
-        # The request payload is 602112 B but a fresh Linux pipe holds only
-        # 64 KiB, so a client write blocks until the server has drained most of
-        # it - and a serial server does that only after answering the previous
-        # request.  The transfer then sits on the critical path however deep the
-        # client queues, so throughput stops at 1/(compute+transfer).  Growing
-        # the pipe to fit a whole request is what makes depth > 1 pay off.
-        self.pipe_bytes = pipe_capacity(self.proc.stdin, INPUT_BYTES + 4096)
-        note("inference backend: %s ir=%s device=%s (server pid %d, request pipe "
-             "%.0f KiB)" % (backend, ir, device, self.proc.pid,
-                            self.pipe_bytes / 1024.0))
-
-    def _stdin_closed_message(self):
-        code = self.proc.poll()
-        if code is None:
-            return ("server closed its stdin pipe but has not exited yet "
-                    "(see its diagnostics above)")
-        return ("server closed its stdin pipe (exit code %s: %s)"
-                % (code, server_exit_meaning(code)))
-
-    def _read_exact(self, n):
-        buf = bytearray()
-        deadline = time.monotonic() + self.request_timeout
-        while len(buf) < n:
-            if self.proc.poll() is not None:
-                raise RuntimeError(
-                    "inference server exited with code %s before the response "
-                    "was complete (see its diagnostics above)" % self.proc.returncode)
-            ready, _, _ = select.select([self.proc.stdout], [], [],
-                                        max(0.001, deadline - time.monotonic()))
-            if not ready:
-                raise RuntimeError("no inference response within %.0f s"
-                                   % self.request_timeout)
-            chunk = os.read(self.proc.stdout.fileno(), n - len(buf))
-            if not chunk:
-                raise RuntimeError("inference server closed the response pipe")
-            buf += chunk
-        return bytes(buf)
-
-    def send(self, payload):
-        """Write one request payload to the server without waiting for a reply.
-
-        `payload` is a tensor, or any bytes-like already holding the request
-        bytes - useful when the same frame is sent many times, because the
-        worker thread then does one os.write() and nothing else per request.
-
-        Split out of infer() so a pipeline thread can queue the next payload
-        while an earlier response is still outstanding.  The server loop is
-        strictly serial (read a whole request, compute it, write the logits),
-        so a client that writes and then reads inline leaves the server idle
-        for exactly as long as it takes the client to capture, preprocess and
-        hand over the following frame.
-
-        The payload goes out with os.write() over a memoryview rather than
-        stdin.write(tensor.tobytes()).  A 602112 B request copied while holding
-        the GIL costs about as much as the inference itself, and every server in
-        a --servers pool shares this process's GIL, so that copy is what caps
-        the pool: four *separate* client+server pairs reach 553 inferences/s on
-        this host where one process with worker threads plateaus near 140.
-        os.write() releases the GIL for the kernel copy, and accepting a
-        pre-built payload removes the per-request numpy work too.
-        """
-        view = (payload if isinstance(payload, memoryview)
-                else memoryview(payload).cast("B"))
-        if view.nbytes != INPUT_BYTES:
-            raise AssertionError("payload is %d bytes, expected %d"
-                                 % (view.nbytes, INPUT_BYTES))
-        if not view.c_contiguous:
-            raise AssertionError("payload must be C-contiguous to send")
-        fd = self.proc.stdin.fileno()
-        off = 0
-        try:
-            while off < view.nbytes:
-                off += os.write(fd, view[off:])
-        except (BrokenPipeError, OSError) as e:
-            raise RuntimeError(self._stdin_closed_message()) from e
-
-    def recv(self):
-        """Read one response (1000 float32 logits) and return it as an array."""
-        raw = self._read_exact(OUTPUT_BYTES)
-        return np.frombuffer(raw, dtype="<f4")
-
-    def infer(self, tensor):
-        self.send(tensor)
-        return self.recv()
-
-    def close(self):
-        stop_server(self.proc)
-        for stream in (self.proc.stdin, self.proc.stdout):
-            try:
-                stream.close()
-            except Exception:
-                pass
 
 def bench_processes(client_factory, payload, workers, iters, progress_every=1.0):
     """Measure N servers, each driven by its own client process.
