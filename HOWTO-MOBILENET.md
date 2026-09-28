@@ -113,14 +113,10 @@ First separate build/package problems from USB hardware problems:
 
 or use `armv7`/`amd64` as appropriate. Then check `lsusb`, udev permissions and Docker re-enumeration settings documented in `README.md`.
 
-## Timing evidence
+## Validation results
 
-Only the original Raspberry Pi ARMv7 measurements are historical evidence in this repository. Native ARM64 and amd64 results remain pending physical hardware validation.
+Performance numbers are hardware-dependent and are not stored as tracked log
+artifacts in the repository. Use the same model, firmware, precision and
+iteration count when comparing targets, and follow `docs/HARDWARE-TEST.md`
+for repeatable hardware validation.
 
-| Host/runtime | MobileNet FP16 load + compile | MA2450 inference | Evidence |
-|---|---:|---:|---|
-| Raspberry Pi 5 / ARMv7 | 1656.92 ms | 44.40 ms mean over 25 runs (22.5 fps) | `logs/mobilenet-run.log` |
-| Raspberry Pi 5 / ARM64 | **pending hardware validation** | **pending hardware validation** | capture under `logs/rpi5-arm64/` |
-| Ubuntu x86_64 / amd64 | **pending hardware validation** | **pending hardware validation** | capture under `logs/ubuntu-amd64/` |
-
-Use identical models, firmware and iteration counts when adding comparison results.
