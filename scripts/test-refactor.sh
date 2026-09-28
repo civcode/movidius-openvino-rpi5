@@ -5,4 +5,5 @@ find scripts examples standalone -name '*.sh' -type f -print0 | xargs -0 -n1 bas
 python3 -m compileall -q examples python tests standalone/tools scripts/mo_compat_run.py scripts/patch-model-optimizer.py
 python3 -m unittest discover -s tests/python -p 'test_*.py'
 bash tests/shell/test-runtime.sh
+bash tests/shell/test-export-standalone.sh
 timeout 45s bash scripts/test-python-clients.sh
