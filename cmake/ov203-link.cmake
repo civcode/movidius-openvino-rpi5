@@ -100,3 +100,25 @@ else()
     message(FATAL_ERROR
             "shared header half.hpp not found (expected in the repository root)")
 endif()
+
+
+function(ov203_add_inference_executable target source)
+    add_executable(${target} ${source})
+    target_include_directories(${target} PRIVATE
+        "${OV_ROOT}/include"
+        "${SHARED_INCLUDE_DIR}")
+    if(EXISTS "${NGRAPH_ROOT}/include")
+        target_include_directories(${target} PRIVATE "${NGRAPH_ROOT}/include")
+    endif()
+    target_link_libraries(${target} PRIVATE
+        "-Wl,--start-group" ${ov_link_libs} "-Wl,--end-group" dl)
+    if(OV_RUNTIME_PREFIX)
+        set_target_properties(${target} PROPERTIES
+            BUILD_WITH_INSTALL_RPATH ON
+            INSTALL_RPATH "${ov_rpath_use}")
+    else()
+        set_target_properties(${target} PROPERTIES
+            BUILD_RPATH "${ov_rpath_use}"
+            INSTALL_RPATH "${ov_rpath_use}")
+    endif()
+endfunction()
