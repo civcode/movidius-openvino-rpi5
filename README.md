@@ -225,7 +225,7 @@ Then run:
 IR=fp32 ./run.sh --platform amd64 mobilenet
 ```
 
-See `HOWTO-MOBILENET.md` for details.
+See `examples/webcam/README.md` for the live classification pipeline and `scripts/prepare-mobilenet.sh` for model preparation.
 
 ### Live webcam classification
 
