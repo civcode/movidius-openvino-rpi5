@@ -38,6 +38,7 @@ if PYTHON_ROOT not in sys.path:
 from ov203.request_pool import RequestPool
 from ov203.device import resolve_servers as _resolve_servers_shared
 from ov203.protocol import LinePipe, pipe_capacity, write_all
+from ov203.process import server_exit_meaning, stop_server
 
 # CPU affinity as this process started, captured before any imaging library is
 # imported.  Some OpenCV wheels call sched_setaffinity() during import and leave
@@ -77,15 +78,6 @@ def die(msg, code=1):
 # The C++ servers' exit codes (shared by all three inference servers):
 #   0 clean   1 runtime failure   2 device missing / bad command line
 #   3 model or IO failure   4 bad command line (mobilenet_server)
-def server_exit_meaning(code):
-    return {
-        1: "runtime failure (see its diagnostics)",
-        2: "device not available or bad command line",
-        3: "model or IO failure",
-        4: "bad command line",
-    }.get(code, "unknown")
-
-
 def windowed_fps(times, n=10):
     """Average fps over the last n frame intervals (the `times` list holds
     per-frame elapsed seconds, most recent last).  Callers must NOT append
@@ -750,86 +742,6 @@ class WindowWatcher:
         except (OSError, subprocess.SubprocessError):
             pass
         return self._closed
-
-
-def _docker_container_for(proc):
-    """If proc is a 'docker run' client, find its container's name.
-
-    The launchers name their containers ov203-<sample>[-cpu]-<pid> where
-    <pid> is the launcher's pid, and the launcher execs docker run, so the
-    pid is proc.pid.  Matching the pid suffix makes the lookup exact.
-    """
-    try:
-        with open("/proc/%d/cmdline" % proc.pid, "rb") as f:
-            cmd = f.read().decode()
-    except OSError:
-        return None
-    if "docker" not in cmd or "run" not in cmd:
-        return None
-    try:
-        out = subprocess.run(
-            ["docker", "ps", "-a", "--filter", "name=ov203-",
-             "--format", "{{.Names}}"],
-            capture_output=True, text=True, timeout=5).stdout
-    except (OSError, subprocess.SubprocessError):
-        return None
-    for line in out.splitlines():
-        name = line.strip()
-        if name.endswith("-%d" % proc.pid):
-            return name
-    return None
-
-
-def stop_server(proc):
-    """Terminate an inference server started with Popen(start_new_session=True).
-
-    Every server treats end-of-stdin as the end of the protocol and exits 0;
-    the MYRIAD servers additionally release the VPU with a clean mvnc/XLink
-    deinit.  A hard kill orphans the stick's XLink session and can leave the
-    USB device slow to re-enumerate, so close stdin first and give the
-    server a few seconds to exit cleanly before escalating.
-
-    The docker backend still needs special treatment in the escalation path:
-    a SIGTERM to the `docker run` client does not reliably terminate it (we
-    measured >170 s), and on this host the kernel also drops unhandled
-    SIGTERMs to the container's PID 1 (both 'python3' and 'sh' PID 1s
-    survived docker stop's grace period and needed SIGKILL), so ask the
-    daemon to stop the container with a zero grace period - that SIGKILLs
-    the server and the docker run client exits - then SIGTERM the process
-    group, and only SIGKILL as a last resort.
-    """
-    if proc.poll() is not None:
-        return
-    # Clean shutdown: EOF on stdin is the protocol terminator for every
-    # server (C++ and Python alike).
-    try:
-        if proc.stdin and not proc.stdin.closed:
-            proc.stdin.close()
-    except (OSError, ValueError):
-        pass
-    try:
-        proc.wait(timeout=5)
-        return
-    except subprocess.TimeoutExpired:
-        pass
-    container = _docker_container_for(proc)
-    if container:
-        try:
-            subprocess.run(["docker", "stop", "-t", "0", container],
-                           capture_output=True, timeout=10)
-        except (OSError, subprocess.SubprocessError):
-            pass
-    try:
-        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-    except (ProcessLookupError, PermissionError):
-        proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
-            proc.kill()
 
 
 class MyriadClient:
