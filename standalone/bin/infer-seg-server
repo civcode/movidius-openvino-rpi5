@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; source "$ROOT/bin/ov-env"
+BACKEND="${1:-host}"; DEVICE="${2:-MYRIAD}"
+case "$BACKEND" in auto|host) ;; *) echo "standalone backend must be host|auto" >&2; exit 2;; esac
+if [[ "$DEVICE" == CPU && "$(uname -m)" =~ ^(aarch64|arm64)$ ]]; then
+  PY="$ROOT/.envs/apps/bin/python"; [[ -x "$PY" ]] || PY=python3
+  MODEL="${OV_SEG_CPU_MODEL:-$OV_MODELS_DIR/deeplabv3/source/frozen_inference_graph.pb}"
+  exec "$PY" "$ROOT/apps/segmentation/seg_cpu_server.py" --model "$MODEL" --labels "$OV_MODELS_DIR/labels/pascal_voc.txt"
+fi
+DIR=openvino; [[ "$DEVICE" == CPU ]] && DIR=openvino_fp32
+XML="$OV_MODELS_DIR/deeplabv3/$DIR/deeplabv3.xml"; BIN="${XML%.xml}.bin"; LABELS="$OV_MODELS_DIR/labels/pascal_voc.txt"
+[[ -f "$XML" && -f "$BIN" && -f "$LABELS" ]] || { echo "DeepLab model/labels missing below $OV_MODELS_DIR" >&2; exit 1; }
+exec "$OV_ROOT/bin/seg_detect" --model "$XML" --weights "$BIN" --labels "$LABELS" --stdin --device "$DEVICE"
