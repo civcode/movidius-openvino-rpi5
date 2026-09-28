@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CHECK=0; UDEV=0; SKIP_PY=0
-while [[ $# -gt 0 ]]; do case "$1" in --check) CHECK=1; shift;; --install-udev) UDEV=1; shift;; --skip-python) SKIP_PY=1; shift;; -h|--help) echo "usage: ./setup.sh [--check] [--install-udev] [--skip-python]"; exit 0;; *) echo "unknown option: $1" >&2; exit 2;; esac; done
+CHECK=0; UDEV=0; SKIP_PY=0; SKIP_CPU=0
+while [[ $# -gt 0 ]]; do case "$1" in
+  --check) CHECK=1; shift;;
+  --install-udev) UDEV=1; shift;;
+  --skip-python) SKIP_PY=1; shift;;
+  --skip-cpu-fallback) SKIP_CPU=1; shift;;
+  -h|--help) echo "usage: ./setup.sh [--check] [--install-udev] [--skip-python] [--skip-cpu-fallback]"; exit 0;;
+  *) echo "unknown option: $1" >&2; exit 2;;
+esac; done
 [[ -f "$ROOT/MANIFEST.env" ]] && source "$ROOT/MANIFEST.env"
 arch="$(uname -m)"; case "${TARGET:-}" in arm64) [[ "$arch" =~ ^(aarch64|arm64)$ ]] || { echo "bundle target arm64 does not match host $arch" >&2; exit 1; };; amd64) [[ "$arch" =~ ^(x86_64|amd64)$ ]] || { echo "bundle target amd64 does not match host $arch" >&2; exit 1; };; esac
 command -v python3 >/dev/null || { echo "python3 is required" >&2; exit 1; }
@@ -10,6 +17,9 @@ command -v ldconfig >/dev/null && { ldconfig -p 2>/dev/null | grep -q 'libusb-1.
 if (( CHECK )); then "$ROOT/verify.sh" --static; exit $?; fi
 if (( ! SKIP_PY )); then
   envs=(apps)
+  if (( ! SKIP_CPU )); then
+    envs+=(cpu-tensorflow)
+  fi
   if [[ "${MODEL_OPTIMIZER_INCLUDED:-0}" == 1 ]]; then
     envs+=(mo-onnx mo-tensorflow)
   fi
