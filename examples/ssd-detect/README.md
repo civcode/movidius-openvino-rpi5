@@ -208,7 +208,7 @@ coordinates are original-image pixels, clamped.
 * padded rows (`image_id < 0`) and degenerate boxes (`x2<=x1`, `y2<=y1`) dropped
 * `max_detections` keeps the highest-confidence tail
 * COCO label lookup incl. sparse ids and the `class_<id>` fallback
-* shared `half.hpp` sign-bit round trip (regression guard for the 2024 bug)
+* shared `include/ov203/half.hpp` sign-bit round trip (regression guard for the 2024 bug)
 
 ## Verified results (MA2450, amd64 image)
 
