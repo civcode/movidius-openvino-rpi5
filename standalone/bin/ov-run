@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; source "$ROOT/bin/ov-env"
+[[ $# -gt 0 ]] || { echo "usage: ov-run <program> [args...]" >&2; exit 2; }
+prog="$1"; shift
+case "$prog" in /*) exec "$prog" "$@";; esac
+for p in "$OV_ROOT/bin/$prog" "$OV_IE_LIB/$prog"; do [[ -x "$p" ]] && exec "$p" "$@"; done
+echo "program not found in standalone OpenVINO runtime: $prog" >&2; exit 127
