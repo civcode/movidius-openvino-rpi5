@@ -27,10 +27,8 @@ __pycache__/
 # Model Optimizer / conversion by-products (the IR itself lives in vendor/, ignored)
 *.mapping
 
-# New build/output logs (the tracked logs/*.log evidence files stay committed;
-# .gitignore does not untrack them)
-logs/*.log
-logs/*/*.log
+# Generated build/validation logs are artifacts, not source.
+logs/
 
 # Editor / OS noise
 *.swp
