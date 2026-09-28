@@ -45,19 +45,15 @@ the same pinned firmware payload sourced from Intel's 2020.3.2 Raspbian runtime
 package, while `libmyriadPlugin.so` and the applications are built natively for
 the selected host target.
 
-Every target also ships the Hetero and Multi-Device plugins, plus the CPU
-plugin on **amd64 and arm64** (the pinned mkl-dnn 0.21.3 has full x86
-kernels; on AArch64 it predates NEON kernels, so arm64 uses the slow generic
-C++ path - fine as a CPU baseline, e.g. to benchmark against the MYRIAD
-stick, but not a fast inference engine; armv7 cannot build it at all,
-mkl-dnn 0.21.3 refuses 32-bit targets).
+Every target ships the Hetero and Multi-Device plugins. The OpenVINO CPU
+plugin is built only for **amd64**; the pinned mkl-dnn 0.21.3 backend does
+not provide a usable AArch64 inference path for this project, and armv7 is
+MYRIAD-only.
 
-`--device CPU` works in the examples on **amd64** (the C++ OV server with
-FP32 IRs) and **arm64**.  On arm64 the launchers instead run per-example
-Python CPU servers from the image - ONNX Runtime for the webcam classifier,
-full TensorFlow for the SSDLite and DeepLabV3 frozen graphs - because the
-generic C++ path is much slower than those; armv7 remains MYRIAD-only. See
-`docs/CPU-BACKENDS.md` for the design and the parity test results.
+`--device CPU` therefore uses the OpenVINO C++ server with FP32 IRs on
+**amd64**, while **arm64** uses per-example Python CPU servers: ONNX Runtime
+for MobileNet and TensorFlow for SSDLite/DeepLabV3. See
+`docs/CPU-BACKENDS.md` for the backend contract and parity results.
 
 ## Quick start
 
