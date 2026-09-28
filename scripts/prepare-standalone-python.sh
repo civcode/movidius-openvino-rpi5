@@ -7,7 +7,7 @@ while [[ $# -gt 0 ]]; do case "$1" in --platform) TARGET_REQUEST="$2"; shift 2;;
 platform_load "$TARGET_REQUEST"
 OUT="$ROOT/work/standalone-python/$TARGET"; rm -rf "$OUT"; mkdir -p "$OUT/wheelhouse" "$OUT/manifests"
 case "$(uname -m):$TARGET" in aarch64:arm64|arm64:arm64|x86_64:amd64|amd64:amd64) ;; *) echo "wheelhouses must be prepared natively for $TARGET; host=$(uname -m)" >&2; exit 1;; esac
-for env in apps mo-onnx mo-tensorflow; do req="$ROOT/requirements/$env.txt"; dest="$OUT/wheelhouse/$env"; mkdir -p "$dest"; "$PYTHON" -m pip download --dest "$dest" -r "$req"; done
+for env in apps cpu-tensorflow mo-onnx mo-tensorflow; do req="$ROOT/requirements/$env.txt"; dest="$OUT/wheelhouse/$env"; mkdir -p "$dest"; "$PYTHON" -m pip download --dest "$dest" -r "$req"; done
 {
   echo "TARGET=$TARGET"
   "$PYTHON" - <<'PY'
