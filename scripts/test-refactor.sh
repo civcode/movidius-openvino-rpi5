@@ -14,3 +14,9 @@ g++ -std=c++14 -Wall -Wextra -I. tests/cpp/test_device_spec.cpp -o "$device_test
 bash tests/shell/test-runtime.sh
 bash tests/shell/test-export-standalone.sh
 timeout 45s bash scripts/test-python-clients.sh
+
+if grep -R -n 'work/mo-2020\.3' scripts standalone python examples \
+     --exclude='test-refactor.sh' >/dev/null 2>&1; then
+    echo "legacy work/mo-2020.3 reference remains in active code" >&2
+    exit 1
+fi
