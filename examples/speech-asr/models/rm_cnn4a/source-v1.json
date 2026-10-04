@@ -1,0 +1,21 @@
+{
+  "schema": "speech-asr/model-source",
+  "version": 1,
+  "id": "rm_cnn4a-smbr-openvino-contrib-2021.2",
+  "model_family": "rm_cnn4a",
+  "source_release": "OpenVINO models_contrib speech 2021.2",
+  "base_url": "https://storage.openvinotoolkit.org/models_contrib/speech/2021.2/rm_cnn4a_smbr",
+  "license_url": "https://storage.openvinotoolkit.org/models_contrib/speech/2021.2/LICENSE.txt",
+  "files": [
+    {"name": "rm_cnn4a.nnet", "role": "kaldi_model"},
+    {"name": "rm_cnn4a.counts", "role": "class_counts"},
+    {"name": "rm_cnn4a.mapping", "role": "model_mapping"},
+    {"name": "rm_cnn4a.md", "role": "model_notes"},
+    {"name": "feat1_10.ark", "role": "reference_features"},
+    {"name": "score1_10.ark", "role": "reference_scores"}
+  ],
+  "integrity": {
+    "policy": "versioned-url-plus-first-fetch-sha256-lock",
+    "note": "The Intel storage index does not publish SHA-256 values. The preparation script creates SOURCE-LOCK.sha256 on first acquisition and verifies it on every subsequent run. Benchmark provenance records the resulting hashes."
+  }
+}

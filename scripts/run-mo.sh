@@ -5,16 +5,16 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FRAMEWORK=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --framework) [[ $# -ge 2 ]] || { echo "--framework needs onnx|tf" >&2; exit 2; }; FRAMEWORK="$2"; shift 2 ;;
+        --framework) [[ $# -ge 2 ]] || { echo "--framework needs onnx|tf|kaldi" >&2; exit 2; }; FRAMEWORK="$2"; shift 2 ;;
         --) shift; break ;;
         -h|--help)
-            echo "usage: $0 --framework onnx|tf -- <Model Optimizer arguments>"
+            echo "usage: $0 --framework onnx|tf|kaldi -- <Model Optimizer arguments>"
             exit 0
             ;;
         *) break ;;
     esac
 done
-case "$FRAMEWORK" in onnx|tf) ;; *) echo "--framework must be onnx or tf" >&2; exit 2 ;; esac
+case "$FRAMEWORK" in onnx|tf|kaldi) ;; *) echo "--framework must be onnx, tf or kaldi" >&2; exit 2 ;; esac
 
 MO_ROOT="$ROOT/work/model-optimizer"
 if [[ ! -f "$MO_ROOT/mo.py" ]]; then
@@ -31,6 +31,11 @@ case "$FRAMEWORK" in
         VENV="$ROOT/work/venv-mo-tensorflow"
         REQ="$ROOT/requirements/mo-tensorflow.txt"
         IMPORTS='import numpy, tensorflow, networkx, defusedxml, google.protobuf'
+        ;;
+    kaldi)
+        VENV="$ROOT/work/venv-mo-kaldi"
+        REQ="$ROOT/requirements/mo-kaldi.txt"
+        IMPORTS='import numpy, networkx, defusedxml'
         ;;
 esac
 

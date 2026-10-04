@@ -1,0 +1,2 @@
+-r mo-common.txt
+numpy==1.21.6
