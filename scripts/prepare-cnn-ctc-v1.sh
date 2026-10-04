@@ -28,12 +28,16 @@ test -s "$OUT/cnn_ctc_v1.bin"
 
 "$ROOT/scripts/python.sh"     "$ROOT/examples/speech-asr/tools/inspect_ir.py"     "$OUT/cnn_ctc_v1.xml"     --bin "$OUT/cnn_ctc_v1.bin"     > "$OUT/ir-contract.json"
 
+"$ROOT/scripts/python.sh"     "$ROOT/examples/speech-asr/tools/validate_cnn_ctc_ir.py"     "$ROOT/examples/speech-asr/models/cnn_ctc_v1/model_spec.json"     "$OUT/ir-contract.json"     --output "$OUT/ir-validation.json"
+
 "$ROOT/scripts/python.sh" - "$ONNX" "$OUT" <<'PY'
 import hashlib, json, pathlib, sys
 onnx = pathlib.Path(sys.argv[1])
 out = pathlib.Path(sys.argv[2])
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+contract = json.loads((out / "ir-contract.json").read_text(encoding="utf-8"))
+validation = json.loads((out / "ir-validation.json").read_text(encoding="utf-8"))
 value = {
     "schema": "speech-asr/cnn-ctc-openvino-artifacts",
     "version": 1,
@@ -44,6 +48,14 @@ value = {
         "onnx_sha256": sha(onnx),
         "xml_sha256": sha(out / "cnn_ctc_v1.xml"),
         "bin_sha256": sha(out / "cnn_ctc_v1.bin"),
+        "ir_contract_sha256": sha(out / "ir-contract.json"),
+        "ir_validation_sha256": sha(out / "ir-validation.json"),
+    },
+    "ir": {
+        "version": contract["ir_version"],
+        "canonical_graph_sha256": contract["canonical_graph_sha256"],
+        "input": validation["input"],
+        "output": validation["output"],
     },
 }
 (out / "artifacts.json").write_text(
