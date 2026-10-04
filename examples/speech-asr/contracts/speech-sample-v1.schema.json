@@ -4,41 +4,100 @@
   "title": "Normalized speech sample v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "version", "id", "audio", "transcript"],
+  "required": [
+    "schema",
+    "version",
+    "id",
+    "audio",
+    "transcript"
+  ],
   "properties": {
-    "schema": {"const": "speech-asr/sample"},
-    "version": {"const": 1},
-    "id": {"type": "string", "minLength": 1},
+    "schema": {
+      "const": "speech-asr/sample"
+    },
+    "version": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
     "audio": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "sample_rate_hz", "channels", "sample_type", "start_sample", "end_sample"],
+      "required": [
+        "path",
+        "sample_rate_hz",
+        "channels",
+        "sample_type",
+        "encoding",
+        "start_sample",
+        "end_sample"
+      ],
       "properties": {
-        "path": {"type": "string", "minLength": 1},
-        "sample_rate_hz": {"const": 16000},
-        "channels": {"const": 1},
-        "sample_type": {"const": "float32"},
-        "start_sample": {"type": "integer", "minimum": 0},
-        "end_sample": {"type": "integer", "minimum": 1}
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sample_rate_hz": {
+          "const": 16000
+        },
+        "channels": {
+          "const": 1
+        },
+        "sample_type": {
+          "const": "float32"
+        },
+        "start_sample": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end_sample": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "encoding": {
+          "const": "f32le"
+        }
       }
     },
     "transcript": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["text", "normalization"],
+      "required": [
+        "text",
+        "normalization"
+      ],
       "properties": {
-        "text": {"type": "string"},
-        "normalization": {"const": "text-v1"},
+        "text": {
+          "type": "string"
+        },
+        "normalization": {
+          "const": "text-v1"
+        },
         "words": {
           "type": "array",
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["text", "start_sample", "end_sample"],
+            "required": [
+              "text",
+              "start_sample",
+              "end_sample"
+            ],
             "properties": {
-              "text": {"type": "string", "minLength": 1},
-              "start_sample": {"type": "integer", "minimum": 0},
-              "end_sample": {"type": "integer", "minimum": 1}
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "start_sample": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "end_sample": {
+                "type": "integer",
+                "minimum": 1
+              }
             }
           }
         }

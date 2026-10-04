@@ -100,6 +100,8 @@ def validate_speech_sample(document: Any) -> Dict[str, Any]:
         errors.append("$.audio.channels: expected 1")
     if audio.get("sample_type") != "float32":
         errors.append("$.audio.sample_type: expected 'float32'")
+    if audio.get("encoding") != "f32le":
+        errors.append("$.audio.encoding: expected 'f32le'")
     _integer(audio.get("start_sample"), "$.audio.start_sample", errors)
     _integer(audio.get("end_sample"), "$.audio.end_sample", errors)
 

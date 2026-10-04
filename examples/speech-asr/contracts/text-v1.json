@@ -13,7 +13,7 @@
     "special_tokens": "do_not_drop_unless_dataset_adapter_explicitly_maps_them_before_text-v1"
   },
   "notes": [
-    "This file defines scoring normalization. The implementation is scheduled for roadmap Phase 2.",
     "A benchmark version must not change these rules in place; create a new text normalization version instead."
-  ]
+  ],
+  "implementation": "python/speech_asr/text.py::normalize_text_v1"
 }

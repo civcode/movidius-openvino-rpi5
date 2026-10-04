@@ -8,14 +8,23 @@
     "channels": 1,
     "sample_type": "float32",
     "start_sample": 0,
-    "end_sample": 16000
+    "end_sample": 16000,
+    "encoding": "f32le"
   },
   "transcript": {
     "text": "hello world",
     "normalization": "text-v1",
     "words": [
-      {"text": "hello", "start_sample": 800, "end_sample": 5200},
-      {"text": "world", "start_sample": 6400, "end_sample": 11200}
+      {
+        "text": "hello",
+        "start_sample": 800,
+        "end_sample": 5200
+      },
+      {
+        "text": "world",
+        "start_sample": 6400,
+        "end_sample": 11200
+      }
     ]
   },
   "metadata": {

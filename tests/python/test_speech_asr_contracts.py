@@ -27,6 +27,7 @@ def sample_document():
             "sample_rate_hz": 16000,
             "channels": 1,
             "sample_type": "float32",
+            "encoding": "f32le",
             "start_sample": 160,
             "end_sample": 1760,
         },
