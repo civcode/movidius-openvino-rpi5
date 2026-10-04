@@ -6,7 +6,8 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "examples" / "speech-asr" / "python"))
 
-from speech_asr.openvino_ir import inspect_ir
+from speech_asr.openvino_ir import canonical_graph_manifest, inspect_ir
+from xml.etree import ElementTree as ET
 
 
 IR = """<net name="synthetic" version="10">
@@ -83,6 +84,25 @@ class IrInspectorTests(unittest.TestCase):
                 a["canonical_graph_sha256"],
                 b["canonical_graph_sha256"],
             )
+
+    def test_manifest_pinpoints_layer_sections(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = pathlib.Path(name)
+            first = root / "first.xml"
+            second = root / "second.xml"
+            first.write_text(IR, encoding="utf-8")
+            second.write_text(
+                IR.replace("<dim>10</dim>", "<dim>11</dim>", 1),
+                encoding="utf-8",
+            )
+            a = canonical_graph_manifest(ET.parse(first).getroot())
+            b = canonical_graph_manifest(ET.parse(second).getroot())
+            self.assertEqual(a["layer_count"], b["layer_count"])
+            self.assertEqual(a["edge_count"], b["edge_count"])
+            a_layers = {item["name"]: item for item in a["layers"]}
+            b_layers = {item["name"]: item for item in b["layers"]}
+            self.assertNotEqual(a_layers["fc"]["sha256"], b_layers["fc"]["sha256"])
+            self.assertEqual(a_layers["input"]["sha256"], b_layers["input"]["sha256"])
 
     def test_graph_hash_ignores_only_top_level_model_optimizer_metadata(self):
         with tempfile.TemporaryDirectory() as name:

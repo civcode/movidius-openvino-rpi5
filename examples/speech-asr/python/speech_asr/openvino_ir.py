@@ -131,6 +131,37 @@ def canonical_graph_sha256(root: ET.Element) -> str:
     return _json_sha256(canonical_graph_document(root))
 
 
+def canonical_graph_manifest(root: ET.Element) -> dict[str, Any]:
+    """Return a compact diagnostic manifest for cross-host IR comparison."""
+    document = canonical_graph_document(root)
+    layers = []
+    for layer in document["layers"]:
+        attributes = layer["attributes"]
+        sections = []
+        for child in layer["children"]:
+            sections.append({
+                "tag": child["tag"],
+                "sha256": _json_sha256(child),
+            })
+        layers.append({
+            "name": attributes.get("name", ""),
+            "type": attributes.get("type", ""),
+            "sha256": _json_sha256(layer),
+            "attributes_sha256": _json_sha256(attributes),
+            "sections": sections,
+        })
+
+    return {
+        "canonical_graph_sha256": _json_sha256(document),
+        "network": document["network"],
+        "layer_count": len(document["layers"]),
+        "edge_count": len(document["edges"]),
+        "layers": layers,
+        "edges": document["edges"],
+        "extras_sha256": _json_sha256(document["extras"]),
+    }
+
+
 def inspect_ir(xml_path: Path, bin_path: Path | None = None) -> dict[str, Any]:
     root = ET.parse(xml_path).getroot()
     layers_node = root.find("layers")

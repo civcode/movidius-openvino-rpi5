@@ -7,7 +7,8 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "python"))
 
-from speech_asr.openvino_ir import inspect_ir  # noqa: E402
+from speech_asr.openvino_ir import canonical_graph_manifest, inspect_ir  # noqa: E402
+from xml.etree import ElementTree as ET
 
 
 def main() -> int:
@@ -15,8 +16,18 @@ def main() -> int:
     parser.add_argument("xml", type=pathlib.Path)
     parser.add_argument("--bin", dest="bin_path", type=pathlib.Path)
     parser.add_argument("--output", type=pathlib.Path)
+    parser.add_argument(
+        "--manifest",
+        action="store_true",
+        help="emit compact per-layer/edge canonical graph diagnostics",
+    )
     args = parser.parse_args()
-    result = inspect_ir(args.xml, args.bin_path)
+    if args.manifest:
+        result = canonical_graph_manifest(ET.parse(args.xml).getroot())
+        if args.bin_path is not None:
+            result["bin_sha256"] = inspect_ir(args.xml, args.bin_path)["bin_sha256"]
+    else:
+        result = inspect_ir(args.xml, args.bin_path)
     payload = json.dumps(result, sort_keys=True, indent=2) + "\n"
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
