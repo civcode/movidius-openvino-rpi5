@@ -1,45 +1,57 @@
-schema: speech-asr/benchmark
-version: 1
-status: scaffold
-result_schema: experiment-result-v1.schema.json
-
-dataset:
-  canonical_corpus: AMI
-  normalized_manifest_format: jsonl
-  timing_unit: sample_index
-  splits:
-    smoke: manifests/ami-smoke-v1.jsonl
-    benchmark: manifests/ami-benchmark-v1.jsonl
-    validation: manifests/ami-validation-v1.jsonl
-
-audio_contract: audio-v1
-
-scoring:
-  text_normalization_version: text-v1
-  text_normalization_contract: text-v1.json
-  metrics:
-    - wer
-    - cer
-  notes:
-    - "WER and CER are non-negative ratios and may exceed 1.0 when insertions exceed reference length."
-    - "CER is computed after text-v1 normalization with spaces removed."
-    - "Empty-reference scoring uses denominator max(1, reference_units) so metric output stays finite."
-
-hardware_metrics:
-  - realtime_factor
-  - inference_latency_p50_ms
-  - inference_latency_p95_ms
-  - model_load_success
-  - inference_failures
-
-streaming_metrics:
-  enabled_when_available:
-    - word_stabilization_delay_ms
-    - end_to_end_latency_ms
-
-measurement_policy:
-  warmup_count: "defined by benchmark runner and frozen before comparative runs"
-  measured_iterations: "defined by benchmark runner and frozen before comparative runs"
-  notes:
-    - "LLMs may summarize results but may not calculate authoritative metric values."
-    - "Benchmark manifests and scoring rules are immutable within benchmark version 1."
+{
+  "schema": "speech-asr/benchmark",
+  "version": 1,
+  "status": "scaffold",
+  "result_schema": "experiment-result-v1.schema.json",
+  "dataset": {
+    "canonical_corpus": "AMI",
+    "normalized_manifest_format": "jsonl",
+    "timing_unit": "sample_index",
+    "splits": {
+      "smoke": "manifests/ami-smoke-v1.jsonl",
+      "benchmark": "manifests/ami-benchmark-v1.jsonl",
+      "validation": "manifests/ami-validation-v1.jsonl"
+    }
+  },
+  "audio_contract": "audio-v1",
+  "scoring": {
+    "text_normalization_version": "text-v1",
+    "text_normalization_contract": "text-v1.json",
+    "metrics": [
+      "wer",
+      "cer"
+    ],
+    "notes": [
+      "WER and CER are non-negative ratios and may exceed 1.0 when insertions exceed reference length.",
+      "CER is computed after text-v1 normalization with spaces removed.",
+      "Empty-reference scoring uses denominator max(1, reference_units) so metric output stays finite."
+    ]
+  },
+  "hardware_metrics": [
+    "realtime_factor",
+    "inference_latency_p50_ms",
+    "inference_latency_p95_ms",
+    "model_load_success",
+    "inference_failures"
+  ],
+  "streaming_metrics": {
+    "enabled_when_available": [
+      "word_stabilization_delay_ms",
+      "end_to_end_latency_ms"
+    ]
+  },
+  "measurement_policy": {
+    "warmup_count": 1,
+    "measured_iterations": 5,
+    "latency_percentiles": [
+      50,
+      95
+    ],
+    "aggregation": "corpus_weighted",
+    "notes": [
+      "Warmup and iteration counts are part of benchmark-v1 and must not be changed for comparative runs.",
+      "LLMs may summarize results but may not calculate authoritative metric values.",
+      "Benchmark manifests and scoring rules are immutable within benchmark version 1."
+    ]
+  }
+}

@@ -10,6 +10,24 @@ The central rule is:
 > Do not automate model research before the dataset, metrics and hardware
 > benchmark are deterministic.
 
+## Implementation status
+
+| Phase | Status |
+|---|---|
+| 0 — contracts and reproducibility | **complete** |
+| 1 — AMI dataset pipeline | implemented smoke path; real-source execution still to be verified |
+| 2 — deterministic evaluation | implemented |
+| 3 — audio/frontend framework | implemented |
+| 4 — rm_cnn4a reference path | model preparation implemented; hardware-independent execution still needs artifact run |
+| 5 — MYRIAD deployment | wired; physical device validation pending |
+| 6 — benchmark harness | implemented; physical device validation pending |
+| 7+ | not started |
+
+Phase 0 was re-reviewed after later implementation work. The root audio,
+benchmark, model and text contracts now have executable semantic validators,
+benchmark measurement counts are explicit rather than runner-defined, and all
+contract documents have deterministic canonical hashes.
+
 ## Milestone overview
 
 The work is grouped into three major milestones.

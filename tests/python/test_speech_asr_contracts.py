@@ -9,6 +9,8 @@ sys.path.insert(0, str(ROOT / "examples" / "speech-asr" / "python"))
 from speech_asr.contracts import (
     ContractValidationError,
     canonical_json_sha256,
+    validate_acoustic_regression_result,
+    validate_benchmark_contract,
     validate_experiment_result,
     validate_speech_sample,
 )
@@ -23,7 +25,7 @@ def sample_document():
         "version": 1,
         "id": "synthetic-001",
         "audio": {
-            "path": "audio/synthetic.wav",
+            "path": "audio/synthetic.f32",
             "sample_rate_hz": 16000,
             "channels": 1,
             "sample_type": "float32",
@@ -56,8 +58,8 @@ def result_document():
             "text_normalization_version": "text-v1",
         },
         "model": {
-            "id": "rm_cnn4a",
-            "family": "rm_cnn4a",
+            "id": "example-model",
+            "family": "example-family",
             "spec_sha256": SHA,
             "artifact_sha256": {"model.xml": SHA, "model.bin": SHA},
         },
@@ -80,6 +82,42 @@ def result_document():
             "dataset_manifest_sha256": SHA,
             "model_spec_sha256": SHA,
         },
+    }
+
+
+def regression_document():
+    return {
+        "schema": "speech-asr/acoustic-regression-result",
+        "version": 1,
+        "status": "completed",
+        "model": {
+            "id": "rm_cnn4a-fp16",
+            "family": "rm_cnn4a",
+            "xml_sha256": SHA,
+            "bin_sha256": SHA,
+        },
+        "fixture": {
+            "features_sha256": SHA,
+            "reference_scores_sha256": SHA,
+        },
+        "runtime": {
+            "repo_commit": "7e3d0e0ce950769fa1c03f6d2bf5574de244a16c",
+            "backend": "MYRIAD",
+            "target": "arm64",
+            "openvino_version": "2020.3.2",
+        },
+        "metrics": {
+            "utterances": 1,
+            "total_frames": 100,
+            "weighted_mean_infer_ms_per_frame": 10.0,
+            "utterance_avg_infer_ms_per_frame_p50": 10.0,
+            "utterance_avg_infer_ms_per_frame_p95": 10.0,
+            "max_error_max": 1.0,
+            "avg_error_mean": 0.1,
+            "rms_error_mean": 0.2,
+            "failures": 0,
+        },
+        "provenance": {"raw_log_sha256": SHA},
     }
 
 
@@ -106,6 +144,46 @@ class SpeechSampleContractTests(unittest.TestCase):
             validate_speech_sample(document)
 
 
+class BenchmarkContractTests(unittest.TestCase):
+    def test_rejects_implicit_measurement_policy(self):
+        document = {
+            "schema": "speech-asr/benchmark",
+            "version": 1,
+            "result_schema": "experiment-result-v1.schema.json",
+            "dataset": {
+                "canonical_corpus": "AMI",
+                "normalized_manifest_format": "jsonl",
+                "timing_unit": "sample_index",
+                "splits": {
+                    "smoke": "smoke.jsonl",
+                    "benchmark": "benchmark.jsonl",
+                    "validation": "validation.jsonl",
+                },
+            },
+            "audio_contract": "audio-v1",
+            "scoring": {
+                "text_normalization_version": "text-v1",
+                "text_normalization_contract": "text-v1.json",
+                "metrics": ["wer", "cer"],
+            },
+            "hardware_metrics": [
+                "realtime_factor",
+                "inference_latency_p50_ms",
+                "inference_latency_p95_ms",
+                "model_load_success",
+                "inference_failures",
+            ],
+            "measurement_policy": {
+                "warmup_count": "runner decides",
+                "measured_iterations": "runner decides",
+                "latency_percentiles": [50, 95],
+                "aggregation": "corpus_weighted",
+            },
+        }
+        with self.assertRaisesRegex(ContractValidationError, "warmup_count"):
+            validate_benchmark_contract(document)
+
+
 class ExperimentResultContractTests(unittest.TestCase):
     def test_valid_completed_result(self):
         self.assertEqual(validate_experiment_result(result_document())["status"], "completed")
@@ -128,6 +206,20 @@ class ExperimentResultContractTests(unittest.TestCase):
         document["runtime"]["openvino_version"] = "2024.0"
         with self.assertRaisesRegex(ContractValidationError, "2020.3.2"):
             validate_experiment_result(document)
+
+
+class AcousticRegressionContractTests(unittest.TestCase):
+    def test_valid_regression_result(self):
+        self.assertEqual(
+            validate_acoustic_regression_result(regression_document())["status"],
+            "completed",
+        )
+
+    def test_failed_regression_requires_diagnostics(self):
+        document = regression_document()
+        document["status"] = "failed"
+        with self.assertRaisesRegex(ContractValidationError, "diagnostics.summary"):
+            validate_acoustic_regression_result(document)
 
 
 class CanonicalHashTests(unittest.TestCase):

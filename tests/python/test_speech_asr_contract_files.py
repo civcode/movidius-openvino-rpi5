@@ -8,19 +8,42 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 SPEECH = ROOT / "examples" / "speech-asr"
 sys.path.insert(0, str(SPEECH / "python"))
 
-from speech_asr.contracts import validate_experiment_result, validate_speech_sample
+from speech_asr.contracts import (
+    validate_audio_contract,
+    validate_benchmark_contract,
+    validate_experiment_result,
+    validate_model_contract,
+    validate_speech_sample,
+    validate_text_contract,
+)
 
 
 class ContractFileTests(unittest.TestCase):
-    def test_json_contract_files_are_parseable(self):
+    def test_contract_documents_are_json_parseable_yaml_compatible(self):
         for name in (
+            "audio-v1.yaml",
+            "benchmark-v1.yaml",
+            "model-v1.yaml",
             "speech-sample-v1.schema.json",
             "experiment-result-v1.schema.json",
+            "acoustic-regression-result-v1.schema.json",
             "text-v1.json",
         ):
             with self.subTest(name=name):
                 with (SPEECH / "contracts" / name).open("r", encoding="utf-8") as handle:
                     self.assertIsInstance(json.load(handle), dict)
+
+    def test_root_contracts_validate(self):
+        validators = {
+            "audio-v1.yaml": validate_audio_contract,
+            "benchmark-v1.yaml": validate_benchmark_contract,
+            "model-v1.yaml": validate_model_contract,
+            "text-v1.json": validate_text_contract,
+        }
+        for name, validator in validators.items():
+            with self.subTest(name=name):
+                with (SPEECH / "contracts" / name).open("r", encoding="utf-8") as handle:
+                    self.assertEqual(validator(json.load(handle))["version"], 1)
 
     def test_example_documents_validate(self):
         examples = SPEECH / "contracts" / "examples"
@@ -29,21 +52,23 @@ class ContractFileTests(unittest.TestCase):
         with (examples / "result-v1.json").open("r", encoding="utf-8") as handle:
             self.assertEqual(validate_experiment_result(json.load(handle))["status"], "completed")
 
-    def test_validator_cli_accepts_example(self):
-        proc = subprocess.run(
-            [
-                sys.executable,
-                str(SPEECH / "tools" / "validate_contract.py"),
-                str(SPEECH / "contracts" / "examples" / "sample-v1.json"),
-            ],
-            cwd=ROOT,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=False,
-        )
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertIn("valid sample sha256=", proc.stdout)
+    def test_validator_cli_accepts_all_root_contracts(self):
+        for name in ("audio-v1.yaml", "benchmark-v1.yaml", "model-v1.yaml", "text-v1.json"):
+            with self.subTest(name=name):
+                proc = subprocess.run(
+                    [
+                        sys.executable,
+                        str(SPEECH / "tools" / "validate_contract.py"),
+                        str(SPEECH / "contracts" / name),
+                    ],
+                    cwd=ROOT,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    check=False,
+                )
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertIn("sha256=", proc.stdout)
 
 
 if __name__ == "__main__":

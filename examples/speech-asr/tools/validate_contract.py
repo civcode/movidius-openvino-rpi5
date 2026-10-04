@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate a normalized speech sample or experiment result JSON document."""
+"""Validate a versioned speech-ASR contract or result document."""
 
 import argparse
 import json
@@ -12,15 +12,45 @@ sys.path.insert(0, str(HERE.parent / "python"))
 from speech_asr.contracts import (  # noqa: E402
     ContractValidationError,
     canonical_json_sha256,
+    validate_acoustic_regression_result,
+    validate_audio_contract,
+    validate_benchmark_contract,
     validate_experiment_result,
+    validate_model_contract,
     validate_speech_sample,
+    validate_text_contract,
 )
+
+
+VALIDATORS = {
+    "audio": validate_audio_contract,
+    "benchmark": validate_benchmark_contract,
+    "model": validate_model_contract,
+    "text": validate_text_contract,
+    "sample": validate_speech_sample,
+    "result": validate_experiment_result,
+    "regression": validate_acoustic_regression_result,
+}
+
+SCHEMA_TO_KIND = {
+    "speech-asr/audio": "audio",
+    "speech-asr/benchmark": "benchmark",
+    "speech-asr/model": "model",
+    "speech-asr/text-normalization": "text",
+    "speech-asr/sample": "sample",
+    "speech-asr/experiment-result": "result",
+    "speech-asr/acoustic-regression-result": "regression",
+}
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("document", type=pathlib.Path)
-    parser.add_argument("--kind", choices=("auto", "sample", "result"), default="auto")
+    parser.add_argument(
+        "--kind",
+        choices=("auto", *VALIDATORS),
+        default="auto",
+    )
     args = parser.parse_args()
 
     try:
@@ -33,19 +63,13 @@ def main() -> int:
     kind = args.kind
     if kind == "auto":
         schema = document.get("schema") if isinstance(document, dict) else None
-        if schema == "speech-asr/sample":
-            kind = "sample"
-        elif schema == "speech-asr/experiment-result":
-            kind = "result"
-        else:
+        kind = SCHEMA_TO_KIND.get(schema)
+        if kind is None:
             print("error: cannot infer contract kind from $.schema", file=sys.stderr)
             return 2
 
     try:
-        if kind == "sample":
-            validate_speech_sample(document)
-        else:
-            validate_experiment_result(document)
+        VALIDATORS[kind](document)
     except ContractValidationError as exc:
         print(str(exc), file=sys.stderr)
         return 1
