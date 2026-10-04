@@ -22,6 +22,7 @@ uv-managed virtual environments. System Python is never mutated.
 | repository tools | `work/venv-tools` | 3.11 |
 | example clients / ONNX CPU fallback | `work/venv-apps` | 3.11 |
 | TensorFlow CPU fallback | `work/venv-cpu` | 3.11 |
+| PyTorch training/export | `work/venv-training` | 3.11 |
 | OpenVINO MO ONNX | `work/venv-mo-onnx` | 3.10 |
 | OpenVINO MO TensorFlow | `work/venv-mo-tensorflow` | 3.11 |
 | OpenVINO MO Kaldi | `work/venv-mo-kaldi` | 3.10 |
@@ -32,6 +33,7 @@ Examples:
 ./scripts/prepare-python-env.sh tools
 ./scripts/prepare-python-env.sh apps
 ./scripts/prepare-python-env.sh cpu
+./scripts/prepare-python-env.sh training
 ./scripts/prepare-python-env.sh mo-kaldi
 
 ./scripts/python.sh examples/speech-asr/datasets/ami/prepare_ami.py --subset smoke

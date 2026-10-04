@@ -1,0 +1,5 @@
+# cnn_ctc_v1 training/export environment.
+# Host packages remain isolated in work/venv-training via uv.
+numpy==1.26.4
+torch==2.2.2
+onnx==1.16.2
