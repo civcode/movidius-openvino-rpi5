@@ -170,3 +170,36 @@ respectively. These ratios are measurements, not pass/fail thresholds.
 
 This validates the physical MYRIAD execution path on an amd64 host. Raspberry
 Pi 5 / arm64 host validation remains a separate deployment gate.
+
+
+## Frozen Raspberry Pi 5 / arm64 MYRIAD result
+
+The first completed Pi 5 physical-device regression is frozen in
+`myriad-arm64-pi5-v1.json`.
+
+Observed Pi result:
+
+- 10 utterances / 3401 frames;
+- 0 failures;
+- weighted mean inference: 21.31601402528668 ms/frame;
+- utterance p50: 21.31425 ms/frame;
+- utterance p95: 21.323745 ms/frame;
+- maximum absolute score error: 0.0915527;
+- mean average error: 0.006222882000000001;
+- mean RMS error: 0.007926627000000002;
+- model load time: 1972.68 ms.
+
+The numerical error metrics are the same as the frozen amd64 MYRIAD result.
+Steady-state MYRIAD inference on the Pi was about 1.68% faster by weighted
+per-frame latency (21.3160 vs 21.6799 ms/frame), while model loading was about
+8.04% slower.
+
+The prepared BIN and both vendor ARK hashes match the frozen amd64 result.
+The raw XML SHA-256 does not: the Pi-prepared XML is
+`5fbc7dc2327a22d75bcd4b27d98f73689fdaf047fc16ee57be3ea507670d4d35`,
+while the earlier amd64-prepared XML is
+`53a22c26746eeedf053864385606d64b20ce6c4020732a2a55f8ce2609152f27`.
+Because OpenVINO Model Optimizer appends a non-executable `meta_data` section,
+new benchmark results record an executable-graph fingerprint that excludes only
+that top-level metadata. Phase 5 reproducibility is closed only after that
+fingerprint is confirmed equal across the two prepared IRs.

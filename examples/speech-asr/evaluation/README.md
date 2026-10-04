@@ -79,6 +79,21 @@ completed MYRIAD result as the candidate:
 ```
 
 The command first validates both acoustic-regression result documents. It then
-requires identical model XML/BIN, vendor feature/reference-score fixtures and
-OpenVINO version before reporting count agreement plus exact metric deltas and
-ratios. It deliberately does not apply MYRIAD pass/fail thresholds.
+requires identical BIN, vendor feature/reference-score fixtures and OpenVINO
+version. Raw XML must also match unless both results contain the same
+`graph_sha256` executable-graph fingerprint. The fingerprint excludes only
+Model Optimizer's top-level non-executable `meta_data` section; graph
+layers/edges/ports/blobs remain part of the identity. The command then reports
+count agreement plus exact metric deltas and ratios and deliberately applies no
+MYRIAD pass/fail thresholds.
+
+
+### Pi 5 evidence
+
+The first completed arm64 MYRIAD run is frozen at
+`models/rm_cnn4a/myriad-arm64-pi5-v1.json`. It completed all 3401 frames with
+zero failures and produced the same vendor-reference error metrics as the
+frozen amd64 MYRIAD run. Its raw XML hash differs from the earlier amd64
+preparation, so cross-host artifact identity remains explicitly pending until
+the new executable-graph fingerprint is regenerated and compared on both
+prepared IRs.

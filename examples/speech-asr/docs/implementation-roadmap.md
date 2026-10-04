@@ -19,8 +19,8 @@ The central rule is:
 | 2 — deterministic evaluation | implemented |
 | 3 — audio/frontend framework | implemented |
 | 4 — rm_cnn4a reference path | **complete** — real amd64 CPU reference frozen with artifact hashes and numerical metrics |
-| 5 — MYRIAD deployment | **validated on amd64 host** — physical device result frozen; Pi 5/arm64 host validation pending |
-| 6 — benchmark harness | implemented; Pi 5/arm64 worker validation pending |
+| 5 — MYRIAD deployment | **physical execution validated on amd64 + Pi 5/arm64** — semantic IR fingerprint confirmation pending |
+| 6 — benchmark harness | implemented; full Pi worker acceptance pending Phase 5 IR identity confirmation |
 | 7+ | not started |
 
 Phase 0 was re-reviewed after later implementation work. The root audio,
@@ -731,16 +731,22 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-The physical MYRIAD path is now validated on an amd64 host and frozen in
-`models/rm_cnn4a/myriad-amd64-v1.json`, with the CPU/device comparison frozen
-in `cpu-vs-myriad-amd64-v1.json`.
+The physical MYRIAD execution path has now completed successfully on both the
+amd64 host and Raspberry Pi 5 / arm64 host. The Pi result is frozen at
+`models/rm_cnn4a/myriad-arm64-pi5-v1.json`.
 
-The next unresolved deployment gate is Raspberry Pi 5 / arm64 validation:
+The remaining Phase 5 reproducibility gate is IR identity across preparation
+hosts. The BIN and vendor ARK hashes match, and MYRIAD numerical error metrics
+are identical, but the raw XML SHA-256 differs. New benchmark runs record a
+conservative `graph_sha256` that removes only Model Optimizer's top-level
+non-executable `meta_data` section.
 
-1. build the arm64 runtime image on the Pi 5;
-2. prepare or copy the exact same pinned rm_cnn4a artifact/fixture set;
-3. run `benchmark_rm_cnn4a.py --backend myriad --platform arm64`;
-4. verify XML/BIN and vendor ARK hashes match the frozen CPU/amd64-MYRIAD runs;
-5. freeze the Pi result and compare host-specific timing/error evidence;
-6. then close the Pi-specific Phase 5 gate and perform Phase 6 worker validation.
+Next:
+
+1. pull the graph-fingerprint update on both preparation hosts;
+2. rerun the benchmark (no model regeneration is required) so each result
+   records `graph_sha256`;
+3. confirm the graph fingerprints match;
+4. if they match, close Phase 5 and proceed to Phase 6 Pi worker acceptance;
+5. if they differ, diff the executable graph before accepting the artifact.
 
