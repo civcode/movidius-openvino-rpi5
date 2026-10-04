@@ -153,7 +153,7 @@ manifests.
 ### Target command shape
 
 ```bash
-python3 examples/speech-asr/datasets/ami/prepare_ami.py \
+./scripts/python.sh examples/speech-asr/datasets/ami/prepare_ami.py \
     --subset smoke \
     --output work/speech-asr/ami
 ```
@@ -731,13 +731,13 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-Start Phase 0 and Phase 1 together only where they are tightly coupled:
+Phases 0-3 are implemented and Phase 1 is frozen against real AMI source data.
+The next unresolved gate is Phase 4 reference-model execution:
 
-1. define the normalized speech-sample and text-normalization schemas;
-2. implement their validation tests;
-3. identify and pin the exact AMI material needed for the smoke subset;
-4. implement the AMI annotation-to-manifest conversion;
-5. produce the first deterministic smoke manifest.
-
-Do **not** start `rm_cnn4a` integration until the smoke corpus and deterministic
-scoring path are stable enough to serve as its acceptance harness.
+1. prepare the pinned `rm_cnn4a` source and FP16 IR through the uv-managed
+   Kaldi Model Optimizer environment;
+2. inspect and freeze the generated IR tensor contract;
+3. run the published feature/score regression independently of MYRIAD where
+   practical;
+4. preserve the resulting artifact hashes and numerical reference result;
+5. only then promote the same artifact to the physical MYRIAD gate in Phase 5.
