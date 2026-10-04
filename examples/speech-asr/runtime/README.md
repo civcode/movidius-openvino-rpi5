@@ -3,10 +3,39 @@
 The speech runtime is the Pi/host-side execution layer between normalized model
 inputs and model outputs.
 
-It may:
+## Canonical audio
+
+`python/speech_asr/audio.py` implements the `audio-v1` boundary:
+
+- uncompressed integer PCM WAV input (8/16/24/32-bit);
+- deterministic channel averaging to mono;
+- deterministic linear resampling to 16 kHz when required;
+- canonical raw little-endian float32 (`f32le`) I/O;
+- sample-index slicing.
+
+The AMI smoke source is already 16 kHz, so its corpus adapter preserves exact
+annotation sample coordinates rather than resampling before segment extraction.
+
+## Frontend profiles
+
+`python/speech_asr/features.py` defines a narrow `FrontendProfile` protocol:
+
+```text
+CanonicalAudio -> FeatureTensor
+```
+
+A `FeatureTensor` declares dtype, layout, shape and values and can be dumped as
+f32le plus canonical metadata/hash for golden-tensor comparisons.
+
+There is intentionally no global log-mel/MFCC default. A model package owns its
+frontend profile. `RawAudioFrontend` exists only as a plumbing/test fixture.
+
+## Runtime authority
+
+The runtime may:
 
 - load a declared model package;
-- prepare fixed-shape tensors from an already-defined feature profile;
+- prepare tensors from the model's declared frontend profile;
 - invoke CPU/reference or MYRIAD inference;
 - measure load/inference timing;
 - expose deterministic diagnostics;
@@ -21,7 +50,3 @@ It may not:
 - tune parameters while reporting the result as the original experiment.
 
 Model-specific behavior is selected through the model contract/adapter.
-
-The implementation should keep the existing repository's generic MYRIAD
-runtime reusable and add speech-specific behavior only under this subproject
-unless a component is generalized first.
