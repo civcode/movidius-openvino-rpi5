@@ -4,89 +4,218 @@
   "title": "Speech ASR experiment result v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "version", "experiment_id", "status", "benchmark", "model", "runtime", "provenance"],
+  "required": [
+    "schema",
+    "version",
+    "experiment_id",
+    "status",
+    "benchmark",
+    "model",
+    "runtime",
+    "provenance"
+  ],
   "properties": {
-    "schema": {"const": "speech-asr/experiment-result"},
-    "version": {"const": 1},
-    "experiment_id": {"type": "string", "minLength": 1},
-    "status": {"enum": ["completed", "failed", "blocked"]},
+    "schema": {
+      "const": "speech-asr/experiment-result"
+    },
+    "version": {
+      "const": 1
+    },
+    "experiment_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "completed",
+        "failed",
+        "blocked"
+      ]
+    },
     "benchmark": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "contract_version", "manifest_sha256", "text_normalization_version"],
+      "required": [
+        "id",
+        "contract_version",
+        "manifest_sha256",
+        "text_normalization_version"
+      ],
       "properties": {
-        "id": {"type": "string", "minLength": 1},
-        "contract_version": {"const": 1},
-        "manifest_sha256": {"$ref": "#/$defs/sha256"},
-        "text_normalization_version": {"const": "text-v1"}
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contract_version": {
+          "const": 1
+        },
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "text_normalization_version": {
+          "const": "text-v1"
+        }
       }
     },
     "model": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "family", "spec_sha256", "artifact_sha256"],
+      "required": [
+        "id",
+        "family",
+        "spec_sha256",
+        "artifact_sha256"
+      ],
       "properties": {
-        "id": {"type": "string", "minLength": 1},
-        "family": {"type": "string", "minLength": 1},
-        "spec_sha256": {"$ref": "#/$defs/sha256"},
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "family": {
+          "type": "string",
+          "minLength": 1
+        },
+        "spec_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
         "artifact_sha256": {
           "type": "object",
           "minProperties": 1,
-          "additionalProperties": {"$ref": "#/$defs/sha256"}
+          "additionalProperties": {
+            "$ref": "#/$defs/sha256"
+          }
         }
       }
     },
     "runtime": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["repo_commit", "backend", "openvino_version", "target"],
+      "required": [
+        "repo_commit",
+        "backend",
+        "openvino_version",
+        "target"
+      ],
       "properties": {
-        "repo_commit": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"},
-        "backend": {"type": "string", "minLength": 1},
-        "openvino_version": {"const": "2020.3.2"},
-        "target": {"type": "string", "minLength": 1},
-        "firmware_sha256": {"$ref": "#/$defs/sha256"}
+        "repo_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{7,40}$"
+        },
+        "backend": {
+          "type": "string",
+          "minLength": 1
+        },
+        "openvino_version": {
+          "const": "2020.3.2"
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1
+        },
+        "firmware_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
       }
     },
     "metrics": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["wer", "cer", "realtime_factor", "inference_latency_p50_ms", "inference_latency_p95_ms", "failures"],
+      "required": [
+        "wer",
+        "cer",
+        "realtime_factor",
+        "inference_latency_p50_ms",
+        "inference_latency_p95_ms",
+        "failures"
+      ],
       "properties": {
-        "wer": {"type": "number", "minimum": 0, "maximum": 1},
-        "cer": {"type": "number", "minimum": 0, "maximum": 1},
-        "realtime_factor": {"type": "number", "minimum": 0},
-        "inference_latency_p50_ms": {"type": "number", "minimum": 0},
-        "inference_latency_p95_ms": {"type": "number", "minimum": 0},
-        "failures": {"type": "integer", "minimum": 0}
+        "wer": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cer": {
+          "type": "number",
+          "minimum": 0
+        },
+        "realtime_factor": {
+          "type": "number",
+          "minimum": 0
+        },
+        "inference_latency_p50_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "inference_latency_p95_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "failures": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     },
     "diagnostics": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["summary"],
+      "required": [
+        "summary"
+      ],
       "properties": {
-        "summary": {"type": "string", "minLength": 1}
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "provenance": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["dataset_manifest_sha256", "model_spec_sha256"],
+      "required": [
+        "dataset_manifest_sha256",
+        "model_spec_sha256"
+      ],
       "properties": {
-        "dataset_manifest_sha256": {"$ref": "#/$defs/sha256"},
-        "model_spec_sha256": {"$ref": "#/$defs/sha256"}
+        "dataset_manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "model_spec_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
       }
     }
   },
   "allOf": [
     {
-      "if": {"properties": {"status": {"const": "completed"}}},
-      "then": {"required": ["metrics"]}
+      "if": {
+        "properties": {
+          "status": {
+            "const": "completed"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "metrics"
+        ]
+      }
     },
     {
-      "if": {"properties": {"status": {"enum": ["failed", "blocked"]}}},
-      "then": {"required": ["diagnostics"]}
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "failed",
+              "blocked"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "diagnostics"
+        ]
+      }
     }
   ],
   "$defs": {

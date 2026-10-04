@@ -201,10 +201,6 @@ def validate_experiment_result(document: Any) -> Dict[str, Any]:
         for key in ("wer", "cer", "realtime_factor", "inference_latency_p50_ms", "inference_latency_p95_ms"):
             _number(metrics.get(key), f"$.metrics.{key}", errors)
         _integer(metrics.get("failures"), "$.metrics.failures", errors)
-        for key in ("wer", "cer"):
-            value = metrics.get(key)
-            if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 1.0:
-                errors.append(f"$.metrics.{key}: expected fraction in range 0..1")
     elif metrics is not None and not isinstance(metrics, Mapping):
         errors.append("$.metrics: expected object when present")
 

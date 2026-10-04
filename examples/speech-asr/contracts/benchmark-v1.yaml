@@ -20,6 +20,10 @@ scoring:
   metrics:
     - wer
     - cer
+  notes:
+    - "WER and CER are non-negative ratios and may exceed 1.0 when insertions exceed reference length."
+    - "CER is computed after text-v1 normalization with spaces removed."
+    - "Empty-reference scoring uses denominator max(1, reference_units) so metric output stays finite."
 
 hardware_metrics:
   - realtime_factor
