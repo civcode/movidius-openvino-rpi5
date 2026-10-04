@@ -1,15 +1,23 @@
 # Python dependency sets
 
-These files are inputs to the repository's staged Python tooling. OpenVINO
-2020.3 Model Optimizer is legacy software, so ONNX, TensorFlow and Kaldi
-frontends intentionally use separate virtual environments.
+Host Python dependency installation is managed exclusively by **uv**. These
+requirement files describe separate virtual environments; they are never
+installed into system Python.
 
-- `mo-onnx.txt` — ONNX Model Optimizer frontend.
-- `mo-tensorflow.txt` — TensorFlow Model Optimizer frontend.
-- `mo-kaldi.txt` — Kaldi nnet1/nnet2 frontend used by speech-ASR rm_cnn4a.
-- `mo-common.txt` — dependencies shared by the MO frontends.
+- `apps.txt` -> `work/venv-apps` (Python 3.11)
+- `cpu-tensorflow.txt` -> `work/venv-cpu` (Python 3.11)
+- `mo-onnx.txt` -> `work/venv-mo-onnx` (Python 3.10)
+- `mo-tensorflow.txt` -> `work/venv-mo-tensorflow` (Python 3.11)
+- `mo-kaldi.txt` -> `work/venv-mo-kaldi` (Python 3.10)
+- `mo-common.txt` is shared by the Model Optimizer environments.
 
-The standalone client environment (`apps.txt`) includes ONNX Runtime for
-MobileNet CPU fallback. SSD/DeepLab CPU fallback uses the separate
-`cpu-tensorflow.txt` environment so MYRIAD-only users can skip the large
-TensorFlow installation with `setup.sh --skip-cpu-fallback`.
+Prepare an environment with:
+
+```bash
+./scripts/prepare-python-env.sh apps
+./scripts/prepare-python-env.sh cpu
+./scripts/prepare-python-env.sh mo-kaldi
+```
+
+Dependency-free repository tools use `work/venv-tools` via
+`./scripts/python.sh`. See `docs/PYTHON-ENVIRONMENTS.md` for the full policy.

@@ -55,6 +55,10 @@ MYRIAD-only.
 for MobileNet and TensorFlow for SSDLite/DeepLabV3. See
 `docs/CPU-BACKENDS.md` for the backend contract and parity results.
 
+## Python tooling
+
+Host Python dependencies are isolated with **uv**; this repository does not install Python libraries into system Python. Use `./scripts/prepare-python-env.sh` for named environments and `./scripts/python.sh` for dependency-free repository tools. See [docs/PYTHON-ENVIRONMENTS.md](docs/PYTHON-ENVIRONMENTS.md).
+
 ## Quick start
 
 Platform selection is centralized in `scripts/platform.sh`. If `--platform` is omitted, `x86_64` maps to `amd64`, `aarch64`/`arm64` maps to native `arm64`, and `armv7l` maps to `armv7`.
