@@ -221,6 +221,22 @@ class AcousticRegressionContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ContractValidationError, "diagnostics.summary"):
             validate_acoustic_regression_result(document)
 
+    def test_cpu_reference_backend_is_valid_on_amd64(self):
+        document = regression_document()
+        document["runtime"]["backend"] = "CPU"
+        document["runtime"]["target"] = "amd64"
+        self.assertEqual(
+            validate_acoustic_regression_result(document)["runtime"]["backend"],
+            "CPU",
+        )
+
+    def test_cpu_reference_backend_rejects_arm_target(self):
+        document = regression_document()
+        document["runtime"]["backend"] = "CPU"
+        document["runtime"]["target"] = "arm64"
+        with self.assertRaisesRegex(ContractValidationError, "requires 'amd64'"):
+            validate_acoustic_regression_result(document)
+
 
 class CanonicalHashTests(unittest.TestCase):
     def test_hash_is_key_order_independent(self):
