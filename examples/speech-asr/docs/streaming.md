@@ -86,3 +86,30 @@ Phase 7 code is considered implemented when hardware-free tests cover:
 
 A real prepared AMI clip replay remains the final acceptance evidence before the
 phase is marked complete.
+
+
+## Accepted real AMI replay
+
+Phase 7 acceptance is frozen in
+`../evaluation/phase7-ami-smoke-acceptance-v1.json`.
+
+The accepted run used prepared AMI smoke sample `ami-ES2002a-A-4` and replayed
+the same canonical 56,752-sample clip twice. Both replay result files had the
+same SHA-256
+`c7a4d8f1b22d83473ad59fae9b0a88b2a3e4378997fb5679f2a5a5b997812bc6`
+and `cmp` reported no differences.
+
+Observed replay:
+
+- 15 chunks;
+- 10 transcript events;
+- 11 stabilized tokens;
+- final event latency 85 ms;
+- word stabilization p50 240 ms / p95 493.5 ms;
+- exact offline transcript match;
+- WER 0 / CER 0;
+- streaming replay contract validation succeeded.
+
+This closes recorded-audio streaming mechanics. The result does not claim
+model-backed ASR: scripted cumulative hypotheses are still derived from
+reference word timing until Phase 8 provides a trainable model/decoder path.

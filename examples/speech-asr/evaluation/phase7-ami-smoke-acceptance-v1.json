@@ -1,0 +1,54 @@
+{
+  "schema": "speech-asr/phase-acceptance",
+  "version": 1,
+  "phase": 7,
+  "status": "accepted",
+  "evidence_kind": "recorded-streaming-replay",
+  "repository_commit": "a41aa1713430b981a5b149ffa07443d208fc782f",
+  "source": {
+    "corpus": "AMI",
+    "split_id": "ami-smoke-v1",
+    "sample_id": "ami-ES2002a-A-4",
+    "audio_relpath": "work/speech-asr/ami/ami-smoke-v1/audio/ES2002a.A.4.f32",
+    "records": 4,
+    "manifest_sha256": "2b38aba98d0af830f5f0cfecdbda819f3b4f339f77c89c2f5f8090217bfc8922",
+    "logical_tree_sha256": "21c529d2d5a02f4436d929026538f1a7e1c602e34d8723a6c09ad9acd3123e2d",
+    "audio_samples": 56752
+  },
+  "replay": {
+    "repeated_runs": 2,
+    "result_sha256": {
+      "replay_1": "c7a4d8f1b22d83473ad59fae9b0a88b2a3e4378997fb5679f2a5a5b997812bc6",
+      "replay_2": "c7a4d8f1b22d83473ad59fae9b0a88b2a3e4378997fb5679f2a5a5b997812bc6"
+    },
+    "byte_identical": true,
+    "contract_validation": {
+      "kind": "streaming-replay",
+      "status": "valid",
+      "canonical_json_sha256": "b105e3ca6f5a3481e5c5dbcd535ac6348197763f48d987d12c53b87304fdddd4"
+    }
+  },
+  "metrics": {
+    "chunks": 15,
+    "events": 10,
+    "final_latency_ms": 85,
+    "stabilized_tokens": 11,
+    "word_stabilization_delay_ms": {
+      "p50": 240,
+      "p95": 493.5
+    },
+    "offline_comparison": {
+      "exact_match": true,
+      "wer": 0,
+      "cer": 0
+    }
+  },
+  "acceptance": {
+    "prepared_corpus_verified": true,
+    "repeated_replay_byte_identical": true,
+    "contract_valid": true,
+    "offline_streaming_exact_match": true,
+    "requirements_met": true
+  },
+  "note": "The scripted cumulative decoder uses reference word timing to validate streaming mechanics; it is not model inference."
+}

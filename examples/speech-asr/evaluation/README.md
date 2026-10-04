@@ -188,3 +188,15 @@ streaming-contract hash and implementation hash.
 The scripted decoder is a **mechanics fixture**, not an acoustic model. It
 exists so chunking, event timing, stabilization and offline comparison can be
 verified before Phase 8 supplies a raw-audio model.
+
+
+### Frozen Phase 7 acceptance
+
+The first real prepared-AMI streaming replay acceptance is checked in at
+`phase7-ami-smoke-acceptance-v1.json`. It records the frozen AMI corpus
+identity, selected sample, replay-result byte hash, canonical contract-validation
+hash and observed chunk/event/stabilization/offline-comparison metrics.
+
+The two replay outputs were byte-identical and both represent exact offline
+transcript parity (WER 0, CER 0). This closes Phase 7 mechanics acceptance; it
+does not convert the scripted decoder fixture into a model prediction.
