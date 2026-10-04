@@ -514,9 +514,12 @@ def validate_acoustic_regression_result(document: Any) -> Dict[str, Any]:
 
     runtime = _mapping(root.get("runtime"), "$.runtime", errors)
     _git_sha(runtime.get("repo_commit"), "$.runtime.repo_commit", errors)
-    if runtime.get("backend") != "MYRIAD":
-        errors.append("$.runtime.backend: expected 'MYRIAD'")
+    backend = runtime.get("backend")
+    if backend not in {"CPU", "MYRIAD"}:
+        errors.append("$.runtime.backend: expected one of CPU, MYRIAD")
     _nonempty_string(runtime.get("target"), "$.runtime.target", errors)
+    if backend == "CPU" and runtime.get("target") != "amd64":
+        errors.append("$.runtime.target: CPU reference backend requires 'amd64'")
     if runtime.get("openvino_version") != "2020.3.2":
         errors.append("$.runtime.openvino_version: expected '2020.3.2'")
 

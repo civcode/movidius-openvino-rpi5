@@ -14,6 +14,8 @@
 #                                            # SSDLite detection (prepare-ssdlite.sh)
 #   ./run.sh seg [--image /models/images/dog_ssd.ppm]
 #                                            # DeepLabV3 segmentation (prepare-deeplabv3.sh)
+#   ./run.sh speech-reference
+#                                            # rm_cnn4a vendor ARK regression on amd64 CPU
 #   ./run.sh speech-regress
 #                                            # rm_cnn4a vendor ARK regression on MYRIAD
 #
@@ -58,7 +60,7 @@ if (( PRINT_PLATFORM )); then platform_print; exit 0; fi
 
 MODE="${1:-demo}"
 case "${MODE}" in
-    demo|--demo|list|demo-list|shell|bench|custom|mobilenet|ssd|seg|speech-regress)
+    demo|--demo|list|demo-list|shell|bench|custom|mobilenet|ssd|seg|speech-reference|speech-regress)
         [[ $# -gt 0 ]] && shift
         ;;
     *) MODE=demo ;;
@@ -85,12 +87,16 @@ fi
 DOCKER_ARGS=(
     --rm
     --platform "${DOCKER_PLATFORM}"
-    --name "ov203-myriad-${TARGET}-$$"
-    --network=host
-    -v /dev:/dev
-    --device-cgroup-rule='c 189:* rwm'
+    --name "ov203-${MODE}-${TARGET}-$"
     -e OV_ROOT=/opt/openvino
 )
+if [[ "${MODE}" != speech-reference ]]; then
+    DOCKER_ARGS+=(
+        --network=host
+        -v /dev:/dev
+        --device-cgroup-rule='c 189:* rwm'
+    )
+fi
 
 case "${MODE}" in
     demo)
@@ -112,7 +118,7 @@ case "${MODE}" in
         DOCKER_ARGS+=(-v "${ROOT}/work:/work:ro")
         ENTRY=(/opt/openvino/bin/hello_myriad --device MYRIAD "$@")
         ;;
-    speech-regress)
+    speech-reference|speech-regress)
         MODEL_DIR="${ROOT}/vendor/models/rm_cnn4a_smbr"
         XML="${MODEL_DIR}/openvino/fp16/rm_cnn4a_fp16.xml"
         FEATURES="${MODEL_DIR}/source/feat1_10.ark"
@@ -121,13 +127,23 @@ case "${MODE}" in
             echo "rm_cnn4a fixture is not prepared - run ./scripts/prepare-rm-cnn4a.sh first" >&2
             exit 1
         fi
+        DEVICE=MYRIAD
+        OUT=/tmp/rm_cnn4a_myriad_scores.ark
+        if [[ "${MODE}" == speech-reference ]]; then
+            if [[ "${TARGET}" != amd64 ]]; then
+                echo "speech-reference requires --platform amd64 because the pinned OpenVINO CPU plugin is built only for amd64" >&2
+                exit 2
+            fi
+            DEVICE=CPU
+            OUT=/tmp/rm_cnn4a_cpu_scores.ark
+        fi
         DOCKER_ARGS+=(-v "${ROOT}/vendor/models:/models:ro")
         ENTRY=(/opt/openvino/bin/speech_sample
                -m /models/rm_cnn4a_smbr/openvino/fp16/rm_cnn4a_fp16.xml
                -i /models/rm_cnn4a_smbr/source/feat1_10.ark
                -r /models/rm_cnn4a_smbr/source/score1_10.ark
-               -o /tmp/rm_cnn4a_scores.ark
-               -d MYRIAD
+               -o "${OUT}"
+               -d "${DEVICE}"
                -bs 1
                "$@")
         ;;

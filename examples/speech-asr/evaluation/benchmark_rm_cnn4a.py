@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the rm_cnn4a MYRIAD regression and emit a validated result."""
+"""Run rm_cnn4a vendor-score regression on CPU reference or MYRIAD."""
 
 from __future__ import annotations
 
@@ -43,9 +43,20 @@ def git_head() -> str:
 
 
 def repo_path(path: pathlib.Path) -> pathlib.Path:
-    """Resolve relative artifact paths from the repository root."""
-
     return path if path.is_absolute() else ROOT / path
+
+
+def build_command(backend: str, platform: str) -> list[str]:
+    backend = backend.lower()
+    if backend == "cpu":
+        if platform != "amd64":
+            raise ValueError("CPU reference regression requires platform amd64")
+        mode = "speech-reference"
+    elif backend == "myriad":
+        mode = "speech-regress"
+    else:
+        raise ValueError(f"unsupported backend: {backend}")
+    return [str(ROOT / "run.sh"), "--platform", platform, mode]
 
 
 def failed_metrics() -> dict:
@@ -64,24 +75,32 @@ def failed_metrics() -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--backend", choices=("cpu", "myriad"), default="myriad")
     parser.add_argument(
         "--platform",
-        default="arm64",
+        default=None,
         choices=("armv7", "arm64", "amd64"),
+        help="defaults to amd64 for CPU and arm64 for MYRIAD",
     )
-    parser.add_argument(
-        "--output",
-        type=pathlib.Path,
-        default=pathlib.Path("work/speech-asr/rm_cnn4a/result.json"),
-    )
-    parser.add_argument(
-        "--log",
-        type=pathlib.Path,
-        default=pathlib.Path("work/speech-asr/rm_cnn4a/speech_sample.log"),
-    )
+    parser.add_argument("--output", type=pathlib.Path)
+    parser.add_argument("--log", type=pathlib.Path)
     args = parser.parse_args()
-    output_path = repo_path(args.output)
-    log_path = repo_path(args.log)
+
+    platform = args.platform or ("amd64" if args.backend == "cpu" else "arm64")
+    try:
+        command = build_command(args.backend, platform)
+    except ValueError as exc:
+        parser.error(str(exc))
+
+    suffix = "cpu-reference" if args.backend == "cpu" else f"myriad-{platform}"
+    output_path = repo_path(
+        args.output
+        or pathlib.Path(f"work/speech-asr/rm_cnn4a/result-{suffix}.json")
+    )
+    log_path = repo_path(
+        args.log
+        or pathlib.Path(f"work/speech-asr/rm_cnn4a/speech_sample-{suffix}.log")
+    )
 
     model_root = ROOT / "vendor" / "models" / "rm_cnn4a_smbr"
     xml = model_root / "openvino" / "fp16" / "rm_cnn4a_fp16.xml"
@@ -100,12 +119,6 @@ def main() -> int:
             print(f"  {path}", file=sys.stderr)
         return 2
 
-    command = [
-        str(ROOT / "run.sh"),
-        "--platform",
-        args.platform,
-        "speech-regress",
-    ]
     proc = subprocess.run(
         command,
         cwd=ROOT,
@@ -118,6 +131,7 @@ def main() -> int:
     log_path.write_text(proc.stdout, encoding="utf-8")
     raw_log_sha = sha256(log_path)
 
+    runtime_backend = "CPU" if args.backend == "cpu" else "MYRIAD"
     base = {
         "schema": "speech-asr/acoustic-regression-result",
         "version": 1,
@@ -133,8 +147,8 @@ def main() -> int:
         },
         "runtime": {
             "repo_commit": git_head(),
-            "backend": "MYRIAD",
-            "target": args.platform,
+            "backend": runtime_backend,
+            "target": platform,
             "openvino_version": "2020.3.2",
         },
         "provenance": {
@@ -171,7 +185,7 @@ def main() -> int:
             "status": "failed",
             "metrics": failed_metrics(),
             "diagnostics": {
-                "summary": f"speech-regress exited with status {proc.returncode}",
+                "summary": f"{command[-1]} exited with status {proc.returncode}",
             },
         }
 

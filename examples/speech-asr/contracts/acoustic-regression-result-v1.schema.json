@@ -4,41 +4,120 @@
   "title": "Speech ASR acoustic regression result v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "version", "status", "model", "fixture", "runtime", "metrics", "provenance"],
+  "required": [
+    "schema",
+    "version",
+    "status",
+    "model",
+    "fixture",
+    "runtime",
+    "metrics",
+    "provenance"
+  ],
   "properties": {
-    "schema": {"const": "speech-asr/acoustic-regression-result"},
-    "version": {"const": 1},
-    "status": {"enum": ["completed", "failed"]},
+    "schema": {
+      "const": "speech-asr/acoustic-regression-result"
+    },
+    "version": {
+      "const": 1
+    },
+    "status": {
+      "enum": [
+        "completed",
+        "failed"
+      ]
+    },
     "model": {
       "type": "object",
-      "required": ["id", "family", "xml_sha256", "bin_sha256"],
+      "required": [
+        "id",
+        "family",
+        "xml_sha256",
+        "bin_sha256"
+      ],
       "additionalProperties": true,
       "properties": {
-        "id": {"type": "string", "minLength": 1},
-        "family": {"type": "string", "minLength": 1},
-        "xml_sha256": {"$ref": "#/$defs/sha256"},
-        "bin_sha256": {"$ref": "#/$defs/sha256"}
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "family": {
+          "type": "string",
+          "minLength": 1
+        },
+        "xml_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bin_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
       }
     },
     "fixture": {
       "type": "object",
-      "required": ["features_sha256", "reference_scores_sha256"],
+      "required": [
+        "features_sha256",
+        "reference_scores_sha256"
+      ],
       "additionalProperties": true,
       "properties": {
-        "features_sha256": {"$ref": "#/$defs/sha256"},
-        "reference_scores_sha256": {"$ref": "#/$defs/sha256"}
+        "features_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "reference_scores_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
       }
     },
     "runtime": {
       "type": "object",
-      "required": ["repo_commit", "backend", "target", "openvino_version"],
+      "required": [
+        "repo_commit",
+        "backend",
+        "target",
+        "openvino_version"
+      ],
       "additionalProperties": true,
       "properties": {
-        "repo_commit": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"},
-        "backend": {"const": "MYRIAD"},
-        "target": {"type": "string", "minLength": 1},
-        "openvino_version": {"const": "2020.3.2"}
-      }
+        "repo_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{7,40}$"
+        },
+        "backend": {
+          "enum": [
+            "CPU",
+            "MYRIAD"
+          ]
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1
+        },
+        "openvino_version": {
+          "const": "2020.3.2"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "backend": {
+                "const": "CPU"
+              }
+            },
+            "required": [
+              "backend"
+            ]
+          },
+          "then": {
+            "properties": {
+              "target": {
+                "const": "amd64"
+              }
+            }
+          }
+        }
+      ]
     },
     "metrics": {
       "type": "object",
@@ -55,23 +134,54 @@
       ],
       "additionalProperties": true,
       "properties": {
-        "utterances": {"type": "integer", "minimum": 0},
-        "total_frames": {"type": "integer", "minimum": 0},
-        "weighted_mean_infer_ms_per_frame": {"type": "number", "minimum": 0},
-        "utterance_avg_infer_ms_per_frame_p50": {"type": "number", "minimum": 0},
-        "utterance_avg_infer_ms_per_frame_p95": {"type": "number", "minimum": 0},
-        "max_error_max": {"type": "number", "minimum": 0},
-        "avg_error_mean": {"type": "number", "minimum": 0},
-        "rms_error_mean": {"type": "number", "minimum": 0},
-        "failures": {"type": "integer", "minimum": 0}
+        "utterances": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_frames": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "weighted_mean_infer_ms_per_frame": {
+          "type": "number",
+          "minimum": 0
+        },
+        "utterance_avg_infer_ms_per_frame_p50": {
+          "type": "number",
+          "minimum": 0
+        },
+        "utterance_avg_infer_ms_per_frame_p95": {
+          "type": "number",
+          "minimum": 0
+        },
+        "max_error_max": {
+          "type": "number",
+          "minimum": 0
+        },
+        "avg_error_mean": {
+          "type": "number",
+          "minimum": 0
+        },
+        "rms_error_mean": {
+          "type": "number",
+          "minimum": 0
+        },
+        "failures": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     },
     "provenance": {
       "type": "object",
-      "required": ["raw_log_sha256"],
+      "required": [
+        "raw_log_sha256"
+      ],
       "additionalProperties": true,
       "properties": {
-        "raw_log_sha256": {"$ref": "#/$defs/sha256"}
+        "raw_log_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
       }
     },
     "diagnostics": {
@@ -80,6 +190,9 @@
     }
   },
   "$defs": {
-    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
   }
 }
