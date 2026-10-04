@@ -132,6 +132,10 @@ architecture spec
 The benchmark, dataset and hardware measurement contracts remain stable while
 model architectures evolve.
 
+## Python environment
+
+Host-side speech tooling follows the repository-wide uv policy. Dependency-free speech utilities run through `./scripts/python.sh`; Python packages must not be installed into system Python.
+
 ## Tests
 
 The speech-specific fixture tests are deliberately independent of network and
@@ -145,7 +149,7 @@ Physical-device regression remains a separate explicit operation:
 
 ```bash
 ./scripts/prepare-rm-cnn4a.sh
-python3 examples/speech-asr/evaluation/benchmark_rm_cnn4a.py --platform arm64
+./scripts/python.sh examples/speech-asr/evaluation/benchmark_rm_cnn4a.py --platform arm64
 ```
 
 ## Directory layout

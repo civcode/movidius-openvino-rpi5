@@ -23,13 +23,17 @@ ES2002a **Mix-Headset** WAV. Downloads are rejected when SHA-256 differs from
 the split specification. AMI signals/transcription are CC BY 4.0; downstream
 use must preserve AMI attribution.
 
+## Python environment
+
+The adapter is stdlib-only, but it is still invoked through the repository-wide uv-managed tools environment so host Python remains untouched.
+
 ## Prepare data
 
 From the repository root:
 
 ```bash
-python3 examples/speech-asr/datasets/ami/prepare_ami.py --subset smoke
-python3 examples/speech-asr/datasets/ami/prepare_ami.py --subset benchmark
+./scripts/python.sh examples/speech-asr/datasets/ami/prepare_ami.py --subset smoke
+./scripts/python.sh examples/speech-asr/datasets/ami/prepare_ami.py --subset benchmark
 ```
 
 An explicit split file can be used with `--spec`. Relative cache/output paths
@@ -60,7 +64,7 @@ The `.f32` files are raw little-endian float32 mono samples at 16 kHz.
 After preparation, or after copying a prepared dataset to another machine:
 
 ```bash
-python3 examples/speech-asr/datasets/ami/prepare_ami.py \
+./scripts/python.sh examples/speech-asr/datasets/ami/prepare_ami.py \
     --subset smoke \
     --verify-only
 ```
