@@ -62,6 +62,7 @@ grep -q 'ov203-build-${TARGET}' Dockerfile || fail 'Docker build cache is not ta
 grep -q 'CONFIGURE_REVISION' build.sh || fail 'build.sh lacks CMake cache revision'
 grep -q '/work/build/.configure_stamp' Dockerfile || fail 'Dockerfile lacks CMake build-cache stamp'
 grep -q 'CMakeError.log' Dockerfile || fail 'Dockerfile does not surface CMake configure failures'
+grep -q 'BUILD_IMAGE="${IMAGE}-${BUILD_TARGET}"' build.sh || fail 'stage-only Docker build can overwrite runtime image'
 grep -q 'libmyriadPlugin.so' Dockerfile || fail 'MYRIAD plugin validation missing'
 grep -q 'usb-ma2450.mvcmd' Dockerfile || fail 'MA2450 firmware validation missing'
 grep -q 'readelf -h "${IE_PLUGIN}"' Dockerfile || fail 'MYRIAD plugin ELF architecture validation missing'

@@ -23,7 +23,6 @@ from speech_asr.contracts import (  # noqa: E402
 IDENTITY_PATHS = (
     ("model", "id"),
     ("model", "family"),
-    ("model", "xml_sha256"),
     ("model", "bin_sha256"),
     ("fixture", "features_sha256"),
     ("fixture", "reference_scores_sha256"),
@@ -84,6 +83,30 @@ def compare_results(
         if left != right:
             mismatches.append(f"{path}: reference={left!r}, candidate={right!r}")
 
+    xml_match = reference["model"]["xml_sha256"] == candidate["model"]["xml_sha256"]
+    reference_graph = reference["model"].get("graph_sha256")
+    candidate_graph = candidate["model"].get("graph_sha256")
+    graph_match = None
+    if reference_graph is not None and candidate_graph is not None:
+        graph_match = reference_graph == candidate_graph
+
+    if not xml_match:
+        if graph_match is True:
+            # Raw XML can differ in Model Optimizer's non-executable meta_data
+            # while the executable graph remains byte-for-byte equivalent after
+            # conservative normalization.
+            pass
+        elif graph_match is False:
+            mismatches.append(
+                "model.graph_sha256: executable IR graph differs "
+                f"(reference={reference_graph!r}, candidate={candidate_graph!r})"
+            )
+        else:
+            mismatches.append(
+                "model.xml_sha256: raw IR XML differs and a semantic graph "
+                "fingerprint is unavailable on one or both results"
+            )
+
     if mismatches:
         raise ValueError(
             "candidate does not match frozen artifact/fixture identity:\n- "
@@ -109,7 +132,12 @@ def compare_results(
         "reference": reference_name,
         "candidate": candidate_name,
         "artifact_identity": {
-            "xml_sha256_match": matches["model.xml_sha256"],
+            "xml_sha256_match": xml_match,
+            **(
+                {"graph_sha256_match": graph_match}
+                if graph_match is not None
+                else {}
+            ),
             "bin_sha256_match": matches["model.bin_sha256"],
             "features_sha256_match": matches["fixture.features_sha256"],
             "reference_scores_sha256_match": matches[

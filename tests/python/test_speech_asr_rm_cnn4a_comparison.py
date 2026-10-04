@@ -41,6 +41,21 @@ class RmCnn4aComparisonTests(unittest.TestCase):
         )
         self.assertEqual(actual, expected)
 
+    def test_accepts_raw_xml_difference_when_graph_fingerprint_matches(self):
+        reference = json.loads(json.dumps(self.reference))
+        candidate = json.loads(json.dumps(self.candidate))
+        reference["model"]["graph_sha256"] = "1" * 64
+        candidate["model"]["graph_sha256"] = "1" * 64
+        candidate["model"]["xml_sha256"] = "0" * 64
+        result = self.tool.compare_results(
+            reference,
+            candidate,
+            reference_name="cpu.json",
+            candidate_name="myriad.json",
+        )
+        self.assertFalse(result["artifact_identity"]["xml_sha256_match"])
+        self.assertTrue(result["artifact_identity"]["graph_sha256_match"])
+
     def test_rejects_artifact_mismatch(self):
         candidate = json.loads(json.dumps(self.candidate))
         candidate["model"]["xml_sha256"] = "0" * 64

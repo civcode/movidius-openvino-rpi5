@@ -29,6 +29,7 @@ IR = """<net name="synthetic" version="10">
   <edge from-layer="0" from-port="0" to-layer="1" to-port="0"/>
   <edge from-layer="2" from-port="0" to-layer="1" to-port="1"/>
 </edges>
+<meta_data><cli_parameters><input_model value="/host/a/model.nnet"/></cli_parameters></meta_data>
 </net>"""
 
 
@@ -49,7 +50,34 @@ class IrInspectorTests(unittest.TestCase):
             self.assertEqual(result["outputs"][0]["name"], "fc")
             self.assertEqual(result["outputs"][0]["ports"][0]["shape"], [1, 10])
             self.assertEqual(len(result["xml_sha256"]), 64)
+            self.assertEqual(len(result["graph_sha256"]), 64)
             self.assertEqual(len(result["bin_sha256"]), 64)
+
+    def test_graph_hash_ignores_only_top_level_model_optimizer_metadata(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = pathlib.Path(name)
+            first = root / "first.xml"
+            second = root / "second.xml"
+            first.write_text(IR, encoding="utf-8")
+            second.write_text(
+                IR.replace("/host/a/model.nnet", "/other/host/model.nnet"),
+                encoding="utf-8",
+            )
+            a = inspect_ir(first)
+            b = inspect_ir(second)
+            self.assertNotEqual(a["xml_sha256"], b["xml_sha256"])
+            self.assertEqual(a["graph_sha256"], b["graph_sha256"])
+
+            changed = root / "changed.xml"
+            changed.write_text(
+                IR.replace('precision="FP16"><dim>1</dim><dim>10</dim>',
+                           'precision="FP16"><dim>1</dim><dim>11</dim>'),
+                encoding="utf-8",
+            )
+            self.assertNotEqual(
+                a["graph_sha256"],
+                inspect_ir(changed)["graph_sha256"],
+            )
 
 
 if __name__ == "__main__":

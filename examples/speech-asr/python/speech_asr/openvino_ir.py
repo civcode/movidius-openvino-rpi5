@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
@@ -10,6 +11,39 @@ from xml.etree import ElementTree as ET
 
 def _port_shape(port: ET.Element) -> list[int]:
     return [int(dim.text) for dim in port.findall("dim")]
+
+
+def _semantic_element(element: ET.Element) -> dict[str, Any]:
+    """Return deterministic executable-graph XML content.
+
+    Model Optimizer appends a top-level <meta_data> section containing
+    conversion provenance/CLI details. Those values do not participate in
+    inference and may differ across preparation hosts, so only that section is
+    excluded. Layer/edge/blob structure and all of their attributes remain part
+    of the fingerprint.
+    """
+    children = [
+        _semantic_element(child)
+        for child in list(element)
+        if child.tag != "meta_data"
+    ]
+    text = (element.text or "").strip()
+    return {
+        "tag": element.tag,
+        "attributes": dict(sorted(element.attrib.items())),
+        "text": text or None,
+        "children": children,
+    }
+
+
+def graph_sha256(root: ET.Element) -> str:
+    payload = json.dumps(
+        _semantic_element(root),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def inspect_ir(xml_path: Path, bin_path: Path | None = None) -> dict[str, Any]:
@@ -77,6 +111,7 @@ def inspect_ir(xml_path: Path, bin_path: Path | None = None) -> dict[str, Any]:
         "network_name": root.attrib.get("name", ""),
         "ir_version": root.attrib.get("version"),
         "xml_sha256": hashlib.sha256(xml_path.read_bytes()).hexdigest(),
+        "graph_sha256": graph_sha256(root),
         "inputs": [compact(layer) for layer in sorted(inputs, key=lambda item: item["id"])],
         "outputs": [compact(layer) for layer in sorted(outputs, key=lambda item: item["id"])],
     }

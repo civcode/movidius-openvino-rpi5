@@ -132,7 +132,14 @@ platform_print
 printf 'build_jobs=%s\nproject_revision=%s\nopenvino_commit=%s\npatches=%s\nconfigure_revision=%s\nsync_stamp=%s\n' \
     "${BUILD_JOBS}" "${PROJECT_REVISION}" "${SRC_SHA}" "${APPLY_PATCHES}" "${CONFIGURE_REVISION}" "${SYNC_STAMP}"
 
-log "docker build -> ${IMAGE}"
+BUILD_IMAGE="${IMAGE}"
+if [[ -n "${BUILD_TARGET}" ]]; then
+    # A diagnostic/partial-stage build must never replace the runnable runtime
+    # image tag. Appending the stage name keeps the full image intact.
+    BUILD_IMAGE="${IMAGE}-${BUILD_TARGET}"
+fi
+
+log "docker build -> ${BUILD_IMAGE}"
 ARGS=(
     --platform "${DOCKER_PLATFORM}"
     --provenance=false
@@ -153,11 +160,16 @@ ARGS=(
 )
 [[ -n "${BUILD_TARGET}" ]] && ARGS+=(--target "${BUILD_TARGET}")
 
-docker build "${ARGS[@]}" "${DOCKER_EXTRA[@]+"${DOCKER_EXTRA[@]}"}" -t "${IMAGE}" -f Dockerfile .
+docker build "${ARGS[@]}" "${DOCKER_EXTRA[@]+"${DOCKER_EXTRA[@]}"}" -t "${BUILD_IMAGE}" -f Dockerfile .
 
-log "built ${IMAGE} (${TARGET})"
-docker image ls "${IMAGE}"
-echo
-echo "next: ./run.sh --platform ${TARGET}"
-echo "      ./run.sh --platform ${TARGET} list"
-echo "      ./run.sh --platform ${TARGET} mobilenet"
+log "built ${BUILD_IMAGE} (${TARGET})"
+docker image ls "${BUILD_IMAGE}"
+if [[ -n "${BUILD_TARGET}" ]]; then
+    echo
+    echo "stage-only build: runtime image tag left unchanged: ${IMAGE}"
+else
+    echo
+    echo "next: ./run.sh --platform ${TARGET}"
+    echo "      ./run.sh --platform ${TARGET} list"
+    echo "      ./run.sh --platform ${TARGET} mobilenet"
+fi

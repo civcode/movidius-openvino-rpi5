@@ -19,6 +19,7 @@ from speech_asr.contracts import (  # noqa: E402
     ContractValidationError,
     validate_acoustic_regression_result,
 )
+from speech_asr.openvino_ir import inspect_ir  # noqa: E402
 from speech_asr.regression import parse_speech_sample_output  # noqa: E402
 
 
@@ -31,6 +32,8 @@ def sha256(path: pathlib.Path) -> str:
 
 
 def git_head() -> str:
+    ir_contract = inspect_ir(xml, binary)
+
     proc = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         cwd=ROOT,
@@ -50,7 +53,10 @@ def build_command(backend: str, platform: str) -> list[str]:
     backend = backend.lower()
     if backend == "cpu":
         if platform != "amd64":
-            raise ValueError("CPU reference regression requires platform amd64")
+            raise ValueError(
+                "CPU reference regression requires platform amd64; "
+                "the OpenVINO 2020.3 arm64 runtime intentionally has no CPU plugin"
+            )
         mode = "speech-reference"
     elif backend == "myriad":
         mode = "speech-regress"
@@ -143,8 +149,9 @@ def main() -> int:
         "model": {
             "id": "rm_cnn4a-fp16",
             "family": "rm_cnn4a",
-            "xml_sha256": sha256(xml),
-            "bin_sha256": sha256(binary),
+            "xml_sha256": ir_contract["xml_sha256"],
+            "graph_sha256": ir_contract["graph_sha256"],
+            "bin_sha256": ir_contract["bin_sha256"],
         },
         "fixture": {
             "features_sha256": sha256(features),
