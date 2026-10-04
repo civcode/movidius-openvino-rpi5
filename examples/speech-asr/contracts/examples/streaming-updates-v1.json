@@ -1,0 +1,19 @@
+{
+  "schema": "speech-asr/scripted-streaming-updates",
+  "version": 1,
+  "sample_id": "synthetic-001",
+  "offline_text": "hello world",
+  "decoder_delay_ms": 25,
+  "updates": [
+    {
+      "available_sample": 5600,
+      "source_end_sample": 5200,
+      "text": "hello"
+    },
+    {
+      "available_sample": 11600,
+      "source_end_sample": 11200,
+      "text": "hello world"
+    }
+  ]
+}
