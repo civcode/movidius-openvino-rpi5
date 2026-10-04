@@ -14,10 +14,11 @@ fi
 grep -q 'uv venv' scripts/lib/python-env.sh || fail 'uv venv helper missing'
 grep -q 'uv pip install' scripts/lib/python-env.sh || fail 'uv pip helper missing'
 
-# Shared headers live below include/ov203 and must be included with that prefix.
-if grep -R -nE '#include[[:space:]]+[<"]half\.hpp[>"]' \
-    examples mobilenet-test smoke-test --include='*.cpp' --include='*.hpp'; then
-    fail 'bare half.hpp include bypasses the shared include/ov203 header path'
+# Shared headers live below include/ov203 and source code must include them
+# through the configured include root, never as repository-relative paths.
+if grep -R -nE '#include[[:space:]]+[<"]half\.hpp[>"]|#include[[:space:]]+["<]include/ov203/' \
+    examples mobilenet-test smoke-test tests/cpp --include='*.cpp' --include='*.hpp'; then
+    fail 'invalid shared-header include path; use <ov203/...>'
 fi
 
 # All shell entry points must parse.

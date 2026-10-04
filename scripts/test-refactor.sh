@@ -17,8 +17,8 @@ timeout 10s "$PY" examples/deeplab-seg/seg_stream.py --help >/dev/null
 wire_test="$(mktemp)"
 device_test="$(mktemp)"
 trap 'rm -f "$wire_test" "$device_test"' EXIT
-g++ -std=c++14 -Wall -Wextra -I. tests/cpp/test_wire.cpp -o "$wire_test"
-g++ -std=c++14 -Wall -Wextra -I. tests/cpp/test_device_spec.cpp -o "$device_test"
+g++ -std=c++14 -Wall -Wextra -Iinclude tests/cpp/test_wire.cpp -o "$wire_test"
+g++ -std=c++14 -Wall -Wextra -Iinclude tests/cpp/test_device_spec.cpp -o "$device_test"
 "$wire_test"
 "$device_test"
 bash tests/shell/test-runtime.sh

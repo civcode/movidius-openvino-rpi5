@@ -1,4 +1,4 @@
-#include "include/ov203/device_spec.hpp"
+#include <ov203/device_spec.hpp>
 
 #include <cassert>
 #include <stdexcept>
