@@ -53,3 +53,15 @@ The authoritative Phase 4 CPU result is checked in at
 should use the same XML/BIN and vendor feature/reference-score ARKs. The frozen
 result records 10 utterances, 3401 frames, zero failures and the exact numerical
 error/latency metrics used as the Phase 5 comparison reference.
+
+
+### Frozen amd64 MYRIAD result
+
+The successful physical-device result is checked in at
+`models/rm_cnn4a/myriad-amd64-v1.json`, with its evidence-only comparison at
+`models/rm_cnn4a/cpu-vs-myriad-amd64-v1.json`. Both use the same XML/BIN and
+vendor feature/reference-score hashes as the frozen CPU result.
+
+The comparison intentionally applies no acceptance threshold; it records exact
+deltas/ratios so later Pi 5 and custom-model results can be judged from explicit
+policy rather than retrofitted thresholds.

@@ -19,8 +19,8 @@ The central rule is:
 | 2 — deterministic evaluation | implemented |
 | 3 — audio/frontend framework | implemented |
 | 4 — rm_cnn4a reference path | **complete** — real amd64 CPU reference frozen with artifact hashes and numerical metrics |
-| 5 — MYRIAD deployment | wired; physical device validation pending |
-| 6 — benchmark harness | implemented; physical device validation pending |
+| 5 — MYRIAD deployment | **validated on amd64 host** — physical device result frozen; Pi 5/arm64 host validation pending |
+| 6 — benchmark harness | implemented; Pi 5/arm64 worker validation pending |
 | 7+ | not started |
 
 Phase 0 was re-reviewed after later implementation work. The root audio,
@@ -731,15 +731,16 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-Phase 4 is complete. The next unresolved gate is Phase 5 physical MYRIAD
-execution using the exact same FP16 IR and vendor ARKs as the frozen CPU
-reference:
+The physical MYRIAD path is now validated on an amd64 host and frozen in
+`models/rm_cnn4a/myriad-amd64-v1.json`, with the CPU/device comparison frozen
+in `cpu-vs-myriad-amd64-v1.json`.
 
-1. build/use the target runtime for the physical Movidius host;
-2. run `benchmark_rm_cnn4a.py --backend myriad --platform <target>`;
-3. verify the same XML/BIN and feature/reference-score hashes are used;
-4. record model load, per-frame latency, p50/p95 and score-error metrics;
-5. compare the MYRIAD result to `models/rm_cnn4a/cpu-reference-v1.json`
-   without inventing pass/fail thresholds;
-6. freeze the device result and only then close Phase 5.
+The next unresolved deployment gate is Raspberry Pi 5 / arm64 validation:
+
+1. build the arm64 runtime image on the Pi 5;
+2. prepare or copy the exact same pinned rm_cnn4a artifact/fixture set;
+3. run `benchmark_rm_cnn4a.py --backend myriad --platform arm64`;
+4. verify XML/BIN and vendor ARK hashes match the frozen CPU/amd64-MYRIAD runs;
+5. freeze the Pi result and compare host-specific timing/error evidence;
+6. then close the Pi-specific Phase 5 gate and perform Phase 6 worker validation.
 

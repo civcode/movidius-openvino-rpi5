@@ -1,0 +1,67 @@
+{
+  "schema": "speech-asr/acoustic-regression-comparison",
+  "version": 1,
+  "reference": "cpu-reference-v1.json",
+  "candidate": "myriad-amd64-v1.json",
+  "artifact_identity": {
+    "xml_sha256_match": true,
+    "bin_sha256_match": true,
+    "features_sha256_match": true,
+    "reference_scores_sha256_match": true,
+    "openvino_version_match": true
+  },
+  "counts": {
+    "utterances_match": true,
+    "total_frames_match": true,
+    "utterances": 10,
+    "total_frames": 3401
+  },
+  "metrics": {
+    "weighted_mean_infer_ms_per_frame": {
+      "reference": 2.021289091443693,
+      "candidate": 21.67994733901794,
+      "delta": 19.658658247574245,
+      "ratio": 10.725802375717159
+    },
+    "utterance_avg_infer_ms_per_frame_p50": {
+      "reference": 2.019845,
+      "candidate": 21.6799,
+      "delta": 19.660055,
+      "ratio": 10.733447368486194
+    },
+    "utterance_avg_infer_ms_per_frame_p95": {
+      "reference": 2.0324755000000003,
+      "candidate": 21.792255,
+      "delta": 19.7597795,
+      "ratio": 10.722025923559716
+    },
+    "max_error_max": {
+      "reference": 0.00880814,
+      "candidate": 0.0915527,
+      "delta": 0.08274456,
+      "ratio": 10.39410136532798
+    },
+    "avg_error_mean": {
+      "reference": 0.00137728,
+      "candidate": 0.006222882000000001,
+      "delta": 0.004845602000000001,
+      "ratio": 4.51824029972119
+    },
+    "rms_error_mean": {
+      "reference": 0.001708947,
+      "candidate": 0.007926627000000002,
+      "delta": 0.006217680000000002,
+      "ratio": 4.638310608813499
+    },
+    "model_load_ms": {
+      "reference": 150.739,
+      "candidate": 1825.88,
+      "delta": 1675.141,
+      "ratio": 12.112857322922403
+    }
+  },
+  "acceptance": {
+    "thresholds_applied": false,
+    "note": "Evidence-only comparison. No MYRIAD pass/fail thresholds are defined."
+  }
+}

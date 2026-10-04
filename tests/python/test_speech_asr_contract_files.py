@@ -61,6 +61,16 @@ class ContractFileTests(unittest.TestCase):
         self.assertEqual(reference["metrics"]["failures"], 0)
         self.assertEqual(reference["metrics"]["total_frames"], 3401)
 
+        with (
+            SPEECH / "models" / "rm_cnn4a" / "myriad-amd64-v1.json"
+        ).open("r", encoding="utf-8") as handle:
+            device = validate_acoustic_regression_result(json.load(handle))
+        self.assertEqual(device["status"], "completed")
+        self.assertEqual(device["runtime"]["backend"], "MYRIAD")
+        self.assertEqual(device["runtime"]["target"], "amd64")
+        self.assertEqual(device["metrics"]["failures"], 0)
+        self.assertEqual(device["metrics"]["total_frames"], 3401)
+
     def test_validator_cli_accepts_all_root_contracts(self):
         for name in ("audio-v1.yaml", "benchmark-v1.yaml", "model-v1.yaml", "text-v1.json"):
             with self.subTest(name=name):

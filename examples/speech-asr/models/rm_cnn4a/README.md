@@ -142,3 +142,31 @@ stick plugged into a Raspberry Pi 5 running 64-bit userspace should use
 The requested runtime image must already exist locally. If it does not,
 `run.sh` now stops before Docker attempts a registry pull and prints the exact
 `./build.sh --platform ...` command required.
+
+
+## Frozen Phase 5 amd64 MYRIAD result
+
+The first completed physical MYRIAD regression is frozen in
+`myriad-amd64-v1.json`. It uses the same OpenVINO 2020.3.2 FP16 IR and vendor
+feature/reference-score ARKs as `cpu-reference-v1.json`.
+
+Observed device results on the amd64 host:
+
+- 10 utterances / 3401 frames;
+- 0 failures;
+- weighted mean inference: 21.67994733901794 ms/frame;
+- utterance p50: 21.6799 ms/frame;
+- utterance p95: 21.792255 ms/frame;
+- maximum absolute score error: 0.0915527;
+- mean average error: 0.006222882000000001;
+- mean RMS error: 0.007926627000000002;
+- model load time: 1825.88 ms.
+
+`cpu-vs-myriad-amd64-v1.json` records the deterministic evidence-only
+comparison. On this host the MYRIAD weighted per-frame inference time was
+10.725802375717159x the CPU reference, while mean average error and mean RMS
+error were 4.51824029972119x and 4.638310608813499x the CPU reference,
+respectively. These ratios are measurements, not pass/fail thresholds.
+
+This validates the physical MYRIAD execution path on an amd64 host. Raspberry
+Pi 5 / arm64 host validation remains a separate deployment gate.

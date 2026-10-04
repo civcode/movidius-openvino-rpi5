@@ -1,0 +1,135 @@
+{
+  "schema": "speech-asr/acoustic-regression-result",
+  "version": 1,
+  "status": "completed",
+  "model": {
+    "id": "rm_cnn4a-fp16",
+    "family": "rm_cnn4a",
+    "xml_sha256": "53a22c26746eeedf053864385606d64b20ce6c4020732a2a55f8ce2609152f27",
+    "bin_sha256": "a27a0f9ebf4a235e6789d746940ba07941c236b5930efdafdf8ffd771be79195"
+  },
+  "fixture": {
+    "features_sha256": "1f5a39a930ed636303f57d190293521a33e8da58c92555b366d23c786cad98bf",
+    "reference_scores_sha256": "595a629617d5801c60cb2489d51da53cfbe84f391ee413c33ad4de98b58748ca"
+  },
+  "runtime": {
+    "repo_commit": "47d0a60362f9e382a3a0d5246ac5c34f3469c31f",
+    "backend": "MYRIAD",
+    "target": "amd64",
+    "openvino_version": "2020.3.2"
+  },
+  "metrics": {
+    "utterances": 10,
+    "total_frames": 3401,
+    "weighted_mean_infer_ms_per_frame": 21.67994733901794,
+    "utterance_avg_infer_ms_per_frame_p50": 21.6799,
+    "utterance_avg_infer_ms_per_frame_p95": 21.792255,
+    "max_error_max": 0.0915527,
+    "avg_error_mean": 0.006222882000000001,
+    "rms_error_mean": 0.007926627000000002,
+    "failures": 0,
+    "per_utterance": [
+      {
+        "index": 0,
+        "frames": 250,
+        "infer_ms_per_frame": 21.633,
+        "max_error": 0.0674734,
+        "avg_error": 0.00580374,
+        "rms_error": 0.00738084,
+        "stdev_error": 0.00489129
+      },
+      {
+        "index": 1,
+        "frames": 441,
+        "infer_ms_per_frame": 21.6264,
+        "max_error": 0.0830717,
+        "avg_error": 0.00625914,
+        "rms_error": 0.0079807,
+        "stdev_error": 0.00540017
+      },
+      {
+        "index": 2,
+        "frames": 347,
+        "infer_ms_per_frame": 21.6112,
+        "max_error": 0.0911465,
+        "avg_error": 0.00641429,
+        "rms_error": 0.00816784,
+        "stdev_error": 0.00560137
+      },
+      {
+        "index": 3,
+        "frames": 407,
+        "infer_ms_per_frame": 21.7071,
+        "max_error": 0.0915527,
+        "avg_error": 0.00630222,
+        "rms_error": 0.00801894,
+        "stdev_error": 0.00550326
+      },
+      {
+        "index": 4,
+        "frames": 353,
+        "infer_ms_per_frame": 21.6448,
+        "max_error": 0.0660477,
+        "avg_error": 0.00620579,
+        "rms_error": 0.00789219,
+        "stdev_error": 0.00533821
+      },
+      {
+        "index": 5,
+        "frames": 372,
+        "infer_ms_per_frame": 21.6773,
+        "max_error": 0.0752602,
+        "avg_error": 0.00578733,
+        "rms_error": 0.00740206,
+        "stdev_error": 0.00504598
+      },
+      {
+        "index": 6,
+        "frames": 214,
+        "infer_ms_per_frame": 21.8031,
+        "max_error": 0.0791626,
+        "avg_error": 0.00642625,
+        "rms_error": 0.00819442,
+        "stdev_error": 0.00561381
+      },
+      {
+        "index": 7,
+        "frames": 318,
+        "infer_ms_per_frame": 21.779,
+        "max_error": 0.0641937,
+        "avg_error": 0.00645779,
+        "rms_error": 0.00823247,
+        "stdev_error": 0.00565919
+      },
+      {
+        "index": 8,
+        "frames": 285,
+        "infer_ms_per_frame": 21.6892,
+        "max_error": 0.0869398,
+        "avg_error": 0.00631335,
+        "rms_error": 0.0080218,
+        "stdev_error": 0.00546652
+      },
+      {
+        "index": 9,
+        "frames": 414,
+        "infer_ms_per_frame": 21.6825,
+        "max_error": 0.0896015,
+        "avg_error": 0.00625892,
+        "rms_error": 0.00797501,
+        "stdev_error": 0.00554226
+      }
+    ]
+  },
+  "provenance": {
+    "command": [
+      "/home/chris/workspace/movidius-openvino-rpi5/run.sh",
+      "--platform",
+      "amd64",
+      "speech-regress"
+    ],
+    "model_load_ms": 1825.88,
+    "model_spec_sha256": "ea4376c7c0cf149d6ff3a6d6579903ca19585e1a88c144dd87e590795140f0f7",
+    "raw_log_sha256": "2c9463cd5ec6cadecb5fdb8f5cdb8ba44b6061aa897ed3f2efdcf36a7dbb677d"
+  }
+}
