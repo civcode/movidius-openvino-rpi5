@@ -102,6 +102,19 @@ grep -q 'midpoint_partition' examples/speech-asr/contracts/streaming-v1.json || 
 grep -q 'ScriptedCumulativeDecoder' examples/speech-asr/python/speech_asr/streaming.py || fail 'streaming decoder fixture missing'
 grep -q 'replay_streaming.py' scripts/replay-speech.sh || fail 'streaming replay wrapper missing'
 
+# Phase 8 trainable deployment skeleton invariants.
+test -f examples/speech-asr/models/cnn_ctc_v1/model_spec.json || fail 'cnn_ctc_v1 model spec missing'
+test -f requirements/training.txt || fail 'training dependency set missing'
+grep -q 'work/venv-training' scripts/prepare-python-env.sh || fail 'uv training environment missing'
+grep -q '"onnx_opset": 11' examples/speech-asr/models/cnn_ctc_v1/model_spec.json || fail 'cnn_ctc_v1 ONNX opset changed'
+grep -q '"fixed_shapes": true' examples/speech-asr/models/cnn_ctc_v1/model_spec.json || fail 'cnn_ctc_v1 export must remain fixed-shape'
+grep -q 'TensorDesc::getLayoutByDims' smoke-test/main.cpp || fail 'generic MYRIAD runner still assumes vision layout'
+grep -q 'arg == "--tensor"' smoke-test/main.cpp || fail 'generic MYRIAD runner lacks tensor input'
+grep -q 'arg == "--output"' smoke-test/main.cpp || fail 'generic MYRIAD runner lacks tensor output'
+test -x scripts/probe-cnn-ctc-v1.sh || fail 'cnn_ctc_v1 compatibility probe missing'
+test -x scripts/train-cnn-ctc-v1.sh || fail 'cnn_ctc_v1 training pipeline missing'
+test -x scripts/evaluate-cnn-ctc-v1.sh || fail 'cnn_ctc_v1 evaluator wrapper missing'
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
 for name in [
@@ -110,6 +123,15 @@ for name in [
     "examples/speech-asr/python/speech_asr/streaming.py",
     "examples/speech-asr/evaluation/replay_streaming.py",
     "examples/speech-asr/tools/make_streaming_updates.py",
+    "examples/speech-asr/python/speech_asr/cnn_ctc.py",
+    "examples/speech-asr/python/speech_asr/cnn_ctc_frontend.py",
+    "examples/speech-asr/python/speech_asr/cnn_ctc_compare.py",
+    "examples/speech-asr/training/cnn_ctc_v1.py",
+    "examples/speech-asr/training/train_cnn_ctc_v1.py",
+    "examples/speech-asr/training/export_cnn_ctc_v1.py",
+    "examples/speech-asr/evaluation/compare_cnn_ctc_v1_onnx.py",
+    "examples/speech-asr/evaluation/compare_cnn_ctc_v1_tensor.py",
+    "examples/speech-asr/evaluation/evaluate_cnn_ctc_v1.py",
 ]:
     src = Path(name).read_text()
     compile(src, name, "exec")

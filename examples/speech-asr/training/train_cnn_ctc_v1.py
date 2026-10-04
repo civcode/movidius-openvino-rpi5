@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import pathlib
 import platform
 import random
@@ -65,6 +66,7 @@ def choose_device(request: str) -> torch.device:
 
 
 def set_deterministic(seed: int) -> None:
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -225,6 +227,11 @@ def main() -> int:
             "device_requested": args.device,
             "device_used": str(device),
             "cuda_available": bool(torch.cuda.is_available()),
+            "cuda_device_name": (
+                torch.cuda.get_device_name(device)
+                if device.type == "cuda"
+                else None
+            ),
             "torch_version": torch.__version__,
             "python_version": platform.python_version(),
             "seed": seed,
