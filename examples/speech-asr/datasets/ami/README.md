@@ -107,3 +107,21 @@ provenance.
 Phase 1 intentionally prepares dataset material only. Model inference, feature
 extraction beyond canonical audio normalization, and ASR quality are later
 phases.
+
+
+## Real-source acceptance
+
+Phase 1 was accepted against the pinned official AMI files, not only the
+synthetic fixtures. The source files matched the split-spec hashes exactly and
+both splits were prepared twice from clean output directories.
+
+Frozen output identities:
+
+| Split | Records | manifest SHA-256 | logical-tree SHA-256 |
+|---|---:|---|---|
+| `ami-smoke-v1` | 4 | `2b38aba98d0af830f5f0cfecdbda819f3b4f339f77c89c2f5f8090217bfc8922` | `21c529d2d5a02f4436d929026538f1a7e1c602e34d8723a6c09ad9acd3123e2d` |
+| `ami-benchmark-v1` | 277 | `9f4444c6c0e54cf25d92a69723727bb46a73632e34ec33402c71beca1b64cd3e` | `25884bf377243ae1316e0b4a17d18a032325c4c00229deba05ce4465bee93f41` |
+
+Those expected values are stored in the split specifications themselves.
+`--verify-only` therefore verifies not only internal consistency but also that
+the prepared output is exactly the frozen Phase 1 corpus identity.

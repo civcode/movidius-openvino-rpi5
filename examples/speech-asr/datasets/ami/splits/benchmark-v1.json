@@ -37,5 +37,10 @@
         }
       ]
     }
-  ]
+  ],
+  "expected": {
+    "records": 277,
+    "manifest_sha256": "9f4444c6c0e54cf25d92a69723727bb46a73632e34ec33402c71beca1b64cd3e",
+    "logical_tree_sha256": "25884bf377243ae1316e0b4a17d18a032325c4c00229deba05ce4465bee93f41"
+  }
 }

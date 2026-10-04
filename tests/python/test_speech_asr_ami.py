@@ -99,7 +99,10 @@ class AmiPreparationTests(unittest.TestCase):
         for name in ("smoke-v1.json", "benchmark-v1.json"):
             with self.subTest(name=name):
                 spec = json.loads((split_dir / name).read_text(encoding="utf-8"))
-                self.assertEqual(validate_split_spec(spec)["version"], 1)
+                validated = validate_split_spec(spec)
+                self.assertEqual(validated["version"], 1)
+                self.assertIn("expected", validated)
+                self.assertGreater(validated["expected"]["records"], 0)
 
     def test_seconds_to_samples_is_decimal_deterministic(self):
         self.assertEqual(seconds_to_samples("77.408"), 1238528)

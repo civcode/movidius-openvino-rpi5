@@ -182,6 +182,25 @@ def validate_split_spec(spec: Mapping[str, Any]) -> Dict[str, Any]:
                         errors.append(segment_path + ": duplicate sample selection")
                     declared_samples.add(key)
 
+    expected = spec.get("expected")
+    if expected is not None:
+        if not isinstance(expected, Mapping):
+            errors.append("$.expected: expected object")
+        else:
+            records = expected.get("records")
+            if isinstance(records, bool) or not isinstance(records, int) or records <= 0:
+                errors.append("$.expected.records: expected positive integer")
+            _require_sha256(
+                expected.get("manifest_sha256"),
+                "$.expected.manifest_sha256",
+                errors,
+            )
+            _require_sha256(
+                expected.get("logical_tree_sha256"),
+                "$.expected.logical_tree_sha256",
+                errors,
+            )
+
     if errors:
         raise AmiPreparationError("invalid AMI split spec:\n- " + "\n- ".join(errors))
     return dict(spec)
@@ -610,6 +629,20 @@ def verify_prepared_dataset(
     )
     if provenance.get("logical_tree_sha256") != logical_tree_hash:
         raise AmiPreparationError("logical tree hash does not match provenance")
+
+    expected = spec.get("expected")
+    if isinstance(expected, Mapping):
+        checks = {
+            "records": len(records),
+            "manifest_sha256": manifest_hash,
+            "logical_tree_sha256": logical_tree_hash,
+        }
+        for key, actual in checks.items():
+            if expected.get(key) != actual:
+                raise AmiPreparationError(
+                    f"prepared {key} does not match frozen split expectation: "
+                    f"expected {expected.get(key)!r}, got {actual!r}"
+                )
 
     return {
         "schema": "speech-asr/ami-verification",
