@@ -156,3 +156,35 @@ Stable worker exit codes are:
 The worker uses `benchmark-v1` for measurement policy only. rm_cnn4a remains
 a Kaldi feature/score regression fixture, so the worker does not invent AMI
 WER/CER or raw-audio RTF for it.
+
+
+## Phase 7 recorded-audio replay
+
+Recorded replay is hardware-independent and deterministic:
+
+```bash
+./scripts/replay-speech.sh path/to/clip.f32 \
+    --audio-format f32le \
+    --updates work/speech-asr/streaming/updates.json
+```
+
+For prepared normalized manifests, build the scripted cumulative-hypothesis
+fixture directly from the record's real word timing:
+
+```bash
+./scripts/python.sh examples/speech-asr/tools/make_streaming_updates.py \
+    work/speech-asr/ami/ami-smoke-v1/manifest.jsonl \
+    --output work/speech-asr/streaming/updates.json
+```
+
+The helper prints the selected sample ID, resolved clip path and ready-to-run
+replay command. `--sample-id` selects a particular manifest record and
+`--decoder-delay-ms` controls the declared scripted decoder delay.
+
+The replay result records source/canonical audio hashes, the full streaming
+configuration, partial/final events, stabilization timing, offline comparison,
+streaming-contract hash and implementation hash.
+
+The scripted decoder is a **mechanics fixture**, not an acoustic model. It
+exists so chunking, event timing, stabilization and offline comparison can be
+verified before Phase 8 supplies a raw-audio model.

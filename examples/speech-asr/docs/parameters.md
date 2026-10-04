@@ -136,3 +136,27 @@ No single metric defines "best". The project records at least:
 
 Architecture review should reason over a Pareto frontier rather than optimize
 WER while ignoring real-time operation.
+
+
+## Phase 7 replay profile
+
+The initial recorded-replay defaults are implementation baselines, not model
+architecture constants:
+
+```text
+chunk_ms              320
+overlap_ms             80
+left_context_ms        160
+right_context_ms        80
+stabilization_repeats    2
+VAD                    disabled unless explicitly enabled
+```
+
+At 16 kHz these convert exactly to integer sample counts. Overlap ownership is
+split at deterministic midpoint boundaries; context expands only the inference
+window. Every replay result stores both the millisecond parameters and derived
+sample counts.
+
+These defaults may be tuned later as explicit experiment parameters. They are
+not inherited automatically by a future trained model if its fixed input or
+receptive-field contract requires different values.

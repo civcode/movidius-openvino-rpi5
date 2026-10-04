@@ -94,9 +94,23 @@ grep -q 'measured_iterations.*5' examples/speech-asr/contracts/benchmark-v1.yaml
 grep -q 'expected frozen value 5' examples/speech-asr/python/speech_asr/contracts.py || fail 'benchmark-v1 iteration policy is not enforced'
 test -f examples/speech-asr/contracts/acoustic-benchmark-result-v1.schema.json || fail 'Phase 6 result schema missing'
 
+# Phase 7 recorded streaming invariants.
+test -f examples/speech-asr/python/speech_asr/streaming.py || fail 'Phase 7 streaming core missing'
+test -f examples/speech-asr/contracts/streaming-v1.json || fail 'Phase 7 streaming contract missing'
+test -f examples/speech-asr/contracts/streaming-replay-result-v1.schema.json || fail 'Phase 7 replay result schema missing'
+grep -q 'midpoint_partition' examples/speech-asr/contracts/streaming-v1.json || fail 'streaming overlap ownership changed'
+grep -q 'ScriptedCumulativeDecoder' examples/speech-asr/python/speech_asr/streaming.py || fail 'streaming decoder fixture missing'
+grep -q 'replay_streaming.py' scripts/replay-speech.sh || fail 'streaming replay wrapper missing'
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
-for name in ["smoke-test/model/make_tiny_ir.py", "scripts/reset-stick.py"]:
+for name in [
+    "smoke-test/model/make_tiny_ir.py",
+    "scripts/reset-stick.py",
+    "examples/speech-asr/python/speech_asr/streaming.py",
+    "examples/speech-asr/evaluation/replay_streaming.py",
+    "examples/speech-asr/tools/make_streaming_updates.py",
+]:
     src = Path(name).read_text()
     compile(src, name, "exec")
     print(f"python syntax: {name}: OK")

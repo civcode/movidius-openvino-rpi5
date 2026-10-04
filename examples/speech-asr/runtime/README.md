@@ -65,3 +65,26 @@ preserves every raw log/single-run result, checks model/fixture/runtime identity
 between iterations, and emits one aggregate result plus a summary derived from
 that result. It does not change the model, fixture, scoring rules or measurement
 counts.
+
+
+## Recorded-audio streaming
+
+Phase 7 is implemented in `python/speech_asr/streaming.py`.
+
+The chunker partitions overlap at deterministic midpoint boundaries: inference
+windows may overlap and may include extra left/right context, but each source
+sample belongs to exactly one emission region. This is the boundary future
+model adapters use to avoid duplicate output from overlapping chunks.
+
+The module also provides:
+
+- a bounded absolute-index sample ring buffer;
+- an energy-VAD interface;
+- cumulative partial/final transcript events;
+- consecutive-prefix token stabilization;
+- sample-index-derived event/stabilization latency;
+- offline-versus-streaming WER/CER comparison.
+
+The current recorded replay adapter uses scripted cumulative hypotheses because
+`rm_cnn4a` is not a raw-audio ASR model. Model-backed decoding will plug into
+the same `ChunkDecoder` interface once the custom model exists.

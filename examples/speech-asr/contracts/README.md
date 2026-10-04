@@ -10,6 +10,8 @@ runtime provenance and benchmark results.
 - `experiment-result-v1.schema.json` — transcript/custom-model evaluation result.
 - `acoustic-regression-result-v1.schema.json` — one rm_cnn4a vendor score regression run.
 - `acoustic-benchmark-result-v1.schema.json` — repeated Phase 6 hardware benchmark result.
+- `streaming-v1.json` — Phase 7 chunk/event/timing semantics.
+- `streaming-replay-result-v1.schema.json` — deterministic recorded-audio replay result.
 - `model-v1.yaml` — model-package and provenance boundary.
 
 The three `.yaml` files intentionally contain JSON syntax. JSON is valid YAML
@@ -58,3 +60,15 @@ each iteration is an independent full vendor-fixture invocation; warmup is
 excluded from aggregate statistics. The repeated worker result records
 cross-run repeatability as measured evidence rather than applying an invented
 stability threshold.
+
+
+## Phase 7 streaming contract
+
+`streaming-v1.json` fixes the semantics of sample-index timing, midpoint overlap
+ownership, left/right context expansion, cumulative transcript events and
+consecutive-prefix stabilization. Chunk duration, overlap, context and VAD
+threshold remain explicit runtime parameters and are written into every replay
+result.
+
+The scripted update fixture is deliberately separate from a model contract. It
+lets the project validate streaming mechanics before a raw-audio model exists.

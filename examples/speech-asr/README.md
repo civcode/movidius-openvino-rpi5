@@ -145,8 +145,8 @@ MYRIAD hardware:
 ./scripts/test-speech-asr.sh
 ```
 
-Physical-device qualification and the repeated Phase 6 worker remain explicit
-operations:
+Physical-device qualification, the repeated Phase 6 worker, and Phase 7
+recorded replay remain explicit operations:
 
 ```bash
 ./scripts/prepare-rm-cnn4a.sh
@@ -155,6 +155,11 @@ operations:
 
 ./scripts/benchmark-speech.sh \
     --model rm_cnn4a --backend myriad --platform arm64
+
+./scripts/python.sh examples/speech-asr/tools/make_streaming_updates.py \
+    work/speech-asr/ami/ami-smoke-v1/manifest.jsonl \
+    --output work/speech-asr/streaming/updates.json
+# The helper prints the corresponding ./scripts/replay-speech.sh command.
 ```
 
 ## Directory layout
