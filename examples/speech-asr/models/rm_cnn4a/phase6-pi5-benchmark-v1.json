@@ -1,0 +1,229 @@
+{
+  "aggregate": {
+    "counts": {
+      "failures": 0,
+      "total_frames": 3401,
+      "utterances": 10
+    },
+    "measured_runs": 5,
+    "metrics": {
+      "avg_error_mean": {
+        "cv_population": 0,
+        "max": 0.006222882000000001,
+        "mean": 0.006222882000000001,
+        "median": 0.006222882000000001,
+        "min": 0.006222882000000001,
+        "range": 0,
+        "relative_range": 0
+      },
+      "max_error_max": {
+        "cv_population": 0,
+        "max": 0.0915527,
+        "mean": 0.0915527,
+        "median": 0.0915527,
+        "min": 0.0915527,
+        "range": 0,
+        "relative_range": 0
+      },
+      "model_load_ms": {
+        "cv_population": 0.0037627327715492047,
+        "max": 2008.06,
+        "mean": 1996.562,
+        "median": 1997.09,
+        "min": 1985.7,
+        "range": 22.3599999999999,
+        "relative_range": 0.011199251513351402
+      },
+      "rms_error_mean": {
+        "cv_population": 0,
+        "max": 0.007926627000000002,
+        "mean": 0.007926627000000002,
+        "median": 0.007926627000000002,
+        "min": 0.007926627000000002,
+        "range": 0,
+        "relative_range": 0
+      },
+      "utterance_avg_infer_ms_per_frame_p50": {
+        "cv_population": 0.00008433000663307418,
+        "max": 21.31655,
+        "mean": 21.31373,
+        "median": 21.313299999999998,
+        "min": 21.31185,
+        "range": 0.004699999999999704,
+        "relative_range": 0.0002205151327336747
+      },
+      "utterance_avg_infer_ms_per_frame_p95": {
+        "cv_population": 0.0000906616366079986,
+        "max": 21.32327,
+        "mean": 21.319555,
+        "median": 21.318755,
+        "min": 21.318005,
+        "range": 0.0052650000000014074,
+        "relative_range": 0.0002469563740894877
+      },
+      "weighted_mean_infer_ms_per_frame": {
+        "cv_population": 0.00007851929831317018,
+        "max": 21.316284092913847,
+        "mean": 21.313979870626287,
+        "median": 21.31353428403411,
+        "min": 21.312113701852397,
+        "range": 0.004170391061450118,
+        "relative_range": 0.00019566458665927117
+      }
+    }
+  },
+  "benchmark": {
+    "contract_sha256": "2b0f54d570285b6d272b330d8109dfa7d8dd77acf3d30dca01de01234ec36236",
+    "id": "rm_cnn4a-vendor-regression-v1",
+    "measurement_policy": {
+      "across_runs_aggregation": "unweighted_run_statistics",
+      "iteration_scope": "independent_full_fixture_process",
+      "measured_iterations": 5,
+      "warmup_count": 1,
+      "warmup_included_in_aggregate": false,
+      "within_run_aggregation": "corpus_weighted"
+    }
+  },
+  "fixture": {
+    "features_sha256": "1f5a39a930ed636303f57d190293521a33e8da58c92555b366d23c786cad98bf",
+    "reference_scores_sha256": "595a629617d5801c60cb2489d51da53cfbe84f391ee413c33ad4de98b58748ca"
+  },
+  "model": {
+    "bin_sha256": "a27a0f9ebf4a235e6789d746940ba07941c236b5930efdafdf8ffd771be79195",
+    "canonical_graph_sha256": "2379c6436686682bdc5d439b6ab5423ede11438c8ba37dd2dfba93dd16503f41",
+    "family": "rm_cnn4a",
+    "graph_sha256": "6a299513108db351f47db1d33863a709044d555ce2977219b6f22bfc5f1d598d",
+    "id": "rm_cnn4a-fp16",
+    "xml_sha256": "5fbc7dc2327a22d75bcd4b27d98f73689fdaf047fc16ee57be3ea507670d4d35"
+  },
+  "provenance": {
+    "benchmark_contract_sha256": "2b0f54d570285b6d272b330d8109dfa7d8dd77acf3d30dca01de01234ec36236",
+    "python_version": "3.11.17",
+    "runner_sha256": "67d390c8d0cd16e4c9856f888551d858660b1c50b71a84aed9202677b16f597b",
+    "worker_sha256": "3c1256539321aaafd816d0cd3816ec7dd4388490452038da455a4ebb3c650a6f",
+    "canonical_graph_note": "canonical_graph_sha256 was produced by commit 1f0ce936 before the generated Cast_<number>_const regex escaping bug was corrected; raw XML/BIN and measurement evidence are preserved unchanged"
+  },
+  "request": {
+    "backend": "myriad",
+    "model": "rm_cnn4a",
+    "platform": "arm64"
+  },
+  "runs": {
+    "measured": [
+      {
+        "index": 0,
+        "log_path": "work/speech-asr/rm_cnn4a/benchmark-myriad-arm64/runs/measured-00.log",
+        "metrics": {
+          "avg_error_mean": 0.006222882000000001,
+          "max_error_max": 0.0915527,
+          "model_load_ms": 1985.7,
+          "rms_error_mean": 0.007926627000000002,
+          "utterance_avg_infer_ms_per_frame_p50": 21.31495,
+          "utterance_avg_infer_ms_per_frame_p95": 21.32327,
+          "weighted_mean_infer_ms_per_frame": 21.315566892090562
+        },
+        "raw_log_sha256": "4ad37f3bf615112465bb66568272f665dd8d60558212c3b3c861e038606ef8d4",
+        "result_path": "work/speech-asr/rm_cnn4a/benchmark-myriad-arm64/runs/measured-00.json",
+        "returncode": 0,
+        "status": "completed"
+      },
+      {
+        "index": 1,
+        "log_path": "work/speech-asr/rm_cnn4a/benchmark-myriad-arm64/runs/measured-01.log",
+        "metrics": {
+          "avg_error_mean": 0.006222882000000001,
+          "max_error_max": 0.0915527,
+          "model_load_ms": 2008.06,
+          "rms_error_mean": 0.007926627000000002,
+          "utterance_avg_infer_ms_per_frame_p50": 21.31655,
+          "utterance_avg_infer_ms_per_frame_p95": 21.319544999999998,
+          "weighted_mean_infer_ms_per_frame": 21.316284092913847
+        },
+        "raw_log_sha256": "dede00088b783b0fd813f63918794ebcf05d61f145fa168b2717aec3a235204b",
+        "result_path": "work/speech-asr/rm_cnn4a/benchmark-myriad-arm64/runs/measured-01.json",
+        "returncode": 0,
+        "status": "completed"
+      },
+      {
+        "index": 2,
+        "log_path": "work/speech-asr/rm_cnn4a/benchmark-myriad-arm64/runs/measured-02.log",
+        "metrics": {
+          "avg_error_mean": 0.006222882000000001,
+          "max_error_max": 0.0915527,
+          "model_load_ms": 1997.09,
+          "rms_error_mean": 0.007926627000000002,
+          "utterance_avg_infer_ms_per_frame_p50": 21.31185,
+          "utterance_avg_infer_ms_per_frame_p95": 21.3182,
+          "weighted_mean_infer_ms_per_frame": 21.312113701852397
+        },
+        "raw_log_sha256": "66db8c83aeb28a61e4ae8c61734012ccf210747f96b25a9256ecc01b863b9acb",
+        "result_path": "work/speech-asr/rm_cnn4a/benchmark-myriad-arm64/runs/measured-02.json",
+        "returncode": 0,
+        "status": "completed"
+      },
+      {
+        "index": 3,
+        "log_path": "work/speech-asr/rm_cnn4a/benchmark-myriad-arm64/runs/measured-03.log",
+        "metrics": {
+          "avg_error_mean": 0.006222882000000001,
+          "max_error_max": 0.0915527,
+          "model_load_ms": 1999.92,
+          "rms_error_mean": 0.007926627000000002,
+          "utterance_avg_infer_ms_per_frame_p50": 21.313299999999998,
+          "utterance_avg_infer_ms_per_frame_p95": 21.318005,
+          "weighted_mean_infer_ms_per_frame": 21.31353428403411
+        },
+        "raw_log_sha256": "362395380a4492be9c791c133a17b45b592ac655707bc72e2982728fd28d1a20",
+        "result_path": "work/speech-asr/rm_cnn4a/benchmark-myriad-arm64/runs/measured-03.json",
+        "returncode": 0,
+        "status": "completed"
+      },
+      {
+        "index": 4,
+        "log_path": "work/speech-asr/rm_cnn4a/benchmark-myriad-arm64/runs/measured-04.log",
+        "metrics": {
+          "avg_error_mean": 0.006222882000000001,
+          "max_error_max": 0.0915527,
+          "model_load_ms": 1992.04,
+          "rms_error_mean": 0.007926627000000002,
+          "utterance_avg_infer_ms_per_frame_p50": 21.311999999999998,
+          "utterance_avg_infer_ms_per_frame_p95": 21.318755,
+          "weighted_mean_infer_ms_per_frame": 21.312400382240515
+        },
+        "raw_log_sha256": "5212eb8166b790738c4c89c6835bc4ab02680408afed2494dd875345cfd12314",
+        "result_path": "work/speech-asr/rm_cnn4a/benchmark-myriad-arm64/runs/measured-04.json",
+        "returncode": 0,
+        "status": "completed"
+      }
+    ],
+    "warmup": [
+      {
+        "index": 0,
+        "log_path": "work/speech-asr/rm_cnn4a/benchmark-myriad-arm64/runs/warmup-00.log",
+        "metrics": {
+          "avg_error_mean": 0.006222882000000001,
+          "max_error_max": 0.0915527,
+          "model_load_ms": 1993.86,
+          "rms_error_mean": 0.007926627000000002,
+          "utterance_avg_infer_ms_per_frame_p50": 21.3169,
+          "utterance_avg_infer_ms_per_frame_p95": 21.319705,
+          "weighted_mean_infer_ms_per_frame": 21.317004880917377
+        },
+        "raw_log_sha256": "8d0eff86b221eac537113004eedda0ea0923f031d49d0ab238a35fc264aecbc7",
+        "result_path": "work/speech-asr/rm_cnn4a/benchmark-myriad-arm64/runs/warmup-00.json",
+        "returncode": 0,
+        "status": "completed"
+      }
+    ]
+  },
+  "runtime": {
+    "backend": "MYRIAD",
+    "host_machine": "aarch64",
+    "openvino_version": "2020.3.2",
+    "repo_commit": "1f0ce9369062ccf18b2d68e3ee205b453a7060c8",
+    "target": "arm64"
+  },
+  "schema": "speech-asr/acoustic-benchmark-result",
+  "status": "completed",
+  "version": 1
+}

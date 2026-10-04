@@ -94,7 +94,7 @@ def canonical_graph_document(root: ET.Element) -> dict[str, Any]:
             )
         )
 
-    auto_cast = re.compile(r"^(.*)Cast_\\d+_const$")
+    auto_cast = re.compile(r"^(.*)Cast_\d+_const$")
     id_to_name: dict[str, str] = {}
     names: set[str] = set()
     for layer_id, layer in layers_by_id.items():

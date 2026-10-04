@@ -85,6 +85,21 @@ class IrInspectorTests(unittest.TestCase):
                 b["canonical_graph_sha256"],
             )
 
+    def test_generated_cast_regex_matches_numeric_suffix(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = pathlib.Path(name)
+            xml = root / "model.xml"
+            xml.write_text(
+                IR.replace('name="weights"', 'name="reshape/Cast_12591_const"'),
+                encoding="utf-8",
+            )
+            manifest = canonical_graph_manifest(ET.parse(xml).getroot())
+            names = [item["name"] for item in manifest["layers"]]
+            self.assertTrue(
+                any("Cast_<auto>_const@" in name for name in names),
+                names,
+            )
+
     def test_canonical_graph_hash_normalizes_generated_cast_const_suffix(self):
         with tempfile.TemporaryDirectory() as name:
             root = pathlib.Path(name)

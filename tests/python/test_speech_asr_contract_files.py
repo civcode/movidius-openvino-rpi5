@@ -83,6 +83,16 @@ class ContractFileTests(unittest.TestCase):
         self.assertEqual(pi_device["metrics"]["failures"], 0)
         self.assertEqual(pi_device["metrics"]["total_frames"], 3401)
 
+        with (
+            SPEECH / "models" / "rm_cnn4a" / "phase6-pi5-benchmark-v1.json"
+        ).open("r", encoding="utf-8") as handle:
+            phase6 = validate_acoustic_benchmark_result(json.load(handle))
+        self.assertEqual(phase6["status"], "completed")
+        self.assertEqual(phase6["runtime"]["backend"], "MYRIAD")
+        self.assertEqual(phase6["runtime"]["target"], "arm64")
+        self.assertEqual(phase6["aggregate"]["measured_runs"], 5)
+        self.assertEqual(phase6["aggregate"]["counts"]["failures"], 0)
+
     def test_validator_cli_accepts_all_root_contracts(self):
         for name in ("audio-v1.yaml", "benchmark-v1.yaml", "model-v1.yaml", "text-v1.json"):
             with self.subTest(name=name):
