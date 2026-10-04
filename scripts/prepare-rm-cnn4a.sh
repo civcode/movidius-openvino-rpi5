@@ -25,6 +25,11 @@ LICENSE_URL='https://storage.openvinotoolkit.org/models_contrib/speech/2021.2/LI
 FILES=(rm_cnn4a.nnet rm_cnn4a.counts rm_cnn4a.mapping rm_cnn4a.md feat1_10.ark score1_10.ark)
 
 if (( VERIFY_ONLY )); then
+    if [[ ! -f "$MODEL_ROOT/openvino/model-spec.json" ]]; then
+        echo "rm_cnn4a is not fully prepared yet: missing $MODEL_ROOT/openvino/model-spec.json" >&2
+        echo "run ./scripts/prepare-rm-cnn4a.sh first, then retry --verify-only" >&2
+        exit 2
+    fi
     exec "$ROOT/scripts/python.sh" \
         "$ROOT/examples/speech-asr/tools/verify_prepared_rm_cnn4a.py" \
         --model-root "$MODEL_ROOT" \

@@ -19,7 +19,7 @@ rsync -a \
     --exclude='install_prerequisites/' \
     "$SRC/" "$DEST/"
 
-python3 "$ROOT/scripts/patch-model-optimizer.py" "$DEST"
+"$ROOT/scripts/python.sh" "$ROOT/scripts/patch-model-optimizer.py" "$DEST"
 
 commit=unknown
 if [[ -d "$ROOT/vendor/openvino-2020.3.2/.git" ]]; then
@@ -39,7 +39,7 @@ tree_hash="$(
 {
     echo 'OPENVINO_VERSION=2020.3.2'
     echo "OPENVINO_COMMIT=$commit"
-    echo 'COMPAT_PATCH_REVISION=1'
+    echo 'COMPAT_PATCH_REVISION=2'
     echo "MODEL_OPTIMIZER_TREE_SHA256=$tree_hash"
 } > "$DEST/MANIFEST.env"
 
