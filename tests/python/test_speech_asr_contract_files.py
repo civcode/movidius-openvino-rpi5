@@ -12,6 +12,7 @@ from speech_asr.contracts import (
     validate_audio_contract,
     validate_benchmark_contract,
     validate_experiment_result,
+    validate_acoustic_regression_result,
     validate_model_contract,
     validate_speech_sample,
     validate_text_contract,
@@ -51,6 +52,14 @@ class ContractFileTests(unittest.TestCase):
             self.assertEqual(validate_speech_sample(json.load(handle))["version"], 1)
         with (examples / "result-v1.json").open("r", encoding="utf-8") as handle:
             self.assertEqual(validate_experiment_result(json.load(handle))["status"], "completed")
+        with (
+            SPEECH / "models" / "rm_cnn4a" / "cpu-reference-v1.json"
+        ).open("r", encoding="utf-8") as handle:
+            reference = validate_acoustic_regression_result(json.load(handle))
+        self.assertEqual(reference["status"], "completed")
+        self.assertEqual(reference["runtime"]["backend"], "CPU")
+        self.assertEqual(reference["metrics"]["failures"], 0)
+        self.assertEqual(reference["metrics"]["total_frames"], 3401)
 
     def test_validator_cli_accepts_all_root_contracts(self):
         for name in ("audio-v1.yaml", "benchmark-v1.yaml", "model-v1.yaml", "text-v1.json"):

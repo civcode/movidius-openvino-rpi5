@@ -104,3 +104,28 @@ the generated IR, and verifies that `model-spec.json`, `ir-contract.json`,
 the XML and the BIN all agree. The generated model spec also records the source
 lock and license hashes so a completed reference run can be frozen from actual
 evidence.
+
+
+## Frozen Phase 4 CPU reference
+
+The first completed amd64 CPU reference run is frozen in
+`cpu-reference-v1.json`. It uses OpenVINO 2020.3.2, the FP16 IR identified by
+XML SHA-256 `53a22c26746eeedf053864385606d64b20ce6c4020732a2a55f8ce2609152f27`
+and BIN SHA-256
+`a27a0f9ebf4a235e6789d746940ba07941c236b5930efdafdf8ffd771be79195`.
+
+Observed reference results:
+
+- 10 utterances / 3401 frames;
+- 0 failures;
+- weighted mean inference: 2.021289091443693 ms/frame;
+- utterance p50: 2.019845 ms/frame;
+- utterance p95: 2.0324755000000003 ms/frame;
+- maximum absolute score error: 0.00880814;
+- mean average error: 0.00137728;
+- mean RMS error: 0.001708947;
+- model load time: 150.739 ms.
+
+These are evidence from the frozen run, not acceptance thresholds for MYRIAD.
+Phase 5 should compare the device result against this exact artifact/fixture
+identity and report the measured deltas.

@@ -18,7 +18,7 @@ The central rule is:
 | 1 — AMI dataset pipeline | **complete** — real pinned sources prepared twice with frozen golden hashes |
 | 2 — deterministic evaluation | implemented |
 | 3 — audio/frontend framework | implemented |
-| 4 — rm_cnn4a reference path | **implemented** — CPU reference runner + offline bundle verification; real artifact execution still pending |
+| 4 — rm_cnn4a reference path | **complete** — real amd64 CPU reference frozen with artifact hashes and numerical metrics |
 | 5 — MYRIAD deployment | wired; physical device validation pending |
 | 6 — benchmark harness | implemented; physical device validation pending |
 | 7+ | not started |
@@ -731,18 +731,15 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-Phases 0-3 are implemented and Phase 1 is frozen against real AMI source data.
-The next unresolved gate is Phase 4 reference-model execution:
+Phase 4 is complete. The next unresolved gate is Phase 5 physical MYRIAD
+execution using the exact same FP16 IR and vendor ARKs as the frozen CPU
+reference:
 
-1. prepare the pinned `rm_cnn4a` source and FP16 IR through the uv-managed
-   Kaldi Model Optimizer environment;
-2. inspect and freeze the generated IR tensor contract;
-3. run the published feature/score regression independently of MYRIAD where
-   practical;
-4. preserve the resulting artifact hashes and numerical reference result;
-5. only then promote the same artifact to the physical MYRIAD gate in Phase 5.
+1. build/use the target runtime for the physical Movidius host;
+2. run `benchmark_rm_cnn4a.py --backend myriad --platform <target>`;
+3. verify the same XML/BIN and feature/reference-score hashes are used;
+4. record model load, per-frame latency, p50/p95 and score-error metrics;
+5. compare the MYRIAD result to `models/rm_cnn4a/cpu-reference-v1.json`
+   without inventing pass/fail thresholds;
+6. freeze the device result and only then close Phase 5.
 
-The CPU reference path and offline prepared-bundle verifier are now
-implemented. The remaining Phase 4 acceptance work is an actual
-prepared-artifact CPU run so its generated IR contract, source/IR hashes and
-numerical result can be frozen from evidence rather than guessed.

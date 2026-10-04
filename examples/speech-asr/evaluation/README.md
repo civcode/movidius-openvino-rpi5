@@ -18,7 +18,8 @@ provides feature and score ARKs, so the authoritative first hardware test is
 score regression plus device timing:
 
 ```bash
-python3 examples/speech-asr/evaluation/benchmark_rm_cnn4a.py --platform arm64
+./scripts/python.sh examples/speech-asr/evaluation/benchmark_rm_cnn4a.py \
+    --backend myriad --platform arm64
 ```
 
 The command executes `./run.sh speech-regress`, stores the raw OpenVINO sample
@@ -37,3 +38,18 @@ feature ARK is not the project's canonical raw-audio benchmark.
 
 An AI agent may orchestrate evaluation, diagnose failures and summarize results.
 It must not edit metric outputs to make a candidate appear better.
+
+
+### CPU reference
+
+The authoritative Phase 4 CPU result is checked in at
+`models/rm_cnn4a/cpu-reference-v1.json`. Re-running
+
+```bash
+./scripts/python.sh examples/speech-asr/evaluation/benchmark_rm_cnn4a.py \
+    --backend cpu
+```
+
+should use the same XML/BIN and vendor feature/reference-score ARKs. The frozen
+result records 10 utterances, 3401 frames, zero failures and the exact numerical
+error/latency metrics used as the Phase 5 comparison reference.
