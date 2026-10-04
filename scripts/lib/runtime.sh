@@ -52,14 +52,17 @@ runtime_docker_image_ready() {
 
 runtime_python_interpreter() {
     local module="$1" root="$2" py
-    for py in python3 "$root/work/venv-cpu/bin/python"; do
-        if { [[ "$py" == python3 ]] && command -v python3 >/dev/null 2>&1; } ||
-           [[ -x "$py" ]]; then
-            "$py" -c "import ${module}" >/dev/null 2>&1 && {
-                printf '%s\n' "$py"
-                return 0
-            }
-        fi
+    local -a candidates
+    case "$module" in
+        tensorflow) candidates=("$root/work/venv-cpu/bin/python") ;;
+        *) candidates=("$root/work/venv-apps/bin/python" "$root/work/venv-cpu/bin/python") ;;
+    esac
+    for py in "${candidates[@]}"; do
+        [[ -x "$py" ]] || continue
+        "$py" -c "import ${module}" >/dev/null 2>&1 && {
+            printf '%s\n' "$py"
+            return 0
+        }
     done
     return 1
 }

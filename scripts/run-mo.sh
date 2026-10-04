@@ -2,6 +2,7 @@
 # Run the staged OpenVINO 2020.3 Model Optimizer in a framework-specific venv.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/lib/python-env.sh"
 FRAMEWORK=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -26,26 +27,23 @@ case "$FRAMEWORK" in
         VENV="$ROOT/work/venv-mo-onnx"
         REQ="$ROOT/requirements/mo-onnx.txt"
         IMPORTS='import numpy, onnx, networkx, defusedxml, google.protobuf'
+        PYTHON_REQUEST=3.10
         ;;
     tf)
         VENV="$ROOT/work/venv-mo-tensorflow"
         REQ="$ROOT/requirements/mo-tensorflow.txt"
         IMPORTS='import numpy, tensorflow, networkx, defusedxml, google.protobuf'
+        PYTHON_REQUEST=3.11
         ;;
     kaldi)
         VENV="$ROOT/work/venv-mo-kaldi"
         REQ="$ROOT/requirements/mo-kaldi.txt"
         IMPORTS='import numpy, networkx, defusedxml'
+        PYTHON_REQUEST=3.10
         ;;
 esac
 
-if [[ ! -x "$VENV/bin/python" ]]; then
-    python3 -m venv "$VENV"
-fi
-if ! "$VENV/bin/python" -c "$IMPORTS" >/dev/null 2>&1; then
-    echo "installing Model Optimizer $FRAMEWORK dependencies into $VENV" >&2
-    "$VENV/bin/python" -m pip install --disable-pip-version-check -r "$REQ"
-fi
+python_env_ensure_requirements "$VENV" "$PYTHON_REQUEST" "$REQ" "$IMPORTS"
 
 export OV203_MO_ROOT="$MO_ROOT"
 exec "$VENV/bin/python" "$ROOT/scripts/mo_compat_run.py" "$@"
