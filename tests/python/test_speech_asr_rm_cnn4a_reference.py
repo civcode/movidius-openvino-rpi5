@@ -36,6 +36,10 @@ class RmCnn4aReferenceCommandTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "requires platform amd64"):
                     self.module.build_command("cpu", platform)
 
+    def test_output_tail_keeps_last_nonempty_lines(self):
+        text = "one\n\n two \nthree\nfour\n"
+        self.assertEqual(self.module.output_tail(text, lines=2), "three\nfour")
+
     def test_myriad_uses_device_regression_mode(self):
         for platform in ("armv7", "arm64", "amd64"):
             with self.subTest(platform=platform):

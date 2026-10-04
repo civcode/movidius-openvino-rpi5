@@ -59,6 +59,11 @@ def build_command(backend: str, platform: str) -> list[str]:
     return [str(ROOT / "run.sh"), "--platform", platform, mode]
 
 
+def output_tail(text: str, lines: int = 12) -> str:
+    selected = [line for line in text.splitlines() if line.strip()]
+    return "\n".join(selected[-lines:])
+
+
 def failed_metrics() -> dict:
     return {
         "utterances": 0,
@@ -177,7 +182,11 @@ def main() -> int:
                 **base,
                 "status": "failed",
                 "metrics": failed_metrics(),
-                "diagnostics": {"summary": str(exc)},
+                "diagnostics": {
+                    "summary": str(exc),
+                    "log_tail": output_tail(proc.stdout),
+                    "log_path": str(log_path.relative_to(ROOT)),
+                },
             }
     else:
         result = {
@@ -186,6 +195,8 @@ def main() -> int:
             "metrics": failed_metrics(),
             "diagnostics": {
                 "summary": f"{command[-1]} exited with status {proc.returncode}",
+                "log_tail": output_tail(proc.stdout),
+                "log_path": str(log_path.relative_to(ROOT)),
             },
         }
 

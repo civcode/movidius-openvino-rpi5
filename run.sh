@@ -87,7 +87,7 @@ fi
 DOCKER_ARGS=(
     --rm
     --platform "${DOCKER_PLATFORM}"
-    --name "ov203-${MODE}-${TARGET}-$"
+    --name "ov203-${MODE}-${TARGET}-$$"
     -e OV_ROOT=/opt/openvino
 )
 if [[ "${MODE}" != speech-reference ]]; then

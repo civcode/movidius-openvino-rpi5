@@ -16,6 +16,7 @@ class SpeechIntegrationCommandTests(unittest.TestCase):
         self.assertIn("DEVICE=CPU", text)
         self.assertIn("DEVICE=MYRIAD", text)
         self.assertIn("requires --platform amd64", text)
+        self.assertIn('ov203-${MODE}-${TARGET}-$', text)
 
     def test_benchmark_wrapper_exposes_cpu_and_myriad_backends(self):
         text = (
