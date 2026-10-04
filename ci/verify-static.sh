@@ -14,6 +14,12 @@ fi
 grep -q 'uv venv' scripts/lib/python-env.sh || fail 'uv venv helper missing'
 grep -q 'uv pip install' scripts/lib/python-env.sh || fail 'uv pip helper missing'
 
+# Shared headers live below include/ov203 and must be included with that prefix.
+if grep -R -nE '#include[[:space:]]+[<"]half\.hpp[>"]' \
+    examples mobilenet-test smoke-test --include='*.cpp' --include='*.hpp'; then
+    fail 'bare half.hpp include bypasses the shared include/ov203 header path'
+fi
+
 # All shell entry points must parse.
 while IFS= read -r f; do
     bash -n "$f" || fail "bash syntax: $f"

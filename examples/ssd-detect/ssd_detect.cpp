@@ -38,7 +38,7 @@
 #include <string>
 #include <vector>
 
-#include "half.hpp"
+#include <ov203/half.hpp>
 #include <ov203/device_probe.hpp>  // shared MYRIAD device probe with retry
 #include <ov203/cpu_threading.hpp>
 #include <ov203/device_spec.hpp>
