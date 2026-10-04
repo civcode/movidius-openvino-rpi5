@@ -102,3 +102,57 @@ swapped `Cast_<number>_const` suffixes; their output/blob sections and consumer
 edges are otherwise identical. The canonical graph identity now treats those
 generated numeric suffixes as non-semantic, closing the Phase 5 cross-host IR
 gate.
+
+
+## Phase 6 repeated benchmark worker
+
+The Phase 6 worker applies the frozen `benchmark-v1` measurement policy to the
+rm_cnn4a hardware-qualification fixture:
+
+```bash
+./scripts/benchmark-speech.sh \
+    --model rm_cnn4a \
+    --backend myriad \
+    --platform arm64
+```
+
+The worker requires a native host/target match. On a 64-bit Raspberry Pi,
+`--platform arm64` is valid; an x86_64 workstation uses `amd64`.
+
+The policy is fixed at **one full-fixture warmup followed by five measured
+full-fixture invocations**. The warmup is retained as evidence but excluded from
+aggregation. Every measured invocation starts a fresh benchmark process/container;
+within each invocation the existing rm_cnn4a runner reports corpus-weighted
+per-frame timing. Across the five measured invocations the worker reports mean,
+median, min, max, range, relative range and population coefficient of variation.
+
+Default artifacts are written below:
+
+```text
+work/speech-asr/rm_cnn4a/benchmark-myriad-arm64/
+├── result.json
+├── summary.txt
+└── runs/
+    ├── warmup-00.json
+    ├── warmup-00.log
+    ├── measured-00.json
+    ├── measured-00.log
+    └── ... measured-04 ...
+```
+
+`result.json` is authoritative and validates against
+`acoustic-benchmark-result-v1.schema.json` plus the semantic validator.
+`summary.txt` is generated only from the same result object. The result pins
+the benchmark-contract hash, worker hash, single-run runner hash, repository
+commit, model/fixture identities, Python version and native host architecture.
+
+Stable worker exit codes are:
+
+- `0`: completed benchmark;
+- `2`: invalid request or preflight/contract error;
+- `3`: warmup/measurement execution failure;
+- `4`: inconsistent run identity or invalid aggregate/result.
+
+The worker uses `benchmark-v1` for measurement policy only. rm_cnn4a remains
+a Kaldi feature/score regression fixture, so the worker does not invent AMI
+WER/CER or raw-audio RTF for it.

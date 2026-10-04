@@ -643,8 +643,23 @@ def validate_acoustic_benchmark_result(document: Any) -> Dict[str, Any]:
             _nonempty_string(item.get("result_path"), path + ".result_path", errors)
             _nonempty_string(item.get("log_path"), path + ".log_path", errors)
             _integer(item.get("returncode"), path + ".returncode", errors)
-            if item.get("raw_log_sha256") is not None:
-                _sha256(item.get("raw_log_sha256"), path + ".raw_log_sha256", errors)
+            _sha256(item.get("raw_log_sha256"), path + ".raw_log_sha256", errors)
+            if item.get("status") == "completed":
+                run_metrics = _mapping(item.get("metrics"), path + ".metrics", errors)
+                for metric_name in (
+                    "weighted_mean_infer_ms_per_frame",
+                    "utterance_avg_infer_ms_per_frame_p50",
+                    "utterance_avg_infer_ms_per_frame_p95",
+                    "model_load_ms",
+                    "max_error_max",
+                    "avg_error_mean",
+                    "rms_error_mean",
+                ):
+                    _number(
+                        run_metrics.get(metric_name),
+                        path + f".metrics.{metric_name}",
+                        errors,
+                    )
 
     provenance = _mapping(root.get("provenance"), "$.provenance", errors)
     _sha256(
@@ -655,6 +670,24 @@ def validate_acoustic_benchmark_result(document: Any) -> Dict[str, Any]:
     _sha256(provenance.get("runner_sha256"), "$.provenance.runner_sha256", errors)
     _sha256(provenance.get("worker_sha256"), "$.provenance.worker_sha256", errors)
     _nonempty_string(provenance.get("python_version"), "$.provenance.python_version", errors)
+    if (
+        benchmark.get("contract_sha256") is not None
+        and provenance.get("benchmark_contract_sha256") is not None
+        and benchmark.get("contract_sha256") != provenance.get("benchmark_contract_sha256")
+    ):
+        errors.append(
+            "$.provenance.benchmark_contract_sha256: must match $.benchmark.contract_sha256"
+        )
+
+    expected_backend = "CPU" if request.get("backend") == "cpu" else "MYRIAD"
+    if runtime.get("backend") != expected_backend:
+        errors.append(
+            "$.runtime.backend: does not match $.request.backend"
+        )
+    if runtime.get("target") != request.get("platform"):
+        errors.append(
+            "$.runtime.target: does not match $.request.platform"
+        )
 
     aggregate = root.get("aggregate")
     diagnostics = root.get("diagnostics")

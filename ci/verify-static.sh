@@ -87,6 +87,13 @@ grep -q 'EXPECTED_ELF_MACHINE_ID=183' scripts/platform.sh || fail 'arm64 ELF mac
 grep -q 'arm64:aarch64' scripts/host-run.sh || fail 'host-run lacks native arm64 host acceptance'
 grep -q 'arm64:arm64' scripts/verify.sh || fail 'runtime verifier lacks arm64 image validation'
 
+# Phase 6 speech benchmark worker invariants.
+grep -q 'benchmark_worker.py' scripts/benchmark-speech.sh || fail 'speech benchmark wrapper missing worker'
+grep -q 'EXIT_EXECUTION = 3' examples/speech-asr/evaluation/benchmark_worker.py || fail 'benchmark worker exit codes missing'
+grep -q 'measured_iterations.*5' examples/speech-asr/contracts/benchmark-v1.yaml || fail 'benchmark-v1 measured iteration policy changed'
+grep -q 'expected frozen value 5' examples/speech-asr/python/speech_asr/contracts.py || fail 'benchmark-v1 iteration policy is not enforced'
+test -f examples/speech-asr/contracts/acoustic-benchmark-result-v1.schema.json || fail 'Phase 6 result schema missing'
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
 for name in ["smoke-test/model/make_tiny_ir.py", "scripts/reset-stick.py"]:

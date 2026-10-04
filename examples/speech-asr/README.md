@@ -145,11 +145,16 @@ MYRIAD hardware:
 ./scripts/test-speech-asr.sh
 ```
 
-Physical-device regression remains a separate explicit operation:
+Physical-device qualification and the repeated Phase 6 worker remain explicit
+operations:
 
 ```bash
 ./scripts/prepare-rm-cnn4a.sh
-./scripts/python.sh examples/speech-asr/evaluation/benchmark_rm_cnn4a.py --platform arm64
+./scripts/python.sh examples/speech-asr/evaluation/benchmark_rm_cnn4a.py \
+    --backend myriad --platform arm64
+
+./scripts/benchmark-speech.sh \
+    --model rm_cnn4a --backend myriad --platform arm64
 ```
 
 ## Directory layout

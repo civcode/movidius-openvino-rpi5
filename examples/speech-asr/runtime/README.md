@@ -50,3 +50,18 @@ It may not:
 - tune parameters while reporting the result as the original experiment.
 
 Model-specific behavior is selected through the model contract/adapter.
+
+
+## Evaluation worker
+
+Phase 6 adds a host-side non-interactive worker:
+
+```bash
+./scripts/benchmark-speech.sh --model rm_cnn4a --backend myriad --platform arm64
+```
+
+The worker refuses a non-native target, runs the frozen 1+5 measurement policy,
+preserves every raw log/single-run result, checks model/fixture/runtime identity
+between iterations, and emits one aggregate result plus a summary derived from
+that result. It does not change the model, fixture, scoring rules or measurement
+counts.

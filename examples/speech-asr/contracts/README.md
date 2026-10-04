@@ -8,7 +8,8 @@ runtime provenance and benchmark results.
 - `text-v1.json` — frozen transcript/scoring-normalization policy.
 - `benchmark-v1.yaml` — benchmark identity, metrics and measurement policy.
 - `experiment-result-v1.schema.json` — transcript/custom-model evaluation result.
-- `acoustic-regression-result-v1.schema.json` — rm_cnn4a vendor score regression result.
+- `acoustic-regression-result-v1.schema.json` — one rm_cnn4a vendor score regression run.
+- `acoustic-benchmark-result-v1.schema.json` — repeated Phase 6 hardware benchmark result.
 - `model-v1.yaml` — model-package and provenance boundary.
 
 The three `.yaml` files intentionally contain JSON syntax. JSON is valid YAML
@@ -47,3 +48,13 @@ Contract validation freezes the following assumptions for version 1:
 - model packages declare source/spec/artifact provenance;
 - hardware results identify repository revision, runtime, target and model/data
   hashes.
+
+
+## Phase 6 measurement policy
+
+`benchmark-v1` freezes one warmup plus five measured iterations. The semantic
+validator now rejects any other count for benchmark version 1. For rm_cnn4a,
+each iteration is an independent full vendor-fixture invocation; warmup is
+excluded from aggregate statistics. The repeated worker result records
+cross-run repeatability as measured evidence rather than applying an invented
+stability threshold.
