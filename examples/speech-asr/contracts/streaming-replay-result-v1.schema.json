@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "speech-asr/streaming-replay-result-v1.schema.json",
+  "title": "Speech ASR recorded streaming replay result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "version",
+    "status",
+    "source",
+    "config",
+    "decoder",
+    "events",
+    "metrics",
+    "provenance"
+  ],
+  "properties": {
+    "schema": {
+      "const": "speech-asr/streaming-replay-result"
+    },
+    "version": {
+      "const": 1
+    },
+    "status": {
+      "enum": [
+        "completed",
+        "failed"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "decoder": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "events": {
+      "type": "array"
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "offline_comparison": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

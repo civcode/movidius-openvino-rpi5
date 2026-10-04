@@ -16,6 +16,8 @@ from speech_asr.contracts import (
     validate_acoustic_regression_result,
     validate_model_contract,
     validate_speech_sample,
+    validate_streaming_contract,
+    validate_streaming_replay_result,
     validate_text_contract,
 )
 
@@ -30,6 +32,8 @@ class ContractFileTests(unittest.TestCase):
             "experiment-result-v1.schema.json",
             "acoustic-regression-result-v1.schema.json",
             "acoustic-benchmark-result-v1.schema.json",
+            "streaming-v1.json",
+            "streaming-replay-result-v1.schema.json",
             "text-v1.json",
         ):
             with self.subTest(name=name):
@@ -42,6 +46,7 @@ class ContractFileTests(unittest.TestCase):
             "benchmark-v1.yaml": validate_benchmark_contract,
             "model-v1.yaml": validate_model_contract,
             "text-v1.json": validate_text_contract,
+            "streaming-v1.json": validate_streaming_contract,
         }
         for name, validator in validators.items():
             with self.subTest(name=name):

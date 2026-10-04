@@ -1,0 +1,54 @@
+{
+  "schema": "speech-asr/streaming",
+  "version": 1,
+  "audio_contract": "audio-v1",
+  "timing": {
+    "canonical_unit": "sample_index",
+    "origin": "normalized_audio_start",
+    "sample_rate_hz": 16000
+  },
+  "chunking": {
+    "authoritative_unit": "ms",
+    "overlap_ownership": "midpoint_partition",
+    "context_policy": "left_right_expand_inference_only",
+    "default_profile": {
+      "chunk_ms": 320,
+      "overlap_ms": 80,
+      "left_context_ms": 160,
+      "right_context_ms": 80
+    }
+  },
+  "vad": {
+    "interface": "emission_region_samples",
+    "default": "disabled",
+    "energy_v1": {
+      "metric": "rms",
+      "threshold": "explicit_runtime_parameter"
+    }
+  },
+  "events": {
+    "kinds": [
+      "partial",
+      "final"
+    ],
+    "hypothesis_semantics": "cumulative",
+    "text_normalization": "text-v1",
+    "stabilization": {
+      "kind": "consecutive_cumulative_prefix",
+      "default_repeats": 2,
+      "stabilized_tokens_must_not_be_revised": true
+    }
+  },
+  "latency": {
+    "observed_sample": "chunk_available_sample",
+    "source_sample": "decoder_declared_source_end_sample",
+    "unit": "sample_index",
+    "derived_ms_at_16khz": true
+  },
+  "rules": [
+    "Recorded replay precedes live microphone capture.",
+    "Streaming parameters are explicit result provenance, not hidden model constants.",
+    "Overlap changes inference windows but emission ownership covers every source sample exactly once.",
+    "Offline-versus-streaming transcript comparison uses text-v1."
+  ]
+}

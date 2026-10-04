@@ -14,6 +14,8 @@ from speech_asr.contracts import (
     validate_benchmark_contract,
     validate_experiment_result,
     validate_speech_sample,
+    validate_streaming_contract,
+    validate_streaming_replay_result,
 )
 
 
@@ -378,6 +380,112 @@ class AcousticBenchmarkResultContractTests(unittest.TestCase):
         document["runs"]["measured"].pop()
         with self.assertRaisesRegex(ContractValidationError, "exactly five"):
             validate_acoustic_benchmark_result(document)
+
+def streaming_replay_document():
+    return {
+        "schema": "speech-asr/streaming-replay-result",
+        "version": 1,
+        "status": "completed",
+        "source": {
+            "path": "audio/test.f32",
+            "source_sha256": SHA,
+            "canonical_audio_sha256": SHA,
+            "sample_count": 3200,
+        },
+        "config": {
+            "sample_rate_hz": 16000,
+            "chunk_ms": 100,
+            "overlap_ms": 20,
+            "left_context_ms": 10,
+            "right_context_ms": 10,
+            "stabilization_repeats": 2,
+        },
+        "decoder": {
+            "kind": "scripted-cumulative-v1",
+            "script_sha256": SHA,
+        },
+        "events": [
+            {
+                "kind": "final",
+                "text": "hello",
+                "observed_sample": 3200,
+                "source_end_sample": 3000,
+                "latency_ms": 12.5,
+                "stable_token_count": 1,
+                "newly_stable": [],
+            }
+        ],
+        "metrics": {
+            "audio_samples": 3200,
+            "chunk_count": 3,
+            "speech_chunk_count": None,
+            "final_event_latency_ms": 12.5,
+            "stabilized_token_count": 1,
+            "word_stabilization_delay_ms": None,
+        },
+        "offline_comparison": {
+            "offline_text": "hello",
+            "streaming_text": "hello",
+            "exact_match": True,
+            "wer": 0.0,
+            "cer": 0.0,
+        },
+        "provenance": {
+            "repo_commit": "270fe37f5c55684f9003bce2e6684861556c88af",
+            "streaming_contract_sha256": SHA,
+            "implementation_sha256": SHA,
+            "python_version": "3.11.0",
+        },
+    }
+
+
+class StreamingContractTests(unittest.TestCase):
+    def test_root_streaming_contract_validates(self):
+        document = {
+            "schema": "speech-asr/streaming",
+            "version": 1,
+            "audio_contract": "audio-v1",
+            "timing": {
+                "canonical_unit": "sample_index",
+                "origin": "normalized_audio_start",
+                "sample_rate_hz": 16000,
+            },
+            "chunking": {
+                "authoritative_unit": "ms",
+                "overlap_ownership": "midpoint_partition",
+                "context_policy": "left_right_expand_inference_only",
+                "default_profile": {
+                    "chunk_ms": 320,
+                    "overlap_ms": 80,
+                    "left_context_ms": 160,
+                    "right_context_ms": 80,
+                },
+            },
+            "events": {
+                "kinds": ["partial", "final"],
+                "hypothesis_semantics": "cumulative",
+                "text_normalization": "text-v1",
+                "stabilization": {
+                    "kind": "consecutive_cumulative_prefix",
+                    "default_repeats": 2,
+                    "stabilized_tokens_must_not_be_revised": True,
+                },
+            },
+        }
+        self.assertEqual(validate_streaming_contract(document)["version"], 1)
+
+    def test_streaming_replay_result_validates(self):
+        self.assertEqual(
+            validate_streaming_replay_result(streaming_replay_document())["status"],
+            "completed",
+        )
+
+    def test_streaming_replay_rejects_multiple_final_events(self):
+        document = streaming_replay_document()
+        document["events"].append(dict(document["events"][0]))
+        with self.assertRaisesRegex(ContractValidationError, "exactly one final"):
+            validate_streaming_replay_result(document)
+
 
 class CanonicalHashTests(unittest.TestCase):
     def test_hash_is_key_order_independent(self):

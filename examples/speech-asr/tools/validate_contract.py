@@ -19,6 +19,8 @@ from speech_asr.contracts import (  # noqa: E402
     validate_experiment_result,
     validate_model_contract,
     validate_speech_sample,
+    validate_streaming_contract,
+    validate_streaming_replay_result,
     validate_text_contract,
 )
 
@@ -32,6 +34,8 @@ VALIDATORS = {
     "result": validate_experiment_result,
     "regression": validate_acoustic_regression_result,
     "acoustic-benchmark": validate_acoustic_benchmark_result,
+    "streaming": validate_streaming_contract,
+    "streaming-replay": validate_streaming_replay_result,
 }
 
 SCHEMA_TO_KIND = {
@@ -43,6 +47,8 @@ SCHEMA_TO_KIND = {
     "speech-asr/experiment-result": "result",
     "speech-asr/acoustic-regression-result": "regression",
     "speech-asr/acoustic-benchmark-result": "acoustic-benchmark",
+    "speech-asr/streaming": "streaming",
+    "speech-asr/streaming-replay-result": "streaming-replay",
 }
 
 

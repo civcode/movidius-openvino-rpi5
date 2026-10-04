@@ -735,3 +735,191 @@ def validate_acoustic_benchmark_result(document: Any) -> Dict[str, Any]:
 
     _raise_if_errors(errors)
     return dict(root)
+
+
+def validate_streaming_contract(document: Any) -> Dict[str, Any]:
+    """Validate the recorded-audio streaming-v1 runtime contract."""
+
+    errors: list[str] = []
+    root = _mapping(document, "$", errors)
+    if root.get("schema") != "speech-asr/streaming":
+        errors.append("$.schema: expected 'speech-asr/streaming'")
+    if root.get("version") != 1:
+        errors.append("$.version: expected 1")
+    if root.get("audio_contract") != "audio-v1":
+        errors.append("$.audio_contract: expected 'audio-v1'")
+
+    timing = _mapping(root.get("timing"), "$.timing", errors)
+    if timing.get("canonical_unit") != "sample_index":
+        errors.append("$.timing.canonical_unit: expected 'sample_index'")
+    if timing.get("origin") != "normalized_audio_start":
+        errors.append("$.timing.origin: expected 'normalized_audio_start'")
+    if timing.get("sample_rate_hz") != _CANONICAL_SAMPLE_RATE:
+        errors.append("$.timing.sample_rate_hz: expected 16000")
+
+    chunking = _mapping(root.get("chunking"), "$.chunking", errors)
+    if chunking.get("authoritative_unit") != "ms":
+        errors.append("$.chunking.authoritative_unit: expected 'ms'")
+    if chunking.get("overlap_ownership") != "midpoint_partition":
+        errors.append("$.chunking.overlap_ownership: expected 'midpoint_partition'")
+    if chunking.get("context_policy") != "left_right_expand_inference_only":
+        errors.append(
+            "$.chunking.context_policy: expected 'left_right_expand_inference_only'"
+        )
+    defaults = _mapping(
+        chunking.get("default_profile"),
+        "$.chunking.default_profile",
+        errors,
+    )
+    for key in ("chunk_ms", "overlap_ms", "left_context_ms", "right_context_ms"):
+        _integer(defaults.get(key), f"$.chunking.default_profile.{key}", errors)
+    if (
+        isinstance(defaults.get("chunk_ms"), int)
+        and isinstance(defaults.get("overlap_ms"), int)
+        and defaults.get("overlap_ms") >= defaults.get("chunk_ms")
+    ):
+        errors.append("$.chunking.default_profile.overlap_ms: must be smaller than chunk_ms")
+
+    events = _mapping(root.get("events"), "$.events", errors)
+    _require_values(events.get("kinds"), ("partial", "final"), "$.events.kinds", errors)
+    if events.get("hypothesis_semantics") != "cumulative":
+        errors.append("$.events.hypothesis_semantics: expected 'cumulative'")
+    if events.get("text_normalization") != "text-v1":
+        errors.append("$.events.text_normalization: expected 'text-v1'")
+    stabilization = _mapping(events.get("stabilization"), "$.events.stabilization", errors)
+    if stabilization.get("kind") != "consecutive_cumulative_prefix":
+        errors.append(
+            "$.events.stabilization.kind: expected 'consecutive_cumulative_prefix'"
+        )
+    _integer(
+        stabilization.get("default_repeats"),
+        "$.events.stabilization.default_repeats",
+        errors,
+        minimum=1,
+    )
+    if stabilization.get("stabilized_tokens_must_not_be_revised") is not True:
+        errors.append(
+            "$.events.stabilization.stabilized_tokens_must_not_be_revised: expected true"
+        )
+
+    _raise_if_errors(errors)
+    return dict(root)
+
+
+def validate_streaming_replay_result(document: Any) -> Dict[str, Any]:
+    """Validate a deterministic recorded-audio streaming replay result."""
+
+    errors: list[str] = []
+    root = _mapping(document, "$", errors)
+    if root.get("schema") != "speech-asr/streaming-replay-result":
+        errors.append("$.schema: expected 'speech-asr/streaming-replay-result'")
+    if root.get("version") != 1:
+        errors.append("$.version: expected 1")
+    status = root.get("status")
+    if status not in {"completed", "failed"}:
+        errors.append("$.status: expected completed or failed")
+
+    source = _mapping(root.get("source"), "$.source", errors)
+    _nonempty_string(source.get("path"), "$.source.path", errors)
+    _sha256(source.get("source_sha256"), "$.source.source_sha256", errors)
+    _sha256(
+        source.get("canonical_audio_sha256"),
+        "$.source.canonical_audio_sha256",
+        errors,
+    )
+    _integer(source.get("sample_count"), "$.source.sample_count", errors, minimum=1)
+
+    config = _mapping(root.get("config"), "$.config", errors)
+    if config.get("sample_rate_hz") != _CANONICAL_SAMPLE_RATE:
+        errors.append("$.config.sample_rate_hz: expected 16000")
+    for key in ("chunk_ms", "overlap_ms", "left_context_ms", "right_context_ms"):
+        _integer(config.get(key), f"$.config.{key}", errors)
+    if (
+        isinstance(config.get("chunk_ms"), int)
+        and isinstance(config.get("overlap_ms"), int)
+        and config.get("overlap_ms") >= config.get("chunk_ms")
+    ):
+        errors.append("$.config.overlap_ms: must be smaller than chunk_ms")
+    _integer(
+        config.get("stabilization_repeats"),
+        "$.config.stabilization_repeats",
+        errors,
+        minimum=1,
+    )
+
+    decoder = _mapping(root.get("decoder"), "$.decoder", errors)
+    if decoder.get("kind") != "scripted-cumulative-v1":
+        errors.append("$.decoder.kind: expected 'scripted-cumulative-v1'")
+    _sha256(decoder.get("script_sha256"), "$.decoder.script_sha256", errors)
+
+    events = _sequence(root.get("events"), "$.events", errors)
+    final_count = 0
+    previous_observed = -1
+    for index, value in enumerate(events):
+        path = f"$.events[{index}]"
+        event = _mapping(value, path, errors)
+        if event.get("kind") not in {"partial", "final"}:
+            errors.append(path + ".kind: expected partial or final")
+        final_count += int(event.get("kind") == "final")
+        if not isinstance(event.get("text"), str):
+            errors.append(path + ".text: expected string")
+        _integer(event.get("observed_sample"), path + ".observed_sample", errors)
+        _integer(event.get("source_end_sample"), path + ".source_end_sample", errors)
+        _number(event.get("latency_ms"), path + ".latency_ms", errors)
+        _integer(event.get("stable_token_count"), path + ".stable_token_count", errors)
+        observed = event.get("observed_sample")
+        source_end = event.get("source_end_sample")
+        if isinstance(observed, int) and isinstance(source_end, int):
+            if source_end > observed:
+                errors.append(path + ".source_end_sample: cannot exceed observed_sample")
+            if observed < previous_observed:
+                errors.append(path + ".observed_sample: events must be ordered")
+            previous_observed = observed
+
+    metrics = _mapping(root.get("metrics"), "$.metrics", errors)
+    _integer(metrics.get("audio_samples"), "$.metrics.audio_samples", errors, minimum=1)
+    _integer(metrics.get("chunk_count"), "$.metrics.chunk_count", errors, minimum=1)
+    _number(
+        metrics.get("final_event_latency_ms"),
+        "$.metrics.final_event_latency_ms",
+        errors,
+    )
+    _integer(
+        metrics.get("stabilized_token_count"),
+        "$.metrics.stabilized_token_count",
+        errors,
+    )
+
+    comparison = root.get("offline_comparison")
+    if comparison is not None:
+        comparison = _mapping(comparison, "$.offline_comparison", errors)
+        if not isinstance(comparison.get("exact_match"), bool):
+            errors.append("$.offline_comparison.exact_match: expected boolean")
+        _number(comparison.get("wer"), "$.offline_comparison.wer", errors)
+        _number(comparison.get("cer"), "$.offline_comparison.cer", errors)
+
+    provenance = _mapping(root.get("provenance"), "$.provenance", errors)
+    _git_sha(provenance.get("repo_commit"), "$.provenance.repo_commit", errors)
+    _sha256(
+        provenance.get("streaming_contract_sha256"),
+        "$.provenance.streaming_contract_sha256",
+        errors,
+    )
+    _sha256(
+        provenance.get("implementation_sha256"),
+        "$.provenance.implementation_sha256",
+        errors,
+    )
+    _nonempty_string(provenance.get("python_version"), "$.provenance.python_version", errors)
+
+    if status == "completed":
+        if final_count != 1:
+            errors.append("$.events: completed replay requires exactly one final event")
+        if source.get("sample_count") != metrics.get("audio_samples"):
+            errors.append("$.metrics.audio_samples: must match $.source.sample_count")
+    else:
+        diagnostics = _mapping(root.get("diagnostics"), "$.diagnostics", errors)
+        _nonempty_string(diagnostics.get("summary"), "$.diagnostics.summary", errors)
+
+    _raise_if_errors(errors)
+    return dict(root)

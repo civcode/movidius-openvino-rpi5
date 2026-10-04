@@ -10,6 +10,8 @@ from .contracts import (
     validate_experiment_result,
     validate_model_contract,
     validate_speech_sample,
+    validate_streaming_contract,
+    validate_streaming_replay_result,
     validate_text_contract,
 )
 
@@ -23,5 +25,7 @@ __all__ = [
     "validate_experiment_result",
     "validate_model_contract",
     "validate_speech_sample",
+    "validate_streaming_contract",
+    "validate_streaming_replay_result",
     "validate_text_contract",
 ]
