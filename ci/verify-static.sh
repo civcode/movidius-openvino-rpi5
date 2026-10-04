@@ -6,6 +6,14 @@ cd "${ROOT}"
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 
+# Host Python dependency policy: uv-managed environments only.
+if grep -R -nE 'python([0-9.]+)?[[:space:]]+-m[[:space:]]+venv|/bin/python[[:space:]]+-m[[:space:]]+pip[[:space:]]+install|/bin/pip[[:space:]]+install' \
+    scripts examples --include='*.sh' --exclude='verify-static.sh'; then
+    fail 'host shell script bypasses the uv-managed Python environment policy'
+fi
+grep -q 'uv venv' scripts/lib/python-env.sh || fail 'uv venv helper missing'
+grep -q 'uv pip install' scripts/lib/python-env.sh || fail 'uv pip helper missing'
+
 # All shell entry points must parse.
 while IFS= read -r f; do
     bash -n "$f" || fail "bash syntax: $f"
