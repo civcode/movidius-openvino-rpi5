@@ -65,3 +65,20 @@ vendor feature/reference-score hashes as the frozen CPU result.
 The comparison intentionally applies no acceptance threshold; it records exact
 deltas/ratios so later Pi 5 and custom-model results can be judged from explicit
 policy rather than retrofitted thresholds.
+
+
+### Reproducible CPU-to-MYRIAD comparison
+
+Use the checked-in CPU reference as the default baseline and provide any
+completed MYRIAD result as the candidate:
+
+```bash
+./scripts/python.sh examples/speech-asr/evaluation/compare_rm_cnn4a.py \
+    --candidate work/speech-asr/rm_cnn4a/result-myriad-arm64.json \
+    --output work/speech-asr/rm_cnn4a/comparison-myriad-arm64.json
+```
+
+The command first validates both acoustic-regression result documents. It then
+requires identical model XML/BIN, vendor feature/reference-score fixtures and
+OpenVINO version before reporting count agreement plus exact metric deltas and
+ratios. It deliberately does not apply MYRIAD pass/fail thresholds.
