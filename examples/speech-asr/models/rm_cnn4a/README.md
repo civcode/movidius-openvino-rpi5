@@ -60,3 +60,18 @@ comparison against `score1_10.ark` is a required metric.
 The eventual custom model does not inherit rm_cnn4a's frontend, acoustic
 targets, decoder, topology, or training framework. The custom path remains
 PyTorch/CUDA -> ONNX -> OpenVINO -> MYRIAD.
+
+
+## Runtime regression
+
+After rebuilding the runtime image with this checkpoint:
+
+```bash
+./build.sh --platform arm64
+./run.sh --platform arm64 speech-regress
+```
+
+The Docker build includes the pinned OpenVINO 2020.3 `speech_sample` only; it
+does not enable the full sample suite. The wrapper forces `MYRIAD`, FP16 IR and
+batch size 1, and compares generated acoustic scores with the vendor
+`score1_10.ark` reference.

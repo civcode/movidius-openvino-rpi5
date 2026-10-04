@@ -14,6 +14,8 @@
 #                                            # SSDLite detection (prepare-ssdlite.sh)
 #   ./run.sh seg [--image /models/images/dog_ssd.ppm]
 #                                            # DeepLabV3 segmentation (prepare-deeplabv3.sh)
+#   ./run.sh speech-regress
+#                                            # rm_cnn4a vendor ARK regression on MYRIAD
 #
 # Global options (before the mode):
 #   --platform|-p armv7|arm64|amd64    select the target (default: auto-detect)
@@ -56,7 +58,7 @@ if (( PRINT_PLATFORM )); then platform_print; exit 0; fi
 
 MODE="${1:-demo}"
 case "${MODE}" in
-    demo|--demo|list|demo-list|shell|bench|custom|mobilenet|ssd|seg)
+    demo|--demo|list|demo-list|shell|bench|custom|mobilenet|ssd|seg|speech-regress)
         [[ $# -gt 0 ]] && shift
         ;;
     *) MODE=demo ;;
@@ -109,6 +111,25 @@ case "${MODE}" in
     custom)
         DOCKER_ARGS+=(-v "${ROOT}/work:/work:ro")
         ENTRY=(/opt/openvino/bin/hello_myriad --device MYRIAD "$@")
+        ;;
+    speech-regress)
+        MODEL_DIR="${ROOT}/vendor/models/rm_cnn4a_smbr"
+        XML="${MODEL_DIR}/openvino/fp16/rm_cnn4a_fp16.xml"
+        FEATURES="${MODEL_DIR}/source/feat1_10.ark"
+        SCORES="${MODEL_DIR}/source/score1_10.ark"
+        if [[ ! -f "${XML}" || ! -f "${FEATURES}" || ! -f "${SCORES}" ]]; then
+            echo "rm_cnn4a fixture is not prepared - run ./scripts/prepare-rm-cnn4a.sh first" >&2
+            exit 1
+        fi
+        DOCKER_ARGS+=(-v "${ROOT}/vendor/models:/models:ro")
+        ENTRY=(/opt/openvino/bin/speech_sample
+               -m /models/rm_cnn4a_smbr/openvino/fp16/rm_cnn4a_fp16.xml
+               -i /models/rm_cnn4a_smbr/source/feat1_10.ark
+               -r /models/rm_cnn4a_smbr/source/score1_10.ark
+               -o /tmp/rm_cnn4a_scores.ark
+               -d MYRIAD
+               -bs 1
+               "$@")
         ;;
     mobilenet)
         IR="${IR:-fp16}"

@@ -139,7 +139,8 @@ RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
         -DENABLE_MKL_DNN=${MKL_DNN_FLAG} \
         -DENABLE_CLDNN=OFF \
         -DENABLE_OPENCV=OFF \
-        -DENABLE_SAMPLES=OFF \
+        -DENABLE_SAMPLES=ON \
+        -DBUILD_SAMPLE_NAME=speech_sample \
         -DENABLE_TESTS=OFF \
         -DENABLE_FUNCTIONAL_TESTS=OFF \
         -DENABLE_BEH_TESTS=OFF \
@@ -178,6 +179,10 @@ RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
     test "$(cat /work/src/.sync_stamp)" = "${SYNC_STAMP}"; \
     make -C /work/build -j"${OV_BUILD_JOBS}"; \
     make -C /work/build install; \
+    SPEECH_SAMPLE="$(find /work/src /work/build -type f -name speech_sample -perm /111 -print -quit)"; \
+    test -n "${SPEECH_SAMPLE}"; \
+    mkdir -p /work/stage/bin; \
+    cp "${SPEECH_SAMPLE}" /work/stage/bin/speech_sample; \
     mkdir -p /work/stage/deployment_tools/ngraph/lib \
              /work/stage/deployment_tools/ngraph/include \
              /work/stage/deployment_tools/ngraph/cmake; \
@@ -427,6 +432,7 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /work/stage/deployment_tools ${OV_ROOT}/
+COPY --from=builder /work/stage/bin/speech_sample ${OV_ROOT}/bin/speech_sample
 COPY --from=smoke /work/smoke-build/hello_myriad ${OV_ROOT}/bin/hello_myriad
 COPY --from=smoke /work/smoke/model /opt/openvino-demo/model
 COPY --from=mobilenet /work/mnb-build/mobilenet_classify ${OV_ROOT}/bin/mobilenet_classify
@@ -457,7 +463,7 @@ RUN set -eux; \
     fi
 
 RUN set -eux; \
-    chmod +x /opt/openvino-demo/run.sh ${OV_ROOT}/bin/hello_myriad ${OV_ROOT}/bin/mobilenet_classify ${OV_ROOT}/bin/mobilenet_server ${OV_ROOT}/bin/ssd_detect ${OV_ROOT}/bin/seg_detect; \
+    chmod +x /opt/openvino-demo/run.sh ${OV_ROOT}/bin/hello_myriad ${OV_ROOT}/bin/speech_sample ${OV_ROOT}/bin/mobilenet_classify ${OV_ROOT}/bin/mobilenet_server ${OV_ROOT}/bin/ssd_detect ${OV_ROOT}/bin/seg_detect; \
     IE_PLUGIN="$(find ${OV_ROOT}/inference_engine/lib -mindepth 2 -maxdepth 2 -type f -name libmyriadPlugin.so -print -quit)"; \
     test -n "${IE_PLUGIN}"; \
     IE_LIB="$(dirname "${IE_PLUGIN}")"; \
@@ -472,6 +478,8 @@ RUN set -eux; \
     cat ${OV_ROOT}/runtime-manifest.env; \
     cat ${OV_ROOT}/firmware.sha256; \
     LD_LIBRARY_PATH="${IE_LIB}:${OV_ROOT}/ngraph/lib" ${OV_ROOT}/bin/hello_myriad --help; \
+    LD_LIBRARY_PATH="${IE_LIB}:${OV_ROOT}/ngraph/lib" ${OV_ROOT}/bin/speech_sample -h >/dev/null; \
+    ! LD_LIBRARY_PATH="${IE_LIB}:${OV_ROOT}/ngraph/lib" ldd ${OV_ROOT}/bin/speech_sample | grep -q 'not found'; \
     LD_LIBRARY_PATH="${IE_LIB}:${OV_ROOT}/ngraph/lib" ${OV_ROOT}/bin/mobilenet_classify --help; \
     ! LD_LIBRARY_PATH="${IE_LIB}:${OV_ROOT}/ngraph/lib" ldd ${OV_ROOT}/bin/hello_myriad | grep -q 'not found'; \
     ! LD_LIBRARY_PATH="${IE_LIB}:${OV_ROOT}/ngraph/lib" ldd ${OV_ROOT}/bin/mobilenet_classify | grep -q 'not found'; \
