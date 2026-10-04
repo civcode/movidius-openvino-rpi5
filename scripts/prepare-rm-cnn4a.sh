@@ -5,6 +5,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+VERIFY_ONLY=0
+if [[ "${1:-}" == --verify-only ]]; then
+    VERIFY_ONLY=1
+    shift
+fi
+if [[ $# -ne 0 ]]; then
+    echo "usage: $0 [--verify-only]" >&2
+    exit 2
+fi
+
 SOURCE_SPEC="$ROOT/examples/speech-asr/models/rm_cnn4a/source-v1.json"
 MODEL_ROOT="$ROOT/vendor/models/rm_cnn4a_smbr"
 SOURCE_DIR="$MODEL_ROOT/source"
@@ -13,6 +23,13 @@ LOCK="$SOURCE_DIR/SOURCE-LOCK.sha256"
 BASE_URL='https://storage.openvinotoolkit.org/models_contrib/speech/2021.2/rm_cnn4a_smbr'
 LICENSE_URL='https://storage.openvinotoolkit.org/models_contrib/speech/2021.2/LICENSE.txt'
 FILES=(rm_cnn4a.nnet rm_cnn4a.counts rm_cnn4a.mapping rm_cnn4a.md feat1_10.ark score1_10.ark)
+
+if (( VERIFY_ONLY )); then
+    exec "$ROOT/scripts/python.sh" \
+        "$ROOT/examples/speech-asr/tools/verify_prepared_rm_cnn4a.py" \
+        --model-root "$MODEL_ROOT" \
+        --source-spec "$SOURCE_SPEC"
+fi
 
 mkdir -p "$SOURCE_DIR" "$IR_DIR"
 
@@ -48,9 +65,12 @@ rm -f "$IR_DIR/rm_cnn4a_fp16.xml" "$IR_DIR/rm_cnn4a_fp16.bin"
 test -s "$IR_DIR/rm_cnn4a_fp16.xml"
 test -s "$IR_DIR/rm_cnn4a_fp16.bin"
 
-python3 "$ROOT/examples/speech-asr/tools/inspect_ir.py"     "$IR_DIR/rm_cnn4a_fp16.xml"     --bin "$IR_DIR/rm_cnn4a_fp16.bin"     --output "$IR_DIR/ir-contract.json"
+"$ROOT/scripts/python.sh" "$ROOT/examples/speech-asr/tools/inspect_ir.py" \
+    "$IR_DIR/rm_cnn4a_fp16.xml" \
+    --bin "$IR_DIR/rm_cnn4a_fp16.bin" \
+    --output "$IR_DIR/ir-contract.json"
 
-python3 - "$SOURCE_SPEC" "$SOURCE_DIR" "$IR_DIR" <<'PY'
+"$ROOT/scripts/python.sh" - "$SOURCE_SPEC" "$SOURCE_DIR" "$IR_DIR" <<'PY'
 import hashlib, json, pathlib, sys
 
 spec_path = pathlib.Path(sys.argv[1])
@@ -88,6 +108,11 @@ result = {
 )
 print(json.dumps(result["openvino"], sort_keys=True))
 PY
+
+"$ROOT/scripts/python.sh" \
+    "$ROOT/examples/speech-asr/tools/verify_prepared_rm_cnn4a.py" \
+    --model-root "$MODEL_ROOT" \
+    --source-spec "$SOURCE_SPEC"
 
 echo
 echo "prepared:"
