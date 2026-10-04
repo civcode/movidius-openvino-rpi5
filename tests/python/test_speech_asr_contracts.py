@@ -296,6 +296,15 @@ def acoustic_benchmark_document():
         "log_path": "work/run.log",
         "returncode": 0,
         "raw_log_sha256": SHA,
+        "metrics": {
+            "weighted_mean_infer_ms_per_frame": 10.0,
+            "utterance_avg_infer_ms_per_frame_p50": 10.0,
+            "utterance_avg_infer_ms_per_frame_p95": 10.0,
+            "model_load_ms": 1900.0,
+            "max_error_max": 0.09,
+            "avg_error_mean": 0.006,
+            "rms_error_mean": 0.008,
+        },
     }
     return {
         "schema": "speech-asr/acoustic-benchmark-result",
