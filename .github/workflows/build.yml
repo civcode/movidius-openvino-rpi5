@@ -1,7 +1,7 @@
 name: multi-platform-build
 
 # Full OpenVINO 2020.3 builds are intentionally manual: the ARM jobs run under
-# QEMU on hosted x86 runners and are much heavier than the fast static PR checks.
+# QEMU on hosted x86 runners. All CI in this repository is manually dispatched.
 on:
   workflow_dispatch:
 

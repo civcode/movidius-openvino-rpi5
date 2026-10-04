@@ -587,6 +587,18 @@ def verify_prepared_dataset(
     if provenance.get("records") != len(records):
         raise AmiPreparationError("record count does not match provenance")
 
+    expected_clip_paths = {
+        (output_dir / record["audio"]["path"]).resolve() for record in records
+    }
+    actual_clip_paths = {
+        path.resolve() for path in (output_dir / "audio").glob("*.f32")
+    } if (output_dir / "audio").is_dir() else set()
+    extras = sorted(str(path) for path in actual_clip_paths - expected_clip_paths)
+    if extras:
+        raise AmiPreparationError(
+            "prepared audio directory contains unreferenced clips: " + ", ".join(extras)
+        )
+
     normalized_audio = {
         record["id"]: record["metadata"]["normalized_audio_sha256"]
         for record in records

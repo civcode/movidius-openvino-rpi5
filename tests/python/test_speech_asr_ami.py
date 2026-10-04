@@ -94,6 +94,13 @@ def make_spec(audio, archive, selection):
 
 
 class AmiPreparationTests(unittest.TestCase):
+    def test_checked_in_split_specs_validate(self):
+        split_dir = SPEECH / "datasets" / "ami" / "splits"
+        for name in ("smoke-v1.json", "benchmark-v1.json"):
+            with self.subTest(name=name):
+                spec = json.loads((split_dir / name).read_text(encoding="utf-8"))
+                self.assertEqual(validate_split_spec(spec)["version"], 1)
+
     def test_seconds_to_samples_is_decimal_deterministic(self):
         self.assertEqual(seconds_to_samples("77.408"), 1238528)
 
@@ -173,6 +180,26 @@ class AmiPreparationTests(unittest.TestCase):
                 "ami-TEST-A-2",
             ])
             self.assertEqual(records[1]["transcript"]["text"], "second segment")
+
+    def test_verifier_rejects_unreferenced_clip(self):
+        with tempfile.TemporaryDirectory() as tmp_name:
+            tmp = pathlib.Path(tmp_name)
+            audio, archive = make_fixture(tmp)
+            spec = make_spec(
+                audio,
+                archive,
+                {"speaker": "A", "segments": ["TEST.sync.1"]},
+            )
+            output = tmp / "out"
+            prepare_from_spec(
+                spec=spec,
+                annotation_zip_path=archive,
+                audio_paths={"TEST": audio},
+                output_dir=output,
+            )
+            (output / "audio" / "stale.f32").write_bytes(b"stale")
+            with self.assertRaisesRegex(AmiPreparationError, "unreferenced clips"):
+                verify_prepared_dataset(spec=spec, output_dir=output)
 
     def test_verifier_detects_corrupted_audio(self):
         with tempfile.TemporaryDirectory() as tmp_name:
