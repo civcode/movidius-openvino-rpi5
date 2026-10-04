@@ -1,8 +1,10 @@
 name: multi-platform-static
 
+# CI is intentionally manual for this repository. Keep execution under explicit
+# user control; do not add push, pull_request, schedule, or other automatic
+# repository-event triggers without an explicit project decision.
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   static:
@@ -29,4 +31,3 @@ jobs:
         run: python -m pip install --upgrade pip numpy
       - name: Run bounded unit and refactor tests
         run: bash scripts/test-refactor.sh
-
