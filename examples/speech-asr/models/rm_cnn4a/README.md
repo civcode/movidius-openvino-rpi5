@@ -129,3 +129,16 @@ Observed reference results:
 These are evidence from the frozen run, not acceptance thresholds for MYRIAD.
 Phase 5 should compare the device result against this exact artifact/fixture
 identity and report the measured deltas.
+
+
+## Runtime platform versus Movidius device
+
+The `--platform` argument selects the architecture of the host/runtime Docker
+image, **not** the architecture of the Movidius stick. For example, a stick
+plugged into an x86_64 workstation should use `--platform amd64`; the same
+stick plugged into a Raspberry Pi 5 running 64-bit userspace should use
+`--platform arm64`.
+
+The requested runtime image must already exist locally. If it does not,
+`run.sh` now stops before Docker attempts a registry pull and prints the exact
+`./build.sh --platform ...` command required.

@@ -70,18 +70,32 @@ if [[ "${MODE}" == list || "${MODE}" == demo-list ]]; then
     set -- --list-only
 fi
 
+# Fail before USB/device diagnostics when the requested runtime image is not
+# available locally. These project images are built locally; Docker Hub does not
+# contain them. PLATFORM selects the host/runtime architecture, not the Movidius
+# stick architecture.
+if ! command -v docker >/dev/null 2>&1; then
+    echo "docker is required to run ${MODE}" >&2
+    exit 2
+fi
+if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
+    echo "local Docker image not found: ${IMAGE}" >&2
+    echo "selected runtime platform: ${TARGET} (${DOCKER_PLATFORM})" >&2
+    echo "build it first with: ./build.sh --platform ${TARGET}" >&2
+    echo "note: --platform selects the host/runtime architecture, not the Movidius device" >&2
+    exit 2
+fi
+
 # Catch the common mistake of selecting a target that does not match a locally
 # built image before USB debugging obscures the real problem.
-if command -v docker >/dev/null 2>&1 && docker image inspect "${IMAGE}" >/dev/null 2>&1; then
-    image_arch="$(docker image inspect "${IMAGE}" --format '{{.Architecture}}' 2>/dev/null || true)"
-    expected_arch=amd64
-    [[ "${TARGET}" == armv7 ]] && expected_arch=arm
-    [[ "${TARGET}" == arm64 ]] && expected_arch=arm64
-    if [[ -n "${image_arch}" && "${image_arch}" != "${expected_arch}" ]]; then
-        echo "image architecture mismatch: ${IMAGE} is ${image_arch}, selected target ${TARGET} expects ${expected_arch} (${DOCKER_PLATFORM})" >&2
-        echo "rebuild with: ./build.sh --platform ${TARGET}" >&2
-        exit 1
-    fi
+image_arch="$(docker image inspect "${IMAGE}" --format '{{.Architecture}}' 2>/dev/null || true)"
+expected_arch=amd64
+[[ "${TARGET}" == armv7 ]] && expected_arch=arm
+[[ "${TARGET}" == arm64 ]] && expected_arch=arm64
+if [[ -n "${image_arch}" && "${image_arch}" != "${expected_arch}" ]]; then
+    echo "image architecture mismatch: ${IMAGE} is ${image_arch}, selected target ${TARGET} expects ${expected_arch} (${DOCKER_PLATFORM})" >&2
+    echo "rebuild with: ./build.sh --platform ${TARGET}" >&2
+    exit 1
 fi
 
 DOCKER_ARGS=(

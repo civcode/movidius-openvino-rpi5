@@ -18,6 +18,12 @@ class SpeechIntegrationCommandTests(unittest.TestCase):
         self.assertIn("requires --platform amd64", text)
         self.assertIn('ov203-${MODE}-${TARGET}-$', text)
 
+    def test_run_script_requires_local_target_image(self):
+        text = (ROOT / "run.sh").read_text(encoding="utf-8")
+        self.assertIn("local Docker image not found", text)
+        self.assertIn("build it first with: ./build.sh --platform", text)
+        self.assertIn("--platform selects the host/runtime architecture", text)
+
     def test_benchmark_wrapper_exposes_cpu_and_myriad_backends(self):
         text = (
             ROOT
