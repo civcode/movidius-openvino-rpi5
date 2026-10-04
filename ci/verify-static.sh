@@ -59,6 +59,9 @@ done
 
 grep -q 'USE_CMAKE_TOOLCHAIN' Dockerfile || fail 'Dockerfile lacks conditional toolchain selection'
 grep -q 'ov203-build-${TARGET}' Dockerfile || fail 'Docker build cache is not target-qualified'
+grep -q 'CONFIGURE_REVISION' build.sh || fail 'build.sh lacks CMake cache revision'
+grep -q '/work/build/.configure_stamp' Dockerfile || fail 'Dockerfile lacks CMake build-cache stamp'
+grep -q 'CMakeError.log' Dockerfile || fail 'Dockerfile does not surface CMake configure failures'
 grep -q 'libmyriadPlugin.so' Dockerfile || fail 'MYRIAD plugin validation missing'
 grep -q 'usb-ma2450.mvcmd' Dockerfile || fail 'MA2450 firmware validation missing'
 grep -q 'readelf -h "${IE_PLUGIN}"' Dockerfile || fail 'MYRIAD plugin ELF architecture validation missing'

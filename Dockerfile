@@ -61,6 +61,7 @@ FROM build-deps AS configure
 ARG TARGET
 ARG OPENVINO_SOURCE=vendor/openvino-2020.3.2
 ARG SYNC_STAMP=unpinned
+ARG CONFIGURE_REVISION=2
 ARG BUILD_JOBS=2
 ARG APPLY_PATCHES=1
 ARG USE_CMAKE_TOOLCHAIN=1
@@ -106,6 +107,13 @@ RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
     test -f /work/src/CMakeLists.txt; \
     test "$(cat /work/src/.sync_stamp)" = "${SYNC_STAMP}" \
         || { echo "source cache does not match SYNC_STAMP"; exit 1; }; \
+    CONFIGURE_STAMP="${SYNC_STAMP}:configure-v${CONFIGURE_REVISION}:toolchain=${USE_CMAKE_TOOLCHAIN}"; \
+    if [ ! -f /work/build/.configure_stamp ] || [ "$(cat /work/build/.configure_stamp)" != "${CONFIGURE_STAMP}" ]; then \
+        echo "resetting CMake build cache for ${TARGET}: ${CONFIGURE_STAMP}"; \
+        find /work/build -mindepth 1 -delete; \
+    else \
+        echo "reusing CMake build cache (stamp: ${CONFIGURE_STAMP})"; \
+    fi; \
     set --; \
     if [ "${USE_CMAKE_TOOLCHAIN}" = 1 ]; then \
         set -- "$@" -DCMAKE_TOOLCHAIN_FILE=/work/toolchain-ro/armv7-native.toolchain.cmake; \
@@ -151,7 +159,19 @@ RUN --mount=type=bind,source=toolchain,target=/work/toolchain-ro \
         -DTHREADING=SEQ \
         -DNGRAPH_UNIT_TEST_ENABLE=FALSE \
         -DNGRAPH_ONNX_IMPORT_ENABLE=FALSE \
-        -DNGRAPH_INTERPRETER_ENABLE=TRUE; \
+        -DNGRAPH_INTERPRETER_ENABLE=TRUE \
+    || { \
+        status=$?; \
+        echo "CMake configure failed for target=${TARGET} (status=${status})" >&2; \
+        for log in /work/build/CMakeFiles/CMakeError.log /work/build/CMakeFiles/CMakeOutput.log; do \
+            if [ -f "${log}" ]; then \
+                echo "===== ${log} (tail) =====" >&2; \
+                tail -n 200 "${log}" >&2; \
+            fi; \
+        done; \
+        exit "${status}"; \
+    }; \
+    printf '%s' "${CONFIGURE_STAMP}" > /work/build/.configure_stamp; \
     echo "target=${TARGET} dpkg_arch=$(dpkg --print-architecture) toolchain=${USE_CMAKE_TOOLCHAIN}"; \
     grep -E 'TARGET_ARCH|CMAKE_SYSTEM_PROCESSOR|CMAKE_CROSSCOMPILING|Enabling VPU|VPU firmware|Myriad|THREADING|ARCH' \
         /work/build/CMakeCache.txt /work/build/CMakeFiles/CMakeOutput.log 2>/dev/null || true

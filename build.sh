@@ -25,6 +25,9 @@ IMAGE_OVERRIDE="${IMAGE:-}"
 BASE_IMAGE_OVERRIDE="${BASE_IMAGE:-}"
 BUILD_JOBS_OVERRIDE="${BUILD_JOBS:-}"
 APPLY_PATCHES="${APPLY_PATCHES:-1}"
+# Bump when the OpenVINO CMake configure recipe or relevant flags change.
+# BuildKit cache mounts persist independently of ordinary layer cache invalidation.
+CONFIGURE_REVISION=2
 PRINT_PLATFORM=0
 DOCKER_EXTRA=()
 
@@ -126,8 +129,8 @@ fi
 
 log "build configuration"
 platform_print
-printf 'build_jobs=%s\nproject_revision=%s\nopenvino_commit=%s\npatches=%s\nsync_stamp=%s\n' \
-    "${BUILD_JOBS}" "${PROJECT_REVISION}" "${SRC_SHA}" "${APPLY_PATCHES}" "${SYNC_STAMP}"
+printf 'build_jobs=%s\nproject_revision=%s\nopenvino_commit=%s\npatches=%s\nconfigure_revision=%s\nsync_stamp=%s\n' \
+    "${BUILD_JOBS}" "${PROJECT_REVISION}" "${SRC_SHA}" "${APPLY_PATCHES}" "${CONFIGURE_REVISION}" "${SYNC_STAMP}"
 
 log "docker build -> ${IMAGE}"
 ARGS=(
@@ -141,6 +144,7 @@ ARGS=(
     --build-arg "BUILD_JOBS=${BUILD_JOBS}"
     --build-arg "OPENVINO_SOURCE=${SRC_DIR}"
     --build-arg "SYNC_STAMP=${SYNC_STAMP}"
+    --build-arg "CONFIGURE_REVISION=${CONFIGURE_REVISION}"
     --build-arg "APPLY_PATCHES=${APPLY_PATCHES}"
     --build-arg "USE_CMAKE_TOOLCHAIN=${USE_CMAKE_TOOLCHAIN}"
     --build-arg "EXPECTED_ELF_CLASS=${EXPECTED_ELF_CLASS}"
