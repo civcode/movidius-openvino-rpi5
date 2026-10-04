@@ -15,11 +15,20 @@ IR = """<net name="synthetic" version="10">
     <output><port id="0" precision="FP32"><dim>1</dim><dim>40</dim></port></output>
   </layer>
   <layer id="1" name="fc" type="FullyConnected" precision="FP16">
-    <input><port id="0"><dim>1</dim><dim>40</dim></port></input>
-    <output><port id="1" precision="FP16"><dim>1</dim><dim>10</dim></port></output>
+    <input>
+      <port id="0"><dim>1</dim><dim>40</dim></port>
+      <port id="1"><dim>10</dim><dim>40</dim></port>
+    </input>
+    <output><port id="2" precision="FP16"><dim>1</dim><dim>10</dim></port></output>
+  </layer>
+  <layer id="2" name="weights" type="Const" precision="FP16">
+    <output><port id="0" precision="FP16"><dim>10</dim><dim>40</dim></port></output>
   </layer>
 </layers>
-<edges><edge from-layer="0" from-port="0" to-layer="1" to-port="0"/></edges>
+<edges>
+  <edge from-layer="0" from-port="0" to-layer="1" to-port="0"/>
+  <edge from-layer="2" from-port="0" to-layer="1" to-port="1"/>
+</edges>
 </net>"""
 
 
@@ -33,8 +42,10 @@ class IrInspectorTests(unittest.TestCase):
             binary.write_bytes(b"weights")
             result = inspect_ir(xml, binary)
             self.assertEqual(result["network_name"], "synthetic")
+            self.assertEqual(len(result["inputs"]), 1)
             self.assertEqual(result["inputs"][0]["name"], "input")
             self.assertEqual(result["inputs"][0]["ports"][0]["shape"], [1, 40])
+            self.assertNotIn("weights", [item["name"] for item in result["inputs"]])
             self.assertEqual(result["outputs"][0]["name"], "fc")
             self.assertEqual(result["outputs"][0]["ports"][0]["shape"], [1, 10])
             self.assertEqual(len(result["xml_sha256"]), 64)

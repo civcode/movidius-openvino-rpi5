@@ -49,11 +49,14 @@ def inspect_ir(xml_path: Path, bin_path: Path | None = None) -> dict[str, Any]:
         if target in incoming:
             incoming[target] += 1
 
-    inputs = []
-    for layer_id, layer in layers.items():
-        if layer["type"] in {"Input", "Parameter"} or incoming[layer_id] == 0:
-            if layer["output_ports"]:
-                inputs.append(layer)
+    # Only explicit graph data-input layers are model inputs. Const layers
+    # also have zero incoming edges in IR v7, but they are embedded weights /
+    # reshape metadata and must never appear in the external tensor contract.
+    inputs = [
+        layer
+        for layer in layers.values()
+        if layer["type"] in {"Input", "Parameter"} and layer["output_ports"]
+    ]
 
     outputs = [
         layer for layer_id, layer in layers.items()
