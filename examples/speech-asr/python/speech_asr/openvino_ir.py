@@ -210,6 +210,16 @@ def inspect_ir(xml_path: Path, bin_path: Path | None = None) -> dict[str, Any]:
     layers = {}
     for layer in layers_node.findall("layer"):
         layer_id = layer.attrib["id"]
+        input_ports = []
+        input_node = layer.find("input")
+        if input_node is not None:
+            for port in input_node.findall("port"):
+                input_ports.append({
+                    "id": int(port.attrib["id"]),
+                    "precision": port.attrib.get("precision", layer.attrib.get("precision")),
+                    "shape": _port_shape(port),
+                })
+
         output_ports = []
         output_node = layer.find("output")
         if output_node is not None:
@@ -224,11 +234,15 @@ def inspect_ir(xml_path: Path, bin_path: Path | None = None) -> dict[str, Any]:
             "name": layer.attrib.get("name", ""),
             "type": layer.attrib.get("type", ""),
             "precision": layer.attrib.get("precision"),
+            "input_ports": input_ports,
             "output_ports": output_ports,
         }
 
     outgoing = {layer_id: 0 for layer_id in layers}
     incoming = {layer_id: 0 for layer_id in layers}
+    incoming_edges: dict[str, list[ET.Element]] = {
+        layer_id: [] for layer_id in layers
+    }
     for edge in edges_node.findall("edge"):
         source = edge.attrib["from-layer"]
         target = edge.attrib["to-layer"]
@@ -236,6 +250,7 @@ def inspect_ir(xml_path: Path, bin_path: Path | None = None) -> dict[str, Any]:
             outgoing[source] += 1
         if target in incoming:
             incoming[target] += 1
+            incoming_edges[target].append(edge)
 
     # Only explicit graph data-input layers are model inputs. Const layers
     # also have zero incoming edges in IR v7, but they are embedded weights /
@@ -246,10 +261,66 @@ def inspect_ir(xml_path: Path, bin_path: Path | None = None) -> dict[str, Any]:
         if layer["type"] in {"Input", "Parameter"} and layer["output_ports"]
     ]
 
-    outputs = [
-        layer for layer_id, layer in layers.items()
-        if outgoing[layer_id] == 0 and layer["output_ports"]
-    ]
+    # IR v7 commonly exposes a model output as a sink computation layer with
+    # an output port. IR v10 commonly appends an explicit Result sink that has
+    # only an input port. For Result sinks, report the actual producer tensor
+    # selected by the incoming edge so the external contract retains the
+    # producer/output name (for example "logits") rather than the internal
+    # Result node name.
+    outputs: list[dict[str, Any]] = []
+    result_layer_ids: set[str] = set()
+    for layer_id, layer in layers.items():
+        if layer["type"] != "Result":
+            continue
+        result_layer_ids.add(layer_id)
+        edges = incoming_edges[layer_id]
+        if len(edges) != 1:
+            raise ValueError(
+                f"IR Result layer {layer['name']!r} must have exactly one incoming edge"
+            )
+        edge = edges[0]
+        source_id = edge.attrib["from-layer"]
+        producer = layers.get(source_id)
+        if producer is None:
+            raise ValueError(
+                f"IR Result layer {layer['name']!r} references unknown producer {source_id}"
+            )
+        from_port = int(edge.attrib["from-port"])
+        selected = [
+            port for port in producer["output_ports"]
+            if port["id"] == from_port
+        ]
+        if len(selected) != 1:
+            # Some serializers keep the complete shape only on Result's input
+            # port. Preserve the producer identity but use that port contract.
+            result_port = int(edge.attrib["to-port"])
+            selected = [
+                port for port in layer["input_ports"]
+                if port["id"] == result_port
+            ]
+        if len(selected) != 1:
+            raise ValueError(
+                f"could not resolve output port for IR Result layer {layer['name']!r}"
+            )
+        precision = selected[0]["precision"] or producer["precision"]
+        outputs.append({
+            "name": producer["name"],
+            "type": producer["type"],
+            "precision": precision,
+            "ports": selected,
+            "result_name": layer["name"],
+        })
+
+    for layer_id, layer in layers.items():
+        if layer_id in result_layer_ids:
+            continue
+        if outgoing[layer_id] == 0 and layer["output_ports"]:
+            outputs.append({
+                "name": layer["name"],
+                "type": layer["type"],
+                "precision": layer["precision"],
+                "ports": layer["output_ports"],
+            })
 
     def compact(layer: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -268,7 +339,10 @@ def inspect_ir(xml_path: Path, bin_path: Path | None = None) -> dict[str, Any]:
         "graph_sha256": graph_sha256(root),
         "canonical_graph_sha256": canonical_graph_sha256(root),
         "inputs": [compact(layer) for layer in sorted(inputs, key=lambda item: item["id"])],
-        "outputs": [compact(layer) for layer in sorted(outputs, key=lambda item: item["id"])],
+        "outputs": sorted(
+            outputs,
+            key=lambda item: (item["name"], item["ports"][0]["id"]),
+        ),
     }
     if bin_path is not None:
         result["bin_sha256"] = hashlib.sha256(bin_path.read_bytes()).hexdigest()

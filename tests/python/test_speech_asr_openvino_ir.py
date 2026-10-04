@@ -34,6 +34,35 @@ IR = """<net name="synthetic" version="10">
 </net>"""
 
 
+IR_V10_RESULT = """<net name="synthetic-v10" version="10">
+<layers>
+  <layer id="0" name="features" type="Parameter" version="opset1">
+    <data shape="1,64,512" element_type="f32"/>
+    <output>
+      <port id="0" precision="FP32"><dim>1</dim><dim>64</dim><dim>512</dim></port>
+    </output>
+  </layer>
+  <layer id="1" name="logits" type="Relu" version="opset1">
+    <input>
+      <port id="0" precision="FP32"><dim>1</dim><dim>64</dim><dim>512</dim></port>
+    </input>
+    <output>
+      <port id="1" precision="FP32"><dim>1</dim><dim>64</dim><dim>512</dim></port>
+    </output>
+  </layer>
+  <layer id="2" name="logits/sink_port_0" type="Result" version="opset1">
+    <input>
+      <port id="0" precision="FP32"><dim>1</dim><dim>64</dim><dim>512</dim></port>
+    </input>
+  </layer>
+</layers>
+<edges>
+  <edge from-layer="0" from-port="0" to-layer="1" to-port="0"/>
+  <edge from-layer="1" from-port="1" to-layer="2" to-port="0"/>
+</edges>
+</net>"""
+
+
 class IrInspectorTests(unittest.TestCase):
     def test_identifies_input_and_sink_output(self):
         with tempfile.TemporaryDirectory() as name:
@@ -54,6 +83,54 @@ class IrInspectorTests(unittest.TestCase):
             self.assertEqual(len(result["graph_sha256"]), 64)
             self.assertEqual(len(result["canonical_graph_sha256"]), 64)
             self.assertEqual(len(result["bin_sha256"]), 64)
+
+    def test_identifies_ir_v10_parameter_and_result_output(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = pathlib.Path(name)
+            xml = root / "model.xml"
+            xml.write_text(IR_V10_RESULT, encoding="utf-8")
+            result = inspect_ir(xml)
+            self.assertEqual(result["ir_version"], "10")
+            self.assertEqual(len(result["inputs"]), 1)
+            self.assertEqual(result["inputs"][0]["name"], "features")
+            self.assertEqual(
+                result["inputs"][0]["ports"][0]["shape"],
+                [1, 64, 512],
+            )
+            self.assertEqual(len(result["outputs"]), 1)
+            self.assertEqual(result["outputs"][0]["name"], "logits")
+            self.assertEqual(result["outputs"][0]["type"], "Relu")
+            self.assertEqual(
+                result["outputs"][0]["ports"][0]["shape"],
+                [1, 64, 512],
+            )
+            self.assertEqual(
+                result["outputs"][0]["result_name"],
+                "logits/sink_port_0",
+            )
+
+    def test_ir_v10_result_falls_back_to_result_input_port_shape(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = pathlib.Path(name)
+            xml = root / "model.xml"
+            # Deliberately make the edge's producer port absent from the
+            # producer declaration to exercise Result-input fallback.
+            xml.write_text(
+                IR_V10_RESULT.replace(
+                    'from-layer="1" from-port="1"',
+                    'from-layer="1" from-port="99"',
+                ).replace(
+                    'to-layer="2" to-port="0"',
+                    'to-layer="2" to-port="0"',
+                ),
+                encoding="utf-8",
+            )
+            result = inspect_ir(xml)
+            self.assertEqual(result["outputs"][0]["name"], "logits")
+            self.assertEqual(
+                result["outputs"][0]["ports"][0]["shape"],
+                [1, 64, 512],
+            )
 
     def test_canonical_graph_hash_ignores_layer_ids_and_order(self):
         with tempfile.TemporaryDirectory() as name:
