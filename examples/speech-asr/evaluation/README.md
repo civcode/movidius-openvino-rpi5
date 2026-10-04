@@ -2,43 +2,34 @@
 
 Evaluation is authoritative code, not an LLM judgment.
 
-The implementation lives in `python/speech_asr/evaluation.py` and provides:
+## Transcript metrics
 
-- WER plus substitution/deletion/insertion counts;
-- CER plus edit counts;
-- real-time factor;
-- p50/p95 latency summaries;
-- sample-index timing error in milliseconds.
+`python/speech_asr/evaluation.py` provides WER/CER, real-time factor, latency
+percentiles and sample-index timing error. All transcript scoring applies
+`text-v1` internally.
 
-All transcript scoring applies `text-v1` internally. Callers must not maintain a
-separate normalization implementation.
+WER and CER may exceed 1.0 when insertions exceed reference length. CER removes
+spaces after normalization. Detailed S/D/I counts are retained.
 
-## WER/CER conventions
+## rm_cnn4a acoustic regression
 
-- WER and CER are edit errors divided by the number of reference units.
-- Both are non-negative and may exceed `1.0` when insertions exceed the
-  reference length.
-- CER removes spaces after `text-v1` normalization.
-- An empty normalized reference uses denominator `max(1, reference_units)`.
-  This deliberately produces finite machine-readable output instead of
-  NaN/Infinity.
-- Detailed S/D/I counts are retained alongside the aggregate rates.
-- Equal-cost Levenshtein paths use a fixed substitution, deletion, insertion
-  tie order so detailed counts are deterministic.
-
-## CLI
+`rm_cnn4a` is not an end-to-end transcript fixture. Its vendor package
+provides feature and score ARKs, so the authoritative first hardware test is
+score regression plus device timing:
 
 ```bash
-python3 examples/speech-asr/evaluation/score_transcripts.py \
-    --reference "Hello world" \
-    --hypothesis "hello word" \
-    --pretty
+python3 examples/speech-asr/evaluation/benchmark_rm_cnn4a.py --platform arm64
 ```
+
+The command executes `./run.sh speech-regress`, stores the raw OpenVINO sample
+log, parses each utterance's frame count/inference time/error statistics, and
+writes `work/speech-asr/rm_cnn4a/result.json`.
+
+The result uses `contracts/acoustic-regression-result-v1.schema.json`.
+Per-frame latency is reported directly; no RTF is invented because the vendor
+feature ARK is not the project's canonical raw-audio benchmark.
 
 ## Authority boundary
 
-An AI agent may orchestrate the evaluator, explain failures and summarize
-results. It must not edit metric outputs to make a candidate appear better.
-
-Hardware results must record the benchmark version, model artifact hashes,
-repository revision and relevant runtime/firmware provenance.
+An AI agent may orchestrate evaluation, diagnose failures and summarize results.
+It must not edit metric outputs to make a candidate appear better.

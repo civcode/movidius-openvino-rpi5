@@ -7,7 +7,7 @@ and benchmark results.
 - `speech-sample-v1.schema.json` — normalized dataset record.
 - `text-v1.json` — frozen transcript/scoring-normalization policy.
 - `benchmark-v1.yaml` — benchmark identity and metrics contract.
-- `experiment-result-v1.schema.json` — machine-readable evaluation result.
+- `experiment-result-v1.schema.json` — transcript/custom-model evaluation result.\n- `acoustic-regression-result-v1.schema.json` — rm_cnn4a vendor score regression result.
 - `model-v1.yaml` — model-package boundary.
 
 The JSON Schema files are portable descriptions for tools that support JSON
