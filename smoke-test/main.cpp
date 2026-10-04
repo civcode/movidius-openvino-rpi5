@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -77,8 +78,35 @@ void printDevices(Core& ie) {
     }
 }
 
+std::vector<float> readF32(const std::string& path, size_t expected) {
+    std::ifstream in(path, std::ios::binary | std::ios::ate);
+    if (!in) throw std::runtime_error("cannot open tensor: " + path);
+    const std::streamsize bytes = in.tellg();
+    if (bytes < 0 || static_cast<size_t>(bytes) != expected * sizeof(float)) {
+        std::ostringstream oss;
+        oss << "tensor byte size " << bytes << " does not match expected "
+            << (expected * sizeof(float));
+        throw std::runtime_error(oss.str());
+    }
+    in.seekg(0);
+    std::vector<float> values(expected);
+    in.read(reinterpret_cast<char*>(values.data()), bytes);
+    if (!in) throw std::runtime_error("cannot read tensor: " + path);
+    return values;
+}
+
+void writeF32(const std::string& path, const std::vector<float>& values) {
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out) throw std::runtime_error("cannot open output tensor: " + path);
+    out.write(
+        reinterpret_cast<const char*>(values.data()),
+        static_cast<std::streamsize>(values.size() * sizeof(float)));
+    if (!out) throw std::runtime_error("cannot write output tensor: " + path);
+}
+
 int runInference(Core& ie, const std::string& modelXml, const std::string& modelBin,
-                 const std::string& device, int iterations) {
+                 const std::string& device, int iterations,
+                 const std::string& tensorPath, const std::string& outputPath) {
     std::cout << "\nreading model   : " << modelXml;
     if (!modelBin.empty()) std::cout << " + " << modelBin;
     std::cout << "\n";
@@ -95,7 +123,8 @@ int runInference(Core& ie, const std::string& modelXml, const std::string& model
         // the VPU wants FP16 activations; asking for anything else makes the
         // MYRIAD compiler fail or inserts a conversion node
         item.second->setPrecision(Precision::FP16);
-        item.second->setLayout(Layout::NCHW);
+        item.second->setLayout(
+            TensorDesc::getLayoutByDims(item.second->getInputData()->getDims()));
         // InputInfo exposes precision/layout only; the shape comes from its Data.
         std::cout << "  input  " << item.first << " dims "
                   << dimsToString(item.second->getInputData()->getDims())
@@ -118,10 +147,29 @@ int runInference(Core& ie, const std::string& modelXml, const std::string& model
 
     InferRequest request = executable.CreateInferRequest();
 
-    // deterministic, cheap input pattern: every activation = 0x3c3c (FP16 ~0.0093)
-    for (const auto& item : inputs) {
+    if (!tensorPath.empty()) {
+        if (inputs.size() != 1) {
+            throw std::runtime_error("--tensor requires a model with exactly one input");
+        }
+        const auto& item = *inputs.begin();
         Blob::Ptr blob = request.GetBlob(item.first);
-        std::memset(blob->buffer().as<uint8_t*>(), 0x3c, blob->byteSize());
+        const auto values = readF32(tensorPath, blob->size());
+        if (blob->byteSize() != values.size() * sizeof(uint16_t)) {
+            throw std::runtime_error("MYRIAD input blob is not FP16-sized");
+        }
+        uint8_t* raw = blob->buffer().as<uint8_t*>();
+        for (size_t i = 0; i < values.size(); ++i) {
+            const uint16_t h = floatToHalf(values[i]);
+            std::memcpy(raw + 2 * i, &h, sizeof(h));
+        }
+        std::cout << "input tensor    : " << tensorPath << " (" << values.size()
+                  << " f32 values -> FP16)\n";
+    } else {
+        // deterministic, cheap input pattern: every activation = 0x3c3c
+        for (const auto& item : inputs) {
+            Blob::Ptr blob = request.GetBlob(item.first);
+            std::memset(blob->buffer().as<uint8_t*>(), 0x3c, blob->byteSize());
+        }
     }
 
     double totalMs = 0.0;
@@ -153,11 +201,14 @@ int runInference(Core& ie, const std::string& modelXml, const std::string& model
                   << ", " << bytesPerElem << " B/elem)";
 
         double mn = 1e300, mx = -1e300, sum = 0.0;
+        std::vector<float> decoded;
+        decoded.reserve(n);
         if (bytesPerElem == 2) {
             for (size_t i = 0; i < n; ++i) {
                 uint16_t h;
                 std::memcpy(&h, raw + 2 * i, sizeof(h));
                 const float f = halfToFloat(h);
+                decoded.push_back(f);
                 mn = std::min(mn, static_cast<double>(f));
                 mx = std::max(mx, static_cast<double>(f));
                 sum += f;
@@ -166,10 +217,20 @@ int runInference(Core& ie, const std::string& modelXml, const std::string& model
             for (size_t i = 0; i < n; ++i) {
                 float f;
                 std::memcpy(&f, raw + 4 * i, sizeof(f));
+                decoded.push_back(f);
                 mn = std::min(mn, static_cast<double>(f));
                 mx = std::max(mx, static_cast<double>(f));
                 sum += f;
             }
+        } else {
+            throw std::runtime_error("unsupported output bytes per element");
+        }
+        if (!outputPath.empty()) {
+            if (outputs.size() != 1) {
+                throw std::runtime_error("--output requires a model with exactly one output");
+            }
+            writeF32(outputPath, decoded);
+            std::cout << " -> " << outputPath;
         }
         if (n && bytesPerElem) {
             std::cout << " min " << std::fixed << std::setprecision(5) << mn
@@ -184,7 +245,7 @@ int runInference(Core& ie, const std::string& modelXml, const std::string& model
 }  // namespace
 
 int main(int argc, char** argv) {
-    std::string modelXml, modelBin, device = "MYRIAD";
+    std::string modelXml, modelBin, device = "MYRIAD", tensorPath, outputPath;
     int iterations = 1;
     bool listOnly = false;
 
@@ -205,15 +266,21 @@ int main(int argc, char** argv) {
             device = next("--device");
         } else if (arg == "--iterations") {
             iterations = std::max(1, std::stoi(next("--iterations")));
+        } else if (arg == "--tensor") {
+            tensorPath = next("--tensor");
+        } else if (arg == "--output") {
+            outputPath = next("--output");
         } else if (arg == "--list-only") {
             listOnly = true;
         } else if (arg == "-h" || arg == "--help") {
             std::cout << "usage: hello_myriad [--model <IR.xml>] [--weights <IR.bin>]"
-                      << " [--device MYRIAD] [--iterations N] [--list-only]\n";
+                      << " [--device MYRIAD] [--iterations N] [--tensor input.f32]"
+                      << " [--output output.f32] [--list-only]\n";
             return 0;
         } else {
             std::cerr << "usage: hello_myriad [--model <IR.xml>] [--weights <IR.bin>]"
-                      << " [--device MYRIAD] [--iterations N] [--list-only]\n";
+                      << " [--device MYRIAD] [--iterations N] [--tensor input.f32]"
+                      << " [--output output.f32] [--list-only]\n";
             return 4;
         }
     }
@@ -239,7 +306,8 @@ int main(int argc, char** argv) {
         }
 
         if (!modelXml.empty()) {
-            const int rc = runInference(ie, modelXml, modelBin, device, iterations);
+            const int rc = runInference(
+                ie, modelXml, modelBin, device, iterations, tensorPath, outputPath);
             std::cout << "RESULT: " << (rc == 0 ? "PASS" : "FAIL") << "\n";
             return rc;
         }

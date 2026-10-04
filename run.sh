@@ -129,7 +129,7 @@ case "${MODE}" in
         ENTRY=(/opt/openvino/bin/hello_myriad --device MYRIAD "$@")
         ;;
     custom)
-        DOCKER_ARGS+=(-v "${ROOT}/work:/work:ro")
+        DOCKER_ARGS+=(-v "${ROOT}/work:/work")
         ENTRY=(/opt/openvino/bin/hello_myriad --device MYRIAD "$@")
         ;;
     speech-reference|speech-regress)
