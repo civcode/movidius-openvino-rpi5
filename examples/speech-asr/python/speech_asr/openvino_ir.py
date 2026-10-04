@@ -263,10 +263,11 @@ def inspect_ir(xml_path: Path, bin_path: Path | None = None) -> dict[str, Any]:
 
     # IR v7 commonly exposes a model output as a sink computation layer with
     # an output port. IR v10 commonly appends an explicit Result sink that has
-    # only an input port. For Result sinks, report the actual producer tensor
-    # selected by the incoming edge so the external contract retains the
-    # producer/output name (for example "logits") rather than the internal
-    # Result node name.
+    # only an input port. For Result sinks, report the actual producer selected
+    # by the incoming edge. Model Optimizer may rename that producer (for
+    # example ONNX "logits" may become "/Transpose"), so higher-level model
+    # validators must treat this as serializer provenance, not a stable logical
+    # output name.
     outputs: list[dict[str, Any]] = []
     result_layer_ids: set[str] = set()
     for layer_id, layer in layers.items():

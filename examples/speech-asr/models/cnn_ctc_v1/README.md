@@ -51,3 +51,16 @@ If the legacy MYRIAD compiler rejects the current rank-3 Conv1D graph, treat
 that as a compatibility failure before training. The architecture can then be
 re-expressed as an equivalent fixed Conv2D-over-time graph in the next design
 revision rather than spending a CUDA training budget on an undeployable model.
+
+
+### OpenVINO output naming
+
+OpenVINO 2020.3 Model Optimizer may not preserve the ONNX logical output name
+`logits` in IR v10. The converted graph can expose the sole output producer
+under a generated name such as `/Transpose`.
+
+For `cnn_ctc_v1`, IR acceptance therefore requires exactly one output with the
+declared fixed shape `[1,128,39]`; the logical package name remains
+`logits`, while the actual IR producer/result names are recorded as
+provenance. A generated serializer name is not treated as a model-semantic
+difference.
