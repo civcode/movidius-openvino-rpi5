@@ -32,8 +32,6 @@ def sha256(path: pathlib.Path) -> str:
 
 
 def git_head() -> str:
-    ir_contract = inspect_ir(xml, binary)
-
     proc = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         cwd=ROOT,
@@ -47,6 +45,17 @@ def git_head() -> str:
 
 def repo_path(path: pathlib.Path) -> pathlib.Path:
     return path if path.is_absolute() else ROOT / path
+
+
+def model_identity(xml: pathlib.Path, binary: pathlib.Path) -> dict:
+    contract = inspect_ir(xml, binary)
+    return {
+        "id": "rm_cnn4a-fp16",
+        "family": "rm_cnn4a",
+        "xml_sha256": contract["xml_sha256"],
+        "graph_sha256": contract["graph_sha256"],
+        "bin_sha256": contract["bin_sha256"],
+    }
 
 
 def build_command(backend: str, platform: str) -> list[str]:
@@ -130,6 +139,8 @@ def main() -> int:
             print(f"  {path}", file=sys.stderr)
         return 2
 
+    model = model_identity(xml, binary)
+
     proc = subprocess.run(
         command,
         cwd=ROOT,
@@ -146,13 +157,7 @@ def main() -> int:
     base = {
         "schema": "speech-asr/acoustic-regression-result",
         "version": 1,
-        "model": {
-            "id": "rm_cnn4a-fp16",
-            "family": "rm_cnn4a",
-            "xml_sha256": ir_contract["xml_sha256"],
-            "graph_sha256": ir_contract["graph_sha256"],
-            "bin_sha256": ir_contract["bin_sha256"],
-        },
+        "model": model,
         "fixture": {
             "features_sha256": sha256(features),
             "reference_scores_sha256": sha256(scores),
