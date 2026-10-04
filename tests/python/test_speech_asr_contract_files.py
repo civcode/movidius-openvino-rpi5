@@ -9,6 +9,7 @@ SPEECH = ROOT / "examples" / "speech-asr"
 sys.path.insert(0, str(SPEECH / "python"))
 
 from speech_asr.contracts import (
+    validate_acoustic_benchmark_result,
     validate_audio_contract,
     validate_benchmark_contract,
     validate_experiment_result,
@@ -28,6 +29,7 @@ class ContractFileTests(unittest.TestCase):
             "speech-sample-v1.schema.json",
             "experiment-result-v1.schema.json",
             "acoustic-regression-result-v1.schema.json",
+            "acoustic-benchmark-result-v1.schema.json",
             "text-v1.json",
         ):
             with self.subTest(name=name):

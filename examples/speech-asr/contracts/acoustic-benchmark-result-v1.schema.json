@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "speech-asr/acoustic-benchmark-result-v1.schema.json",
+  "title": "Speech ASR repeated acoustic benchmark result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "version",
+    "status",
+    "benchmark",
+    "request",
+    "model",
+    "fixture",
+    "runtime",
+    "runs",
+    "provenance"
+  ],
+  "properties": {
+    "schema": {
+      "const": "speech-asr/acoustic-benchmark-result"
+    },
+    "version": {
+      "const": 1
+    },
+    "status": {
+      "enum": [
+        "completed",
+        "failed"
+      ]
+    },
+    "benchmark": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "fixture": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "runs": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "aggregate": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

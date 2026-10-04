@@ -12,6 +12,7 @@ sys.path.insert(0, str(HERE.parent / "python"))
 from speech_asr.contracts import (  # noqa: E402
     ContractValidationError,
     canonical_json_sha256,
+    validate_acoustic_benchmark_result,
     validate_acoustic_regression_result,
     validate_audio_contract,
     validate_benchmark_contract,
@@ -30,6 +31,7 @@ VALIDATORS = {
     "sample": validate_speech_sample,
     "result": validate_experiment_result,
     "regression": validate_acoustic_regression_result,
+    "acoustic-benchmark": validate_acoustic_benchmark_result,
 }
 
 SCHEMA_TO_KIND = {
@@ -40,6 +42,7 @@ SCHEMA_TO_KIND = {
     "speech-asr/sample": "sample",
     "speech-asr/experiment-result": "result",
     "speech-asr/acoustic-regression-result": "regression",
+    "speech-asr/acoustic-benchmark-result": "acoustic-benchmark",
 }
 
 

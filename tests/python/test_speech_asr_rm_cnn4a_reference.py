@@ -41,6 +41,7 @@ class RmCnn4aReferenceCommandTests(unittest.TestCase):
         contract = {
             "xml_sha256": "1" * 64,
             "graph_sha256": "2" * 64,
+            "canonical_graph_sha256": "4" * 64,
             "bin_sha256": "3" * 64,
         }
         xml = pathlib.Path("/tmp/model.xml")
@@ -52,6 +53,7 @@ class RmCnn4aReferenceCommandTests(unittest.TestCase):
         self.assertEqual(identity["family"], "rm_cnn4a")
         self.assertEqual(identity["xml_sha256"], "1" * 64)
         self.assertEqual(identity["graph_sha256"], "2" * 64)
+        self.assertEqual(identity["canonical_graph_sha256"], "4" * 64)
         self.assertEqual(identity["bin_sha256"], "3" * 64)
 
     def test_git_head_has_no_model_artifact_dependency(self):

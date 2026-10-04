@@ -9,6 +9,7 @@ sys.path.insert(0, str(ROOT / "examples" / "speech-asr" / "python"))
 from speech_asr.contracts import (
     ContractValidationError,
     canonical_json_sha256,
+    validate_acoustic_benchmark_result,
     validate_acoustic_regression_result,
     validate_benchmark_contract,
     validate_experiment_result,
@@ -184,6 +185,45 @@ class BenchmarkContractTests(unittest.TestCase):
             validate_benchmark_contract(document)
 
 
+    def test_rejects_changed_frozen_iteration_count(self):
+        document = {
+            "schema": "speech-asr/benchmark",
+            "version": 1,
+            "result_schema": "experiment-result-v1.schema.json",
+            "dataset": {
+                "canonical_corpus": "AMI",
+                "normalized_manifest_format": "jsonl",
+                "timing_unit": "sample_index",
+                "splits": {
+                    "smoke": "smoke.jsonl",
+                    "benchmark": "benchmark.jsonl",
+                    "validation": "validation.jsonl",
+                },
+            },
+            "audio_contract": "audio-v1",
+            "scoring": {
+                "text_normalization_version": "text-v1",
+                "text_normalization_contract": "text-v1.json",
+                "metrics": ["wer", "cer"],
+            },
+            "hardware_metrics": [
+                "realtime_factor",
+                "inference_latency_p50_ms",
+                "inference_latency_p95_ms",
+                "model_load_success",
+                "inference_failures",
+            ],
+            "measurement_policy": {
+                "warmup_count": 1,
+                "measured_iterations": 3,
+                "latency_percentiles": [50, 95],
+                "aggregation": "corpus_weighted",
+            },
+        }
+        with self.assertRaisesRegex(ContractValidationError, "frozen value 5"):
+            validate_benchmark_contract(document)
+
+
 class ExperimentResultContractTests(unittest.TestCase):
     def test_valid_completed_result(self):
         self.assertEqual(validate_experiment_result(result_document())["status"], "completed")
@@ -237,6 +277,98 @@ class AcousticRegressionContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ContractValidationError, "requires 'amd64'"):
             validate_acoustic_regression_result(document)
 
+
+
+def acoustic_benchmark_document():
+    stat = {
+        "mean": 10.0,
+        "median": 10.0,
+        "min": 9.9,
+        "max": 10.1,
+        "range": 0.2,
+        "relative_range": 0.02,
+        "cv_population": 0.01,
+    }
+    run = {
+        "index": 0,
+        "status": "completed",
+        "result_path": "work/run.json",
+        "log_path": "work/run.log",
+        "returncode": 0,
+        "raw_log_sha256": SHA,
+    }
+    return {
+        "schema": "speech-asr/acoustic-benchmark-result",
+        "version": 1,
+        "status": "completed",
+        "benchmark": {
+            "id": "rm_cnn4a-vendor-regression-v1",
+            "contract_sha256": SHA,
+            "measurement_policy": {
+                "warmup_count": 1,
+                "measured_iterations": 5,
+                "within_run_aggregation": "corpus_weighted",
+                "across_runs_aggregation": "unweighted_run_statistics",
+                "warmup_included_in_aggregate": False,
+            },
+        },
+        "request": {"model": "rm_cnn4a", "backend": "myriad", "platform": "arm64"},
+        "model": {
+            "id": "rm_cnn4a-fp16",
+            "family": "rm_cnn4a",
+            "xml_sha256": SHA,
+            "canonical_graph_sha256": SHA,
+            "bin_sha256": SHA,
+        },
+        "fixture": {
+            "features_sha256": SHA,
+            "reference_scores_sha256": SHA,
+        },
+        "runtime": {
+            "repo_commit": "d34843a2587b0bea76d7c35137b15ca80eb6f4f4",
+            "backend": "MYRIAD",
+            "target": "arm64",
+            "openvino_version": "2020.3.2",
+            "host_machine": "aarch64",
+        },
+        "runs": {
+            "warmup": [dict(run)],
+            "measured": [{**run, "index": index} for index in range(5)],
+        },
+        "aggregate": {
+            "measured_runs": 5,
+            "counts": {"utterances": 10, "total_frames": 3401, "failures": 0},
+            "metrics": {
+                "weighted_mean_infer_ms_per_frame": dict(stat),
+                "utterance_avg_infer_ms_per_frame_p50": dict(stat),
+                "utterance_avg_infer_ms_per_frame_p95": dict(stat),
+                "model_load_ms": dict(stat),
+                "max_error_max": dict(stat),
+                "avg_error_mean": dict(stat),
+                "rms_error_mean": dict(stat),
+            },
+        },
+        "provenance": {
+            "benchmark_contract_sha256": SHA,
+            "runner_sha256": SHA,
+            "worker_sha256": SHA,
+            "python_version": "3.11.0",
+        },
+    }
+
+
+class AcousticBenchmarkResultContractTests(unittest.TestCase):
+    def test_valid_completed_worker_result(self):
+        self.assertEqual(
+            validate_acoustic_benchmark_result(acoustic_benchmark_document())["status"],
+            "completed",
+        )
+
+    def test_completed_worker_requires_five_measured_runs(self):
+        document = acoustic_benchmark_document()
+        document["runs"]["measured"].pop()
+        with self.assertRaisesRegex(ContractValidationError, "exactly five"):
+            validate_acoustic_benchmark_result(document)
 
 class CanonicalHashTests(unittest.TestCase):
     def test_hash_is_key_order_independent(self):

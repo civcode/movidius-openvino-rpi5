@@ -206,12 +206,16 @@ def validate_benchmark_contract(document: Any) -> Dict[str, Any]:
 
     policy = _mapping(root.get("measurement_policy"), "$.measurement_policy", errors)
     _integer(policy.get("warmup_count"), "$.measurement_policy.warmup_count", errors)
+    if policy.get("warmup_count") != 1:
+        errors.append("$.measurement_policy.warmup_count: expected frozen value 1")
     _integer(
         policy.get("measured_iterations"),
         "$.measurement_policy.measured_iterations",
         errors,
         minimum=1,
     )
+    if policy.get("measured_iterations") != 5:
+        errors.append("$.measurement_policy.measured_iterations: expected frozen value 5")
     percentiles = _sequence(
         policy.get("latency_percentiles"),
         "$.measurement_policy.latency_percentiles",
@@ -544,6 +548,157 @@ def validate_acoustic_regression_result(document: Any) -> Dict[str, Any]:
     if status == "failed":
         diagnostics = _mapping(diagnostics, "$.diagnostics", errors)
         _nonempty_string(diagnostics.get("summary"), "$.diagnostics.summary", errors)
+
+    _raise_if_errors(errors)
+    return dict(root)
+
+
+def validate_acoustic_benchmark_result(document: Any) -> Dict[str, Any]:
+    """Validate a repeated rm_cnn4a benchmark-worker result."""
+
+    errors: list[str] = []
+    root = _mapping(document, "$", errors)
+    if root.get("schema") != "speech-asr/acoustic-benchmark-result":
+        errors.append("$.schema: expected 'speech-asr/acoustic-benchmark-result'")
+    if root.get("version") != 1:
+        errors.append("$.version: expected 1")
+
+    status = root.get("status")
+    if status not in {"completed", "failed"}:
+        errors.append("$.status: expected one of completed, failed")
+
+    benchmark = _mapping(root.get("benchmark"), "$.benchmark", errors)
+    if benchmark.get("id") != "rm_cnn4a-vendor-regression-v1":
+        errors.append(
+            "$.benchmark.id: expected 'rm_cnn4a-vendor-regression-v1'"
+        )
+    _sha256(benchmark.get("contract_sha256"), "$.benchmark.contract_sha256", errors)
+    policy = _mapping(benchmark.get("measurement_policy"), "$.benchmark.measurement_policy", errors)
+    if policy.get("warmup_count") != 1:
+        errors.append("$.benchmark.measurement_policy.warmup_count: expected 1")
+    if policy.get("measured_iterations") != 5:
+        errors.append("$.benchmark.measurement_policy.measured_iterations: expected 5")
+    if policy.get("within_run_aggregation") != "corpus_weighted":
+        errors.append(
+            "$.benchmark.measurement_policy.within_run_aggregation: "
+            "expected 'corpus_weighted'"
+        )
+    if policy.get("warmup_included_in_aggregate") is not False:
+        errors.append(
+            "$.benchmark.measurement_policy.warmup_included_in_aggregate: expected false"
+        )
+
+    request = _mapping(root.get("request"), "$.request", errors)
+    if request.get("model") != "rm_cnn4a":
+        errors.append("$.request.model: expected 'rm_cnn4a'")
+    if request.get("backend") not in {"cpu", "myriad"}:
+        errors.append("$.request.backend: expected one of cpu, myriad")
+    if request.get("platform") not in {"armv7", "arm64", "amd64"}:
+        errors.append("$.request.platform: expected one of armv7, arm64, amd64")
+
+    model = _mapping(root.get("model"), "$.model", errors)
+    _nonempty_string(model.get("id"), "$.model.id", errors)
+    _nonempty_string(model.get("family"), "$.model.family", errors)
+    _sha256(model.get("xml_sha256"), "$.model.xml_sha256", errors)
+    _sha256(model.get("bin_sha256"), "$.model.bin_sha256", errors)
+    if model.get("canonical_graph_sha256") is not None:
+        _sha256(
+            model.get("canonical_graph_sha256"),
+            "$.model.canonical_graph_sha256",
+            errors,
+        )
+
+    fixture = _mapping(root.get("fixture"), "$.fixture", errors)
+    _sha256(fixture.get("features_sha256"), "$.fixture.features_sha256", errors)
+    _sha256(
+        fixture.get("reference_scores_sha256"),
+        "$.fixture.reference_scores_sha256",
+        errors,
+    )
+
+    runtime = _mapping(root.get("runtime"), "$.runtime", errors)
+    _git_sha(runtime.get("repo_commit"), "$.runtime.repo_commit", errors)
+    if runtime.get("backend") not in {"CPU", "MYRIAD"}:
+        errors.append("$.runtime.backend: expected one of CPU, MYRIAD")
+    _nonempty_string(runtime.get("target"), "$.runtime.target", errors)
+    if runtime.get("openvino_version") != "2020.3.2":
+        errors.append("$.runtime.openvino_version: expected '2020.3.2'")
+    _nonempty_string(runtime.get("host_machine"), "$.runtime.host_machine", errors)
+
+    runs = _mapping(root.get("runs"), "$.runs", errors)
+    warmup = _sequence(runs.get("warmup"), "$.runs.warmup", errors)
+    measured = _sequence(runs.get("measured"), "$.runs.measured", errors)
+    if len(warmup) > 1:
+        errors.append("$.runs.warmup: at most one run is allowed")
+    if len(measured) > 5:
+        errors.append("$.runs.measured: at most five runs are allowed")
+
+    for group_name, values in (("warmup", warmup), ("measured", measured)):
+        for index, value in enumerate(values):
+            path = f"$.runs.{group_name}[{index}]"
+            item = _mapping(value, path, errors)
+            _integer(item.get("index"), path + ".index", errors)
+            if item.get("status") not in {"completed", "failed"}:
+                errors.append(path + ".status: expected completed or failed")
+            _nonempty_string(item.get("result_path"), path + ".result_path", errors)
+            _nonempty_string(item.get("log_path"), path + ".log_path", errors)
+            _integer(item.get("returncode"), path + ".returncode", errors)
+            if item.get("raw_log_sha256") is not None:
+                _sha256(item.get("raw_log_sha256"), path + ".raw_log_sha256", errors)
+
+    provenance = _mapping(root.get("provenance"), "$.provenance", errors)
+    _sha256(
+        provenance.get("benchmark_contract_sha256"),
+        "$.provenance.benchmark_contract_sha256",
+        errors,
+    )
+    _sha256(provenance.get("runner_sha256"), "$.provenance.runner_sha256", errors)
+    _sha256(provenance.get("worker_sha256"), "$.provenance.worker_sha256", errors)
+    _nonempty_string(provenance.get("python_version"), "$.provenance.python_version", errors)
+
+    aggregate = root.get("aggregate")
+    diagnostics = root.get("diagnostics")
+    if status == "completed":
+        if len(warmup) != 1:
+            errors.append("$.runs.warmup: completed result requires exactly one warmup")
+        if len(measured) != 5:
+            errors.append("$.runs.measured: completed result requires exactly five measured runs")
+        for path, values in (("$.runs.warmup", warmup), ("$.runs.measured", measured)):
+            for index, item in enumerate(values):
+                if isinstance(item, Mapping) and item.get("status") != "completed":
+                    errors.append(f"{path}[{index}].status: completed worker requires completed run")
+
+        aggregate = _mapping(aggregate, "$.aggregate", errors)
+        if aggregate.get("measured_runs") != 5:
+            errors.append("$.aggregate.measured_runs: expected 5")
+        counts = _mapping(aggregate.get("counts"), "$.aggregate.counts", errors)
+        _integer(counts.get("utterances"), "$.aggregate.counts.utterances", errors)
+        _integer(counts.get("total_frames"), "$.aggregate.counts.total_frames", errors)
+        if counts.get("failures") != 0:
+            errors.append("$.aggregate.counts.failures: expected 0")
+
+        metrics = _mapping(aggregate.get("metrics"), "$.aggregate.metrics", errors)
+        for metric_name in (
+            "weighted_mean_infer_ms_per_frame",
+            "utterance_avg_infer_ms_per_frame_p50",
+            "utterance_avg_infer_ms_per_frame_p95",
+            "model_load_ms",
+            "max_error_max",
+            "avg_error_mean",
+            "rms_error_mean",
+        ):
+            stats = _mapping(metrics.get(metric_name), f"$.aggregate.metrics.{metric_name}", errors)
+            for stat_name in ("mean", "median", "min", "max", "range", "relative_range", "cv_population"):
+                _number(
+                    stats.get(stat_name),
+                    f"$.aggregate.metrics.{metric_name}.{stat_name}",
+                    errors,
+                )
+    else:
+        diagnostics = _mapping(diagnostics, "$.diagnostics", errors)
+        _nonempty_string(diagnostics.get("summary"), "$.diagnostics.summary", errors)
+        if aggregate is not None and not isinstance(aggregate, Mapping):
+            errors.append("$.aggregate: expected object when present")
 
     _raise_if_errors(errors)
     return dict(root)

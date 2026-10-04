@@ -3,6 +3,7 @@
 from .contracts import (
     ContractValidationError,
     canonical_json_sha256,
+    validate_acoustic_benchmark_result,
     validate_acoustic_regression_result,
     validate_audio_contract,
     validate_benchmark_contract,
@@ -15,6 +16,7 @@ from .contracts import (
 __all__ = [
     "ContractValidationError",
     "canonical_json_sha256",
+    "validate_acoustic_benchmark_result",
     "validate_acoustic_regression_result",
     "validate_audio_contract",
     "validate_benchmark_contract",
