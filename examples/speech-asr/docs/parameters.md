@@ -160,3 +160,30 @@ sample counts.
 These defaults may be tuned later as explicit experiment parameters. They are
 not inherited automatically by a future trained model if its fixed input or
 receptive-field contract requires different values.
+
+
+## cnn_ctc_v1 frozen bring-up profile
+
+The first trainable lifecycle proof fixes the following model-specific values:
+
+```text
+frontend              logmel-v1
+window                 25 ms / 400 samples
+hop                    10 ms / 160 samples
+FFT                    512
+mel bins               64
+frequency range        20..7600 Hz
+feature frames         512 fixed
+audio samples          82160 fixed (~5.135 s)
+model input            [1,64,512] NCT
+temporal strides       1,2,2
+model output           [1,128,39] NTV CTC logits
+CTC blank              index 0
+ONNX opset             11
+deployment precision   FP16
+```
+
+These values are frozen for the `cnn_ctc_v1` bring-up identity so lifecycle
+evidence is attributable. They are not a global ASR optimum. Changing them
+creates a new model-spec identity and belongs to a later DESIGN/experiment
+iteration.

@@ -187,3 +187,20 @@ speech-asr/
 
 No corpus audio, checkpoints or generated model binaries are intended to be
 committed here unless a later decision explicitly says otherwise.
+
+
+## Trainable custom-model skeleton
+
+Milestone B now contains `cnn_ctc_v1`, the first custom PyTorch/CTC skeleton.
+The model keeps log-mel extraction on the host so the deployment graph remains
+small and fixed-shape for OpenVINO 2020.3/MYRIAD.
+
+Always run compatibility before training:
+
+```bash
+./scripts/probe-cnn-ctc-v1.sh --platform amd64 --no-device
+./scripts/train-cnn-ctc-v1.sh --device cuda
+```
+
+On the Pi, rebuild the arm64 runtime image after pulling the Phase 8 changes,
+then run the physical compatibility probe and trained-model evaluator.

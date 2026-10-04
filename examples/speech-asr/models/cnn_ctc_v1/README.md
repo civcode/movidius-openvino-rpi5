@@ -26,3 +26,28 @@ The fixed 512-frame input corresponds to 82,160 canonical audio samples
 (~5.135 s). Shorter clips are zero-padded. Longer clips are rejected by the
 training/evaluation baseline rather than silently changing transcript alignment;
 streaming/windowed training is a later optimization.
+
+
+## Compatibility gate
+
+Use `scripts/probe-cnn-ctc-v1.sh` before full training:
+
+```text
+deterministic initialization
+ -> fixed PyTorch golden input/output
+ -> ONNX opset 11 export + checker
+ -> ONNX Runtime comparison
+ -> OpenVINO 2020.3 FP16 Model Optimizer conversion
+ -> IR contract inspection
+ -> optional MYRIAD load/compile/infer
+ -> MYRIAD-vs-PyTorch tensor comparison
+```
+
+The tensor comparison reports signed mean error, MAE, RMS, maximum absolute
+error and framewise CTC argmax agreement. It is evidence-only until this custom
+model family has an explicitly frozen numerical acceptance policy.
+
+If the legacy MYRIAD compiler rejects the current rank-3 Conv1D graph, treat
+that as a compatibility failure before training. The architecture can then be
+re-expressed as an equivalent fixed Conv2D-over-time graph in the next design
+revision rather than spending a CUDA training budget on an undeployable model.
