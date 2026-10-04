@@ -75,3 +75,32 @@ The Docker build includes the pinned OpenVINO 2020.3 `speech_sample` only; it
 does not enable the full sample suite. The wrapper forces `MYRIAD`, FP16 IR and
 batch size 1, and compares generated acoustic scores with the vendor
 `score1_10.ark` reference.
+
+
+## CPU reference regression
+
+Phase 4 now has a hardware-independent OpenVINO reference path on amd64. It
+uses the exact FP16 IR plus `feat1_10.ark` and `score1_10.ark` that the
+MYRIAD path consumes:
+
+```bash
+./build.sh --platform amd64
+./scripts/python.sh examples/speech-asr/evaluation/benchmark_rm_cnn4a.py \
+    --backend cpu
+```
+
+The result is written to
+`work/speech-asr/rm_cnn4a/result-cpu-reference.json`. The same evaluator can
+later run the device path with `--backend myriad --platform arm64`.
+
+Prepared bundles can be checked without network, Docker, or hardware:
+
+```bash
+./scripts/prepare-rm-cnn4a.sh --verify-only
+```
+
+That verification re-hashes the source lock and source artifacts, re-inspects
+the generated IR, and verifies that `model-spec.json`, `ir-contract.json`,
+the XML and the BIN all agree. The generated model spec also records the source
+lock and license hashes so a completed reference run can be frozen from actual
+evidence.

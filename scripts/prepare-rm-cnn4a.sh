@@ -91,6 +91,8 @@ result = {
     "source_artifact_sha256": {
         entry["name"]: sha(source / entry["name"]) for entry in spec["files"]
     },
+    "source_lock_sha256": sha(source / "SOURCE-LOCK.sha256"),
+    "license_sha256": sha(source / "LICENSE.txt"),
     "openvino": {
         "version": "2020.3.2",
         "precision": "FP16",

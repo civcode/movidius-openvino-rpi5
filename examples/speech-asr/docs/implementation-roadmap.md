@@ -18,7 +18,7 @@ The central rule is:
 | 1 — AMI dataset pipeline | **complete** — real pinned sources prepared twice with frozen golden hashes |
 | 2 — deterministic evaluation | implemented |
 | 3 — audio/frontend framework | implemented |
-| 4 — rm_cnn4a reference path | model preparation implemented; hardware-independent execution still needs artifact run |
+| 4 — rm_cnn4a reference path | **implemented** — CPU reference runner + offline bundle verification; real artifact execution still pending |
 | 5 — MYRIAD deployment | wired; physical device validation pending |
 | 6 — benchmark harness | implemented; physical device validation pending |
 | 7+ | not started |
@@ -741,3 +741,8 @@ The next unresolved gate is Phase 4 reference-model execution:
    practical;
 4. preserve the resulting artifact hashes and numerical reference result;
 5. only then promote the same artifact to the physical MYRIAD gate in Phase 5.
+
+The CPU reference path and offline prepared-bundle verifier are now
+implemented. The remaining Phase 4 acceptance work is an actual
+prepared-artifact CPU run so its generated IR contract, source/IR hashes and
+numerical result can be frozen from evidence rather than guessed.
