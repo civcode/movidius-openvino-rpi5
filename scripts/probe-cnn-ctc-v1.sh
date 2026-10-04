@@ -51,6 +51,20 @@ if (( ! WITH_DEVICE )); then
     exit 0
 fi
 
+echo "== validate runtime image supports tensor I/O =="
+HELP_LOG="$PROBE/hello-myriad-help.txt"
+set +e
+"$ROOT/run.sh" --platform "$TARGET" custom --help >"$HELP_LOG" 2>&1
+help_status=$?
+set -e
+cat "$HELP_LOG"
+if (( help_status != 0 )) || ! grep -q -- '--tensor' "$HELP_LOG" || ! grep -q -- '--output' "$HELP_LOG"; then
+    echo "runtime image does not contain the cnn_ctc_v1 tensor-I/O capable hello_myriad" >&2
+    echo "rebuild it from this checkout with: ./build.sh --platform $TARGET" >&2
+    echo "then rerun: ./scripts/probe-cnn-ctc-v1.sh --platform $TARGET" >&2
+    exit 2
+fi
+
 echo "== MYRIAD load/compile/infer probe =="
 OUT="$PROBE/myriad-output.f32"
 LOG="$PROBE/myriad.log"
