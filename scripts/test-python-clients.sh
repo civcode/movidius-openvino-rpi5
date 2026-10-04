@@ -8,15 +8,21 @@
 # frame_utils.hpp resize bounds) and default-launcher sanity (the broken
 # seg_stream DEFAULT_SERVER_CMD of the first fix pass).
 #
-# No MYRIAD device, no Docker.  Skips (exit 0) when python3+numpy or g++ are
-# unavailable, so it can run anywhere verify.sh runs.
+# No MYRIAD device and no Docker. Python dependencies come from the uv-managed
+# apps environment, or an explicitly supplied PYTHON interpreter.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT}"
 
-PY="${PYTHON:-python3}"
-command -v "$PY" >/dev/null 2>&1 || { echo "SKIP: python3 not found"; exit 0; }
-"$PY" -c 'import numpy' 2>/dev/null || { echo "SKIP: python3 numpy not installed"; exit 0; }
+PY="${PYTHON:-$ROOT/work/venv-apps/bin/python}"
+[[ -x "$PY" ]] || {
+    echo "SKIP: uv apps environment missing; run ./scripts/prepare-python-env.sh apps"
+    exit 0
+}
+"$PY" -c "import numpy, cv2" 2>/dev/null || {
+    echo "SKIP: uv apps environment incomplete; rerun ./scripts/prepare-python-env.sh apps"
+    exit 0
+}
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT

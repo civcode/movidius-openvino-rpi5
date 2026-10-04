@@ -5,4 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-exec python3 -m unittest discover     -s tests/python     -p 'test_speech_asr_*.py'     -v
+PY="${PYTHON:-$ROOT/work/venv-tools/bin/python}"
+if [[ ! -x "$PY" ]]; then
+    "$ROOT/scripts/prepare-python-env.sh" tools
+fi
+exec "$PY" -m unittest discover -s tests/python -p 'test_speech_asr_*.py' -v
