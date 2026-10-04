@@ -1,5 +1,6 @@
 schema: speech-asr/audio
 version: 1
+normalized_sample_schema: speech-sample-v1.schema.json
 
 canonical_audio:
   sample_rate_hz: 16000

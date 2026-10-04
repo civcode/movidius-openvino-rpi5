@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "speech-asr/speech-sample-v1.schema.json",
+  "title": "Normalized speech sample v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "version", "id", "audio", "transcript"],
+  "properties": {
+    "schema": {"const": "speech-asr/sample"},
+    "version": {"const": 1},
+    "id": {"type": "string", "minLength": 1},
+    "audio": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sample_rate_hz", "channels", "sample_type", "start_sample", "end_sample"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sample_rate_hz": {"const": 16000},
+        "channels": {"const": 1},
+        "sample_type": {"const": "float32"},
+        "start_sample": {"type": "integer", "minimum": 0},
+        "end_sample": {"type": "integer", "minimum": 1}
+      }
+    },
+    "transcript": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "normalization"],
+      "properties": {
+        "text": {"type": "string"},
+        "normalization": {"const": "text-v1"},
+        "words": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["text", "start_sample", "end_sample"],
+            "properties": {
+              "text": {"type": "string", "minLength": 1},
+              "start_sample": {"type": "integer", "minimum": 0},
+              "end_sample": {"type": "integer", "minimum": 1}
+            }
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Dataset/model-independent provenance. Dataset-specific fields belong here, not at the top level.",
+      "additionalProperties": true
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "schema": "speech-asr/text-normalization",
+  "version": 1,
+  "id": "text-v1",
+  "language": "en",
+  "rules": {
+    "unicode_normalization": "NFKC",
+    "case": "lower",
+    "apostrophe": "normalize_curly_to_ascii_and_preserve_inside_tokens",
+    "punctuation": "replace_with_space_except_internal_apostrophe",
+    "numbers": "preserve_digits_without_verbalization",
+    "whitespace": "trim_and_collapse",
+    "special_tokens": "do_not_drop_unless_dataset_adapter_explicitly_maps_them_before_text-v1"
+  },
+  "notes": [
+    "This file defines scoring normalization. The implementation is scheduled for roadmap Phase 2.",
+    "A benchmark version must not change these rules in place; create a new text normalization version instead."
+  ]
+}

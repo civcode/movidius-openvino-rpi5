@@ -1,6 +1,7 @@
 schema: speech-asr/benchmark
 version: 1
 status: scaffold
+result_schema: experiment-result-v1.schema.json
 
 dataset:
   canonical_corpus: AMI
@@ -15,6 +16,7 @@ audio_contract: audio-v1
 
 scoring:
   text_normalization_version: text-v1
+  text_normalization_contract: text-v1.json
   metrics:
     - wer
     - cer
