@@ -1,0 +1,25 @@
+{
+  "schema": "speech-asr/sample",
+  "version": 1,
+  "id": "synthetic-001",
+  "audio": {
+    "path": "audio/synthetic.wav",
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "sample_type": "float32",
+    "start_sample": 0,
+    "end_sample": 16000
+  },
+  "transcript": {
+    "text": "hello world",
+    "normalization": "text-v1",
+    "words": [
+      {"text": "hello", "start_sample": 800, "end_sample": 5200},
+      {"text": "world", "start_sample": 6400, "end_sample": 11200}
+    ]
+  },
+  "metadata": {
+    "source": "synthetic",
+    "speaker": "speaker-1"
+  }
+}

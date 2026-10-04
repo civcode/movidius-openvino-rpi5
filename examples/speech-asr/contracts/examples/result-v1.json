@@ -1,0 +1,40 @@
+{
+  "schema": "speech-asr/experiment-result",
+  "version": 1,
+  "experiment_id": "asr-example-0001",
+  "status": "completed",
+  "benchmark": {
+    "id": "ami-smoke-v1",
+    "contract_version": 1,
+    "manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "text_normalization_version": "text-v1"
+  },
+  "model": {
+    "id": "rm_cnn4a",
+    "family": "rm_cnn4a",
+    "spec_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "artifact_sha256": {
+      "model.xml": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "model.bin": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    }
+  },
+  "runtime": {
+    "repo_commit": "c3f796285d1d90f2dce9b306db0108c9770a2c91",
+    "backend": "MYRIAD",
+    "openvino_version": "2020.3.2",
+    "target": "arm64",
+    "firmware_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  },
+  "metrics": {
+    "wer": 0.25,
+    "cer": 0.1,
+    "realtime_factor": 0.6,
+    "inference_latency_p50_ms": 12.0,
+    "inference_latency_p95_ms": 14.0,
+    "failures": 0
+  },
+  "provenance": {
+    "dataset_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "model_spec_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  }
+}
