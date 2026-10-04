@@ -77,6 +77,116 @@ def download_verified(url: str, destination: Path, expected_sha256: str) -> Path
     return destination
 
 
+def _require_string(value: Any, path: str, errors: list[str]) -> None:
+    if not isinstance(value, str) or not value.strip():
+        errors.append(f"{path}: expected non-empty string")
+
+
+def _require_sha256(value: Any, path: str, errors: list[str]) -> None:
+    if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None:
+        errors.append(f"{path}: expected lowercase 64-character SHA-256")
+
+
+def validate_split_spec(spec: Mapping[str, Any]) -> Dict[str, Any]:
+    """Validate a frozen AMI split selection before network or filesystem work."""
+
+    errors: list[str] = []
+    if spec.get("schema") != "speech-asr/ami-split":
+        errors.append("$.schema: expected 'speech-asr/ami-split'")
+    if spec.get("version") != 1:
+        errors.append("$.version: expected 1")
+    _require_string(spec.get("id"), "$.id", errors)
+    if spec.get("license") != "CC-BY-4.0":
+        errors.append("$.license: expected 'CC-BY-4.0'")
+
+    annotations = spec.get("annotations")
+    if not isinstance(annotations, Mapping):
+        errors.append("$.annotations: expected object")
+        annotations = {}
+    for key in ("version", "filename", "url"):
+        _require_string(annotations.get(key), f"$.annotations.{key}", errors)
+    _require_sha256(annotations.get("sha256"), "$.annotations.sha256", errors)
+
+    sources = spec.get("sources")
+    if not isinstance(sources, list) or not sources:
+        errors.append("$.sources: expected non-empty array")
+        sources = []
+
+    meetings: set[str] = set()
+    declared_samples: set[tuple[str, str, str]] = set()
+    for source_index, source_value in enumerate(sources):
+        path = f"$.sources[{source_index}]"
+        if not isinstance(source_value, Mapping):
+            errors.append(f"{path}: expected object")
+            continue
+        meeting = source_value.get("meeting")
+        _require_string(meeting, path + ".meeting", errors)
+        if isinstance(meeting, str):
+            if meeting in meetings:
+                errors.append(f"{path}.meeting: duplicate meeting {meeting!r}")
+            meetings.add(meeting)
+
+        audio = source_value.get("audio")
+        if not isinstance(audio, Mapping):
+            errors.append(path + ".audio: expected object")
+            audio = {}
+        for key in ("stream", "filename", "url"):
+            _require_string(audio.get(key), path + f".audio.{key}", errors)
+        _require_sha256(audio.get("sha256"), path + ".audio.sha256", errors)
+
+        selections = source_value.get("selections")
+        if not isinstance(selections, list) or not selections:
+            errors.append(path + ".selections: expected non-empty array")
+            continue
+        speakers: set[str] = set()
+        for selection_index, selection_value in enumerate(selections):
+            selection_path = path + f".selections[{selection_index}]"
+            if not isinstance(selection_value, Mapping):
+                errors.append(selection_path + ": expected object")
+                continue
+            speaker = selection_value.get("speaker")
+            _require_string(speaker, selection_path + ".speaker", errors)
+            if isinstance(speaker, str):
+                if speaker in speakers:
+                    errors.append(
+                        selection_path + f".speaker: duplicate speaker {speaker!r}"
+                    )
+                speakers.add(speaker)
+
+            has_all = selection_value.get("all_segments") is True
+            segments = selection_value.get("segments")
+            has_list = isinstance(segments, list) and bool(segments)
+            if has_all == has_list:
+                errors.append(
+                    selection_path
+                    + ": declare exactly one of all_segments=true or a non-empty segments array"
+                )
+                continue
+            if has_list:
+                seen: set[str] = set()
+                for segment_index, segment_id in enumerate(segments):
+                    segment_path = selection_path + f".segments[{segment_index}]"
+                    _require_string(segment_id, segment_path, errors)
+                    if not isinstance(segment_id, str):
+                        continue
+                    expected_prefix = f"{meeting}.sync." if isinstance(meeting, str) else ""
+                    if expected_prefix and not segment_id.startswith(expected_prefix):
+                        errors.append(
+                            segment_path + f": expected prefix {expected_prefix!r}"
+                        )
+                    if segment_id in seen:
+                        errors.append(segment_path + f": duplicate segment {segment_id!r}")
+                    seen.add(segment_id)
+                    key = (str(meeting), str(speaker), segment_id)
+                    if key in declared_samples:
+                        errors.append(segment_path + ": duplicate sample selection")
+                    declared_samples.add(key)
+
+    if errors:
+        raise AmiPreparationError("invalid AMI split spec:\n- " + "\n- ".join(errors))
+    return dict(spec)
+
+
 def _local_name(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
 
@@ -99,6 +209,15 @@ def _parse_word_items(xml_bytes: bytes) -> Sequence[Dict[str, Any]]:
             }
         )
     return items
+
+
+def _segment_ids(segment_xml: bytes) -> list[str]:
+    root = ET.fromstring(segment_xml)
+    return [
+        segment.attrib[NITE_ID]
+        for segment in root.findall("segment")
+        if segment.attrib.get(NITE_ID)
+    ]
 
 
 def _selected_segment(segment_xml: bytes, segment_id: str) -> Dict[str, str]:
@@ -290,6 +409,7 @@ def prepare_from_spec(
     audio_paths: Mapping[str, Path],
     output_dir: Path,
 ) -> Dict[str, Any]:
+    validate_split_spec(spec)
     output_dir.mkdir(parents=True, exist_ok=True)
     audio_dir = output_dir / "audio"
     manifest_path = output_dir / "manifest.jsonl"
@@ -315,7 +435,19 @@ def prepare_from_spec(
                 )
             for selection in source["selections"]:
                 speaker = selection["speaker"]
-                for segment_id in selection["segments"]:
+                segments_member = f"segments/{meeting}.{speaker}.segments.xml"
+                try:
+                    segment_xml = archive.read(segments_member)
+                except KeyError as exc:
+                    raise AmiPreparationError(
+                        f"missing AMI annotation member: {segments_member}"
+                    ) from exc
+                segment_ids = (
+                    _segment_ids(segment_xml)
+                    if selection.get("all_segments") is True
+                    else list(selection["segments"])
+                )
+                for segment_id in segment_ids:
                     suffix = segment_id.rsplit(".", 1)[-1]
                     filename = f"{meeting}.{speaker}.{suffix}.f32"
                     record = render_segment(
@@ -345,6 +477,13 @@ def prepare_from_spec(
             handle.write("\n")
 
     manifest_sha = sha256_file(manifest_path)
+    normalized_audio = {
+        record["id"]: record["metadata"]["normalized_audio_sha256"]
+        for record in records
+    }
+    logical_tree_hash = canonical_json_sha256(
+        {"manifest_sha256": manifest_sha, "normalized_audio_sha256": normalized_audio}
+    )
     provenance = {
         "schema": "speech-asr/ami-preparation",
         "version": 1,
@@ -353,6 +492,8 @@ def prepare_from_spec(
         "annotation_sha256": annotation_sha,
         "manifest_sha256": manifest_sha,
         "records": len(records),
+        "normalized_audio_sha256": normalized_audio,
+        "logical_tree_sha256": logical_tree_hash,
         "audio_sha256": {
             source["meeting"]: source["audio"]["sha256"]
             for source in spec["sources"]
@@ -384,3 +525,85 @@ def acquire_sources(
             audio["url"], cache_dir / audio["filename"], audio["sha256"]
         )
     return annotation_path, audio_paths
+
+
+def verify_prepared_dataset(
+    *, spec: Mapping[str, Any], output_dir: Path
+) -> Dict[str, Any]:
+    """Verify manifest, clip hashes/sizes and provenance without network access."""
+
+    validate_split_spec(spec)
+    manifest_path = output_dir / "manifest.jsonl"
+    provenance_path = output_dir / "provenance.json"
+    if not manifest_path.is_file() or not provenance_path.is_file():
+        raise AmiPreparationError(
+            f"{output_dir}: expected manifest.jsonl and provenance.json"
+        )
+
+    provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    if provenance.get("split_id") != spec["id"]:
+        raise AmiPreparationError("prepared split id does not match split spec")
+    expected_spec_hash = canonical_json_sha256(spec)
+    if provenance.get("split_spec_sha256") != expected_spec_hash:
+        raise AmiPreparationError("prepared split spec hash does not match current spec")
+
+    manifest_hash = sha256_file(manifest_path)
+    if provenance.get("manifest_sha256") != manifest_hash:
+        raise AmiPreparationError("manifest SHA-256 does not match provenance")
+
+    records = []
+    ids: set[str] = set()
+    with manifest_path.open("r", encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise AmiPreparationError(
+                    f"manifest line {line_number}: invalid JSON: {exc}"
+                ) from exc
+            validate_speech_sample(record)
+            sample_id = record["id"]
+            if sample_id in ids:
+                raise AmiPreparationError(f"duplicate manifest sample id: {sample_id}")
+            ids.add(sample_id)
+            clip = output_dir / record["audio"]["path"]
+            if not clip.is_file():
+                raise AmiPreparationError(f"missing normalized audio: {clip}")
+            expected_bytes = (
+                record["audio"]["end_sample"] - record["audio"]["start_sample"]
+            ) * 4
+            actual_bytes = clip.stat().st_size
+            if actual_bytes != expected_bytes:
+                raise AmiPreparationError(
+                    f"{clip}: expected {expected_bytes} bytes, got {actual_bytes}"
+                )
+            clip_hash = sha256_file(clip)
+            if clip_hash != record["metadata"].get("normalized_audio_sha256"):
+                raise AmiPreparationError(f"{clip}: SHA-256 differs from manifest metadata")
+            records.append(record)
+
+    if provenance.get("records") != len(records):
+        raise AmiPreparationError("record count does not match provenance")
+
+    normalized_audio = {
+        record["id"]: record["metadata"]["normalized_audio_sha256"]
+        for record in records
+    }
+    if provenance.get("normalized_audio_sha256") != normalized_audio:
+        raise AmiPreparationError("normalized audio hash map does not match provenance")
+    logical_tree_hash = canonical_json_sha256(
+        {"manifest_sha256": manifest_hash, "normalized_audio_sha256": normalized_audio}
+    )
+    if provenance.get("logical_tree_sha256") != logical_tree_hash:
+        raise AmiPreparationError("logical tree hash does not match provenance")
+
+    return {
+        "schema": "speech-asr/ami-verification",
+        "version": 1,
+        "split_id": spec["id"],
+        "records": len(records),
+        "manifest_sha256": manifest_hash,
+        "logical_tree_sha256": logical_tree_hash,
+    }

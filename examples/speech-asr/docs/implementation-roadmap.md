@@ -15,7 +15,7 @@ The central rule is:
 | Phase | Status |
 |---|---|
 | 0 — contracts and reproducibility | **complete** |
-| 1 — AMI dataset pipeline | implemented smoke path; real-source execution still to be verified |
+| 1 — AMI dataset pipeline | **implemented**; external real-source download/run verification pending |
 | 2 — deterministic evaluation | implemented |
 | 3 — audio/frontend framework | implemented |
 | 4 — rm_cnn4a reference path | model preparation implemented; hardware-independent execution still needs artifact run |

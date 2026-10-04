@@ -5,100 +5,105 @@ adapter converts pinned AMI NXT annotations and source audio into the project's
 normalized speech-sample contract. Corpus audio and generated clips live under
 `work/` and are not committed.
 
-## Pinned smoke subset
+## Version-1 split definitions
 
-`splits/smoke-v1.json` currently pins:
+Two frozen split specifications are checked in:
 
-- AMI manual annotations **v1.6.2**;
-- meeting **ES2002a**;
-- the official **Mix-Headset** WAV;
-- speaker A segments `sync.4`, `sync.6`, `sync.25`, and `sync.27`;
-- SHA-256 for both the annotation archive and source WAV.
+- `splits/smoke-v1.json`: four explicit speaker-A segments from ES2002a for
+  fast plumbing/regression tests;
+- `splits/benchmark-v1.json`: every annotated segment for speakers A-D in
+  ES2002a, using the same source WAV and annotation archive.
 
-The source URLs point to the official AMI corpus servers. Downloads are rejected
-when their SHA-256 differs from the split specification.
+Using all segments for the benchmark avoids a hand-curated list while remaining
+fully frozen: the annotation archive version/hash and the source audio hash are
+part of the split spec.
 
-The AMI signals/transcription are CC BY 4.0; downstream use must preserve AMI
-attribution.
+The sources are the official AMI manual annotations **v1.6.2** and the official
+ES2002a **Mix-Headset** WAV. Downloads are rejected when SHA-256 differs from
+the split specification. AMI signals/transcription are CC BY 4.0; downstream
+use must preserve AMI attribution.
 
-## Prepare the smoke data
+## Prepare data
 
 From the repository root:
 
 ```bash
-python3 examples/speech-asr/datasets/ami/prepare_ami.py
+python3 examples/speech-asr/datasets/ami/prepare_ami.py --subset smoke
+python3 examples/speech-asr/datasets/ami/prepare_ami.py --subset benchmark
 ```
+
+An explicit split file can be used with `--spec`. Relative cache/output paths
+are resolved from the repository root.
 
 Defaults:
 
 ```text
 download cache: work/speech-asr/ami/downloads/
-output:         work/speech-asr/ami/smoke-v1/
+smoke output:   work/speech-asr/ami/ami-smoke-v1/
+benchmark:      work/speech-asr/ami/ami-benchmark-v1/
 ```
 
-The output is:
+Each output contains:
 
 ```text
-smoke-v1/
+<split-id>/
 ├── audio/
 │   └── *.f32
 ├── manifest.jsonl
 └── provenance.json
 ```
 
-The `.f32` files are raw little-endian float32 mono samples at 16 kHz. Each
-manifest record has clip-relative integer sample timing, `text-v1` normalized
-transcript/word text, source hashes, and the normalized clip SHA-256.
+The `.f32` files are raw little-endian float32 mono samples at 16 kHz.
+
+## Offline verification
+
+After preparation, or after copying a prepared dataset to another machine:
+
+```bash
+python3 examples/speech-asr/datasets/ami/prepare_ami.py \
+    --subset smoke \
+    --verify-only
+```
+
+Verification checks:
+
+- split-spec hash;
+- manifest hash and record count;
+- every normalized record against the speech-sample contract;
+- unique sample IDs;
+- each clip's expected byte length;
+- each clip SHA-256 against manifest metadata;
+- the complete per-clip hash map;
+- a logical-tree SHA-256 covering manifest + normalized clips.
+
+No network access is needed for `--verify-only`.
 
 ## Determinism rules
 
+- split specs are validated before network/filesystem work;
 - annotation times are parsed with `Decimal`, not binary floating point;
 - seconds-to-sample conversion uses round-half-up at 16 kHz;
 - AMI segment annotations define clip boundaries;
-- the segment's NXT word range defines the lexical words;
-- punctuation and non-lexical NXT elements are omitted from lexical word
-  timing;
+- the segment's NXT word range defines lexical words;
+- `all_segments=true` expands in annotation-file order;
+- punctuation and non-lexical NXT elements are omitted from lexical word timing;
 - text is normalized by the shared `text-v1` implementation;
-- PCM16 source samples are converted deterministically to f32le by
+- PCM16 samples are converted deterministically to f32le by
   `sample / 32768.0`;
-- JSONL keys and separators are canonicalized before hashing.
+- JSONL keys/separators are canonicalized;
+- provenance includes source, manifest, per-clip and logical-tree hashes.
 
-A synthetic NXT/WAV fixture tests the complete preparation path without
-requiring network access.
+Synthetic NXT/WAV fixtures exercise this complete path without network access.
 
 ## Normalized representation
 
-Runtime/evaluation code consumes `manifest.jsonl`, not AMI-native XML. A
-record follows `contracts/speech-sample-v1.schema.json`, for example:
+Runtime/evaluation code consumes `manifest.jsonl`, never AMI-native XML.
+Records follow `contracts/speech-sample-v1.schema.json` and carry
+clip-relative integer word/sample timing plus source and normalized-audio
+provenance.
 
-```json
-{
-  "schema": "speech-asr/sample",
-  "version": 1,
-  "id": "ami-ES2002a-A-4",
-  "audio": {
-    "path": "audio/ES2002a.A.4.f32",
-    "sample_rate_hz": 16000,
-    "channels": 1,
-    "sample_type": "float32",
-    "encoding": "f32le",
-    "start_sample": 0,
-    "end_sample": 56752
-  },
-  "transcript": {
-    "text": "hi i'm david and i'm supposed to be an industrial designer",
-    "normalization": "text-v1",
-    "words": []
-  }
-}
-```
+## Scope
 
-## Benchmark tiers
-
-- **smoke**: small plumbing/regression set (implemented);
-- **benchmark**: tens of minutes for optimization (planned);
-- **validation**: held-out acceptance set (planned);
-- **full**: corpus-scale training/experiments (planned).
-
-Once a benchmark version is frozen, an agent must not alter its selected
-meeting/segment list to improve a score.
+Phase 1 intentionally prepares dataset material only. Model inference, feature
+extraction beyond canonical audio normalization, and ASR quality are later
+phases.
