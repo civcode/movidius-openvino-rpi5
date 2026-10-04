@@ -90,16 +90,30 @@ def compare_results(
     if reference_graph is not None and candidate_graph is not None:
         graph_match = reference_graph == candidate_graph
 
+    reference_canonical = reference["model"].get("canonical_graph_sha256")
+    candidate_canonical = candidate["model"].get("canonical_graph_sha256")
+    canonical_match = None
+    if reference_canonical is not None and candidate_canonical is not None:
+        canonical_match = reference_canonical == candidate_canonical
+
     if not xml_match:
-        if graph_match is True:
-            # Raw XML can differ in Model Optimizer's non-executable meta_data
-            # while the executable graph remains byte-for-byte equivalent after
-            # conservative normalization.
+        if canonical_match is True:
+            # Numeric layer IDs, serialization order, and Model Optimizer
+            # metadata may differ while the named executable graph is equal.
             pass
+        elif graph_match is True:
+            # Older results may only carry the first semantic graph hash.
+            pass
+        elif canonical_match is False:
+            mismatches.append(
+                "model.canonical_graph_sha256: named executable IR graph differs "
+                f"(reference={reference_canonical!r}, candidate={candidate_canonical!r})"
+            )
         elif graph_match is False:
             mismatches.append(
-                "model.graph_sha256: executable IR graph differs "
-                f"(reference={reference_graph!r}, candidate={candidate_graph!r})"
+                "model.graph_sha256: executable IR serialization differs "
+                f"(reference={reference_graph!r}, candidate={candidate_graph!r}); "
+                "canonical graph fingerprints are unavailable"
             )
         else:
             mismatches.append(
@@ -136,6 +150,11 @@ def compare_results(
             **(
                 {"graph_sha256_match": graph_match}
                 if graph_match is not None
+                else {}
+            ),
+            **(
+                {"canonical_graph_sha256_match": canonical_match}
+                if canonical_match is not None
                 else {}
             ),
             "bin_sha256_match": matches["model.bin_sha256"],

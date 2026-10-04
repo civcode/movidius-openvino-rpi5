@@ -51,7 +51,38 @@ class IrInspectorTests(unittest.TestCase):
             self.assertEqual(result["outputs"][0]["ports"][0]["shape"], [1, 10])
             self.assertEqual(len(result["xml_sha256"]), 64)
             self.assertEqual(len(result["graph_sha256"]), 64)
+            self.assertEqual(len(result["canonical_graph_sha256"]), 64)
             self.assertEqual(len(result["bin_sha256"]), 64)
+
+    def test_canonical_graph_hash_ignores_layer_ids_and_order(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = pathlib.Path(name)
+            first = root / "first.xml"
+            second = root / "second.xml"
+            first.write_text(IR, encoding="utf-8")
+            variant = (
+                IR.replace('id="0" name="input"', 'id="9" name="input"')
+                  .replace('id="1" name="fc"', 'id="4" name="fc"')
+                  .replace('id="2" name="weights"', 'id="7" name="weights"')
+                  .replace('from-layer="0"', 'from-layer="9"')
+                  .replace('from-layer="2"', 'from-layer="7"')
+                  .replace('to-layer="1"', 'to-layer="4"')
+            )
+            # Reorder layer elements without altering names/content.
+            start = variant.index("<layers>") + len("<layers>")
+            end = variant.index("</layers>")
+            body = variant[start:end]
+            chunks = [chunk for chunk in body.split("  <layer ") if chunk.strip()]
+            reordered = "  <layer " + "  <layer ".join(reversed(chunks))
+            variant = variant[:start] + "\n" + reordered + variant[end:]
+            second.write_text(variant, encoding="utf-8")
+            a = inspect_ir(first)
+            b = inspect_ir(second)
+            self.assertNotEqual(a["graph_sha256"], b["graph_sha256"])
+            self.assertEqual(
+                a["canonical_graph_sha256"],
+                b["canonical_graph_sha256"],
+            )
 
     def test_graph_hash_ignores_only_top_level_model_optimizer_metadata(self):
         with tempfile.TemporaryDirectory() as name:

@@ -54,6 +54,7 @@ def model_identity(xml: pathlib.Path, binary: pathlib.Path) -> dict:
         "family": "rm_cnn4a",
         "xml_sha256": contract["xml_sha256"],
         "graph_sha256": contract["graph_sha256"],
+        "canonical_graph_sha256": contract["canonical_graph_sha256"],
         "bin_sha256": contract["bin_sha256"],
     }
 

@@ -36,14 +36,99 @@ def _semantic_element(element: ET.Element) -> dict[str, Any]:
     }
 
 
-def graph_sha256(root: ET.Element) -> str:
+def _json_sha256(document: Any) -> str:
     payload = json.dumps(
-        _semantic_element(root),
+        document,
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,
     ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def graph_sha256(root: ET.Element) -> str:
+    """Hash executable XML while preserving serializer IDs and ordering."""
+    return _json_sha256(_semantic_element(root))
+
+
+def canonical_graph_document(root: ET.Element) -> dict[str, Any]:
+    """Return an ID/order-insensitive but structure-sensitive IR document.
+
+    Layer numeric IDs and XML serialization order are Model Optimizer
+    implementation details. Canonical identity maps edges through unique layer
+    names and sorts layers/edges. Everything else in executable layer XML is
+    preserved, including names, types, precisions, data attributes, blobs,
+    ports, dimensions and connectivity.
+    """
+    layers_node = root.find("layers")
+    edges_node = root.find("edges")
+    if layers_node is None or edges_node is None:
+        raise ValueError("IR must contain layers and edges")
+
+    id_to_name: dict[str, str] = {}
+    names: set[str] = set()
+    canonical_layers = []
+    for layer in layers_node.findall("layer"):
+        layer_id = layer.attrib["id"]
+        name = layer.attrib.get("name", "")
+        if not name:
+            raise ValueError(f"IR layer {layer_id} has no stable name")
+        if name in names:
+            raise ValueError(f"IR layer name is not unique: {name}")
+        names.add(name)
+        id_to_name[layer_id] = name
+
+        item = _semantic_element(layer)
+        item["attributes"] = dict(item["attributes"])
+        item["attributes"].pop("id", None)
+        canonical_layers.append(item)
+
+    canonical_edges = []
+    for edge in edges_node.findall("edge"):
+        source_id = edge.attrib["from-layer"]
+        target_id = edge.attrib["to-layer"]
+        if source_id not in id_to_name or target_id not in id_to_name:
+            raise ValueError("IR edge references unknown layer id")
+        canonical_edges.append({
+            "from_layer": id_to_name[source_id],
+            "from_port": edge.attrib.get("from-port"),
+            "to_layer": id_to_name[target_id],
+            "to_port": edge.attrib.get("to-port"),
+        })
+
+    extras = [
+        _semantic_element(child)
+        for child in list(root)
+        if child.tag not in {"layers", "edges", "meta_data"}
+    ]
+    extras.sort(key=lambda item: json.dumps(item, sort_keys=True, separators=(",", ":")))
+
+    return {
+        "network": {
+            "attributes": dict(sorted(root.attrib.items())),
+        },
+        "layers": sorted(
+            canonical_layers,
+            key=lambda item: (
+                item["attributes"].get("name", ""),
+                item["attributes"].get("type", ""),
+            ),
+        ),
+        "edges": sorted(
+            canonical_edges,
+            key=lambda item: (
+                item["from_layer"],
+                item["from_port"] or "",
+                item["to_layer"],
+                item["to_port"] or "",
+            ),
+        ),
+        "extras": extras,
+    }
+
+
+def canonical_graph_sha256(root: ET.Element) -> str:
+    return _json_sha256(canonical_graph_document(root))
 
 
 def inspect_ir(xml_path: Path, bin_path: Path | None = None) -> dict[str, Any]:
@@ -112,6 +197,7 @@ def inspect_ir(xml_path: Path, bin_path: Path | None = None) -> dict[str, Any]:
         "ir_version": root.attrib.get("version"),
         "xml_sha256": hashlib.sha256(xml_path.read_bytes()).hexdigest(),
         "graph_sha256": graph_sha256(root),
+        "canonical_graph_sha256": canonical_graph_sha256(root),
         "inputs": [compact(layer) for layer in sorted(inputs, key=lambda item: item["id"])],
         "outputs": [compact(layer) for layer in sorted(outputs, key=lambda item: item["id"])],
     }
