@@ -66,6 +66,9 @@ change the benchmark contract.
 
 See [docs/agent-workflow.md](docs/agent-workflow.md).
 
+The implementation sequence and phase exit criteria are defined in
+[docs/implementation-roadmap.md](docs/implementation-roadmap.md).
+
 ## Data and measurement baseline
 
 AMI is the canonical development corpus. Corpus-specific input is normalized to
@@ -130,6 +133,7 @@ speech-asr/
 │   ├── architecture.md
 │   ├── parameters.md
 │   ├── agent-workflow.md
+│   ├── implementation-roadmap.md
 │   └── adr/
 ├── evaluation/            deterministic scoring/measurement
 ├── experiments/           experiment artifact conventions
