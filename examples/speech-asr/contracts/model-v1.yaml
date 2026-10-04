@@ -1,0 +1,46 @@
+schema: speech-asr/model
+version: 1
+
+package:
+  required_fields:
+    - id
+    - family
+    - frontend_profile
+    - input_contract
+    - output_contract
+    - decoder_kind
+    - deployment
+
+frontend:
+  policy: model_declared
+  canonical_audio_contract: audio-v1
+
+input_contract:
+  layout: model_declared
+  dtype: model_declared
+  shape: model_declared
+
+output_contract:
+  semantics: model_declared
+  layout: model_declared
+  dtype: model_declared
+
+decoder:
+  kind: model_declared
+  future_custom_default: ctc
+
+deployment:
+  target: MYRIAD
+  openvino_version: 2020.3.2
+  precision: FP16
+
+training_export:
+  future_canonical_framework: pytorch
+  accelerator: cuda
+  interchange: onnx
+  deployment_conversion: openvino_model_optimizer_2020_3
+
+rules:
+  - "Model-specific frontend/decoder behavior belongs to the model package, not global runtime code."
+  - "rm_cnn4a may use a model-specific frontend and output adapter."
+  - "Future custom models should satisfy the same package contract even when their architecture changes."

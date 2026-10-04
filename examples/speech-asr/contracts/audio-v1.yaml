@@ -1,0 +1,23 @@
+schema: speech-asr/audio
+version: 1
+
+canonical_audio:
+  sample_rate_hz: 16000
+  channels: 1
+  sample_type: float32
+
+timing:
+  canonical_unit: sample_index
+  origin: normalized_audio_start
+  integer_only: true
+
+source_policy:
+  source_container: variable
+  source_bit_depth: variable
+  source_sample_rate: variable
+  action: normalize_before_feature_extraction
+
+rules:
+  - "Do not expose source bit depth as a model parameter."
+  - "Do not use floating-point seconds as the canonical stored timing coordinate."
+  - "Derived sample counts must be computed from declared millisecond parameters."
