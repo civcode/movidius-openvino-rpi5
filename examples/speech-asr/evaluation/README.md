@@ -26,6 +26,10 @@ log, parses each utterance's frame count/inference time/error statistics, and
 writes `work/speech-asr/rm_cnn4a/result.json`.
 
 The result uses `contracts/acoustic-regression-result-v1.schema.json`.
+Before the file is written it is also checked by the stdlib semantic validator,
+so a parser/wiring bug cannot silently emit an invalid benchmark result.
+Relative `--output` and `--log` paths are resolved from the repository root.
+
 Per-frame latency is reported directly; no RTF is invented because the vendor
 feature ARK is not the project's canonical raw-audio benchmark.
 

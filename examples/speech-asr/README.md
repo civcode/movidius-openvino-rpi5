@@ -3,10 +3,11 @@
 This directory is the development area for automatic speech recognition on the
 Movidius/OpenVINO 2020.3.2 platform provided by this repository.
 
-The first development model is **rm_cnn4a**. It is a bring-up and measurement
-fixture: its purpose is to exercise audio ingestion, model-specific feature
-preparation, MYRIAD inference, timing, evaluation, experiment recording and the
-agent handoff workflow. It is not the long-term target architecture.
+The first development model is **rm_cnn4a**. It is a conversion/device
+qualification fixture: its published Intel package provides Kaldi feature and
+reference-score ARKs, so it exercises FP16 conversion, tensor transport,
+MYRIAD inference, numerical comparison, timing and result/provenance handling.
+It is **not** the raw-audio AMI model and is not the long-term architecture.
 
 The long-term workflow is designed for custom acoustic models trained with a
 normal PyTorch/CUDA toolchain, exported through ONNX, converted to OpenVINO
@@ -71,14 +72,15 @@ The implementation sequence and phase exit criteria are defined in
 
 ## Data and measurement baseline
 
-AMI is the canonical development corpus. Corpus-specific input is normalized to
-the internal speech sample format before it reaches inference code.
+AMI is the canonical development corpus for end-to-end transcript evaluation.
+Corpus-specific input is normalized to the internal speech sample format before
+it reaches inference code.
 
 Core invariants:
 
 - 16 kHz audio
 - mono
-- float32 internal sample representation
+- float32 f32le normalized sample representation
 - integer sample indices as the canonical timing coordinate
 - versioned dataset splits/manifests
 - versioned text normalization and scoring rules
@@ -89,18 +91,28 @@ versioned experiment parameters rather than hidden constants.
 
 See [docs/parameters.md](docs/parameters.md).
 
-## Model path
+## Model paths
 
-Initial bring-up:
+Initial device qualification:
+
+```text
+Intel rm_cnn4a Kaldi feature ARK
+  -> OpenVINO 2020.3 FP16 IR
+  -> MYRIAD
+  -> acoustic score ARK
+  -> deterministic comparison to Intel reference score ARK
+```
+
+AMI/custom-model path:
 
 ```text
 AMI/WAV
-  -> normalized audio
-  -> rm_cnn4a-specific frontend
-  -> OpenVINO 2020.3 FP16
-  -> MYRIAD
-  -> rm_cnn4a-specific output handling
-  -> deterministic evaluation
+  -> canonical 16 kHz mono audio
+  -> model-declared frontend
+  -> custom acoustic model
+  -> decoder
+  -> normalized hypothesis
+  -> deterministic WER/CER + timing evaluation
 ```
 
 Future custom-model loop:
@@ -119,6 +131,22 @@ architecture spec
 
 The benchmark, dataset and hardware measurement contracts remain stable while
 model architectures evolve.
+
+## Tests
+
+The speech-specific fixture tests are deliberately independent of network and
+MYRIAD hardware:
+
+```bash
+./scripts/test-speech-asr.sh
+```
+
+Physical-device regression remains a separate explicit operation:
+
+```bash
+./scripts/prepare-rm-cnn4a.sh
+python3 examples/speech-asr/evaluation/benchmark_rm_cnn4a.py --platform arm64
+```
 
 ## Directory layout
 

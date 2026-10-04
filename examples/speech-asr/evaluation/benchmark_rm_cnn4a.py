@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the rm_cnn4a MYRIAD regression and emit a machine-readable result."""
+"""Run the rm_cnn4a MYRIAD regression and emit a validated result."""
 
 from __future__ import annotations
 
@@ -15,6 +15,10 @@ SPEECH_ROOT = HERE.parent
 ROOT = SPEECH_ROOT.parents[1]
 sys.path.insert(0, str(SPEECH_ROOT / "python"))
 
+from speech_asr.contracts import (  # noqa: E402
+    ContractValidationError,
+    validate_acoustic_regression_result,
+)
 from speech_asr.regression import parse_speech_sample_output  # noqa: E402
 
 
@@ -38,9 +42,33 @@ def git_head() -> str:
     return proc.stdout.strip()
 
 
+def repo_path(path: pathlib.Path) -> pathlib.Path:
+    """Resolve relative artifact paths from the repository root."""
+
+    return path if path.is_absolute() else ROOT / path
+
+
+def failed_metrics() -> dict:
+    return {
+        "utterances": 0,
+        "total_frames": 0,
+        "weighted_mean_infer_ms_per_frame": 0.0,
+        "utterance_avg_infer_ms_per_frame_p50": 0.0,
+        "utterance_avg_infer_ms_per_frame_p95": 0.0,
+        "max_error_max": 0.0,
+        "avg_error_mean": 0.0,
+        "rms_error_mean": 0.0,
+        "failures": 1,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--platform", default="arm64", choices=("armv7", "arm64", "amd64"))
+    parser.add_argument(
+        "--platform",
+        default="arm64",
+        choices=("armv7", "arm64", "amd64"),
+    )
     parser.add_argument(
         "--output",
         type=pathlib.Path,
@@ -52,21 +80,32 @@ def main() -> int:
         default=pathlib.Path("work/speech-asr/rm_cnn4a/speech_sample.log"),
     )
     args = parser.parse_args()
+    output_path = repo_path(args.output)
+    log_path = repo_path(args.log)
 
     model_root = ROOT / "vendor" / "models" / "rm_cnn4a_smbr"
     xml = model_root / "openvino" / "fp16" / "rm_cnn4a_fp16.xml"
     binary = model_root / "openvino" / "fp16" / "rm_cnn4a_fp16.bin"
+    model_spec = model_root / "openvino" / "model-spec.json"
     features = model_root / "source" / "feat1_10.ark"
     scores = model_root / "source" / "score1_10.ark"
-    required = (xml, binary, features, scores)
+    required = (xml, binary, model_spec, features, scores)
     missing = [str(path) for path in required if not path.is_file()]
     if missing:
-        print("missing rm_cnn4a artifacts; run ./scripts/prepare-rm-cnn4a.sh first", file=sys.stderr)
+        print(
+            "missing rm_cnn4a artifacts; run ./scripts/prepare-rm-cnn4a.sh first",
+            file=sys.stderr,
+        )
         for path in missing:
             print(f"  {path}", file=sys.stderr)
         return 2
 
-    command = [str(ROOT / "run.sh"), "--platform", args.platform, "speech-regress"]
+    command = [
+        str(ROOT / "run.sh"),
+        "--platform",
+        args.platform,
+        "speech-regress",
+    ]
     proc = subprocess.run(
         command,
         cwd=ROOT,
@@ -75,9 +114,9 @@ def main() -> int:
         stderr=subprocess.STDOUT,
         check=False,
     )
-    args.log.parent.mkdir(parents=True, exist_ok=True)
-    args.log.write_text(proc.stdout, encoding="utf-8")
-    raw_log_sha = sha256(args.log)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text(proc.stdout, encoding="utf-8")
+    raw_log_sha = sha256(log_path)
 
     base = {
         "schema": "speech-asr/acoustic-regression-result",
@@ -100,6 +139,7 @@ def main() -> int:
         },
         "provenance": {
             "raw_log_sha256": raw_log_sha,
+            "model_spec_sha256": sha256(model_spec),
             "command": command,
         },
     }
@@ -122,41 +162,30 @@ def main() -> int:
             result = {
                 **base,
                 "status": "failed",
-                "metrics": {
-                    "utterances": 0,
-                    "total_frames": 0,
-                    "weighted_mean_infer_ms_per_frame": 0.0,
-                    "utterance_avg_infer_ms_per_frame_p50": 0.0,
-                    "utterance_avg_infer_ms_per_frame_p95": 0.0,
-                    "max_error_max": 0.0,
-                    "avg_error_mean": 0.0,
-                    "rms_error_mean": 0.0,
-                    "failures": 1,
-                },
+                "metrics": failed_metrics(),
                 "diagnostics": {"summary": str(exc)},
             }
     else:
         result = {
             **base,
             "status": "failed",
-            "metrics": {
-                "utterances": 0,
-                "total_frames": 0,
-                "weighted_mean_infer_ms_per_frame": 0.0,
-                "utterance_avg_infer_ms_per_frame_p50": 0.0,
-                "utterance_avg_infer_ms_per_frame_p95": 0.0,
-                "max_error_max": 0.0,
-                "avg_error_mean": 0.0,
-                "rms_error_mean": 0.0,
-                "failures": 1,
-            },
+            "metrics": failed_metrics(),
             "diagnostics": {
                 "summary": f"speech-regress exited with status {proc.returncode}",
             },
         }
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(result, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    try:
+        validate_acoustic_regression_result(result)
+    except ContractValidationError as exc:
+        print(str(exc), file=sys.stderr)
+        return 3
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(result, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
     print(json.dumps(result, sort_keys=True))
     return exit_code
 
