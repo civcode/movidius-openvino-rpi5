@@ -85,6 +85,27 @@ class IrInspectorTests(unittest.TestCase):
                 b["canonical_graph_sha256"],
             )
 
+    def test_canonical_graph_hash_normalizes_generated_cast_const_suffix(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = pathlib.Path(name)
+            first = root / "first.xml"
+            second = root / "second.xml"
+            first.write_text(
+                IR.replace('name="weights"', 'name="reshape/Cast_12591_const"'),
+                encoding="utf-8",
+            )
+            second.write_text(
+                IR.replace('name="weights"', 'name="reshape/Cast_12597_const"'),
+                encoding="utf-8",
+            )
+            a = inspect_ir(first)
+            b = inspect_ir(second)
+            self.assertNotEqual(a["graph_sha256"], b["graph_sha256"])
+            self.assertEqual(
+                a["canonical_graph_sha256"],
+                b["canonical_graph_sha256"],
+            )
+
     def test_manifest_pinpoints_layer_sections(self):
         with tempfile.TemporaryDirectory() as name:
             root = pathlib.Path(name)

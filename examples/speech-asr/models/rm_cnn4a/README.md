@@ -199,7 +199,11 @@ The raw XML SHA-256 does not: the Pi-prepared XML is
 `5fbc7dc2327a22d75bcd4b27d98f73689fdaf047fc16ee57be3ea507670d4d35`,
 while the earlier amd64-prepared XML is
 `53a22c26746eeedf053864385606d64b20ce6c4020732a2a55f8ce2609152f27`.
-Because OpenVINO Model Optimizer appends a non-executable `meta_data` section,
-new benchmark results record an executable-graph fingerprint that excludes only
-that top-level metadata. Phase 5 reproducibility is closed only after that
-fingerprint is confirmed equal across the two prepared IRs.
+Cross-host diagnostics confirmed that both prepared IRs contain the same 31
+layers, 30 edges, BIN payload, network attributes and per-layer executable
+section hashes. The only difference is nondeterministic numeric suffixes on two
+Model Optimizer-generated Const names matching `Cast_<number>_const`; the
+suffix assignments are swapped between hosts while the Const output/blob
+sections and consumer ports are identical. The canonical graph fingerprint
+therefore normalizes only that generated suffix and disambiguates each such
+Const by its consumer edge. This closes the Phase 5 IR-identity gate.
