@@ -91,6 +91,15 @@ class ModelQualityQualificationTests(unittest.TestCase):
             self.assertTrue((output / "train.manifest.jsonl").is_file())
             self.assertTrue((output / "validation.manifest.jsonl").is_file())
             self.assertTrue((output / "qualification.json").is_file())
+            train_record = json.loads(
+                (output / "train.manifest.jsonl").read_text(
+                    encoding="utf-8"
+                ).splitlines()[0]
+            )
+            self.assertEqual(
+                train_record["audio"]["path"],
+                "../audio/a1.f32",
+            )
 
     def test_overlap_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp_name:
