@@ -64,6 +64,13 @@ def git_head() -> str:
     return proc.stdout.strip()
 
 
+def safe_git_head() -> str | None:
+    try:
+        return git_head()
+    except Exception:
+        return None
+
+
 def safe_repo_path(relative: str) -> pathlib.Path:
     value = pathlib.PurePosixPath(relative)
     if value.is_absolute() or ".." in value.parts:
@@ -342,7 +349,7 @@ def main() -> int:
             "failure_class": exc.failure_class,
             "experiment_id": experiment_id,
             "attempt_id": attempt_id,
-            "worker_commit": git_head() if (ROOT / ".git").exists() or True else None,
+            "worker_commit": safe_git_head(),
             "deployment_sha256": deployment_sha,
             "diagnostics": {"summary": exc.message},
         }
