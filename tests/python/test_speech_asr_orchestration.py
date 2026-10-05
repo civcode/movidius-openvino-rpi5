@@ -161,6 +161,12 @@ class Phase10TransportTests(unittest.TestCase):
         self.assertIn("ConnectTimeout=10", text)
         self.assertNotIn("StrictHostKeyChecking=no", text)
 
+    def test_worker_alias_cannot_be_an_ssh_option(self):
+        with self.assertRaisesRegex(ValueError, "worker alias"):
+            ssh_command("-oProxyCommand=bad", ["true"])
+        with self.assertRaisesRegex(ValueError, "worker alias"):
+            ssh_command("edge;touch-bad", ["true"])
+
     def test_rsync_uses_same_noninteractive_ssh_policy(self):
         push = rsync_push_command(
             worker="edge",
