@@ -9,6 +9,7 @@ sys.path.insert(0, str(SPEECH / "python"))
 
 from speech_asr.cnn_ctc import (
     acoustic_output_length,
+    aggregate_decoder_diagnostics,
     encode_text,
     greedy_decode,
     greedy_decode_logits,
@@ -69,6 +70,46 @@ class CnnCtcContractTests(unittest.TestCase):
         self.assertAlmostEqual(result["blank_frame_fraction"], 0.6)
         self.assertEqual(result["collapsed_token_count"], 1)
         self.assertEqual(result["emitted_characters_no_spaces"], 1)
+
+    def test_aggregate_decoder_diagnostics_weights_frames(self):
+        per_sample = [
+            {
+                "hypothesis": "",
+                "reference_words": 2,
+                "reference_characters_no_spaces": 5,
+                "decoder": {
+                    "frame_count": 10,
+                    "blank_argmax_frames": 10,
+                    "nonblank_argmax_frames": 0,
+                    "collapsed_token_count": 0,
+                    "emitted_words": 0,
+                    "emitted_characters_no_spaces": 0,
+                },
+            },
+            {
+                "hypothesis": "ab",
+                "reference_words": 1,
+                "reference_characters_no_spaces": 2,
+                "decoder": {
+                    "frame_count": 30,
+                    "blank_argmax_frames": 15,
+                    "nonblank_argmax_frames": 15,
+                    "collapsed_token_count": 2,
+                    "emitted_words": 1,
+                    "emitted_characters_no_spaces": 2,
+                },
+            },
+        ]
+        result = aggregate_decoder_diagnostics(per_sample)
+        self.assertEqual(result["frame_count"], 40)
+        self.assertEqual(result["blank_argmax_frames"], 25)
+        self.assertAlmostEqual(result["blank_frame_fraction"], 0.625)
+        self.assertEqual(result["empty_hypotheses"], 1)
+        self.assertAlmostEqual(result["empty_hypothesis_fraction"], 0.5)
+        self.assertAlmostEqual(
+            result["emitted_to_reference_character_ratio"],
+            2 / 7,
+        )
 
     def test_manifest_eligibility_rejects_fixed_shape_overflow(self):
         record = {
