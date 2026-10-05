@@ -96,6 +96,12 @@ def main() -> int:
     parser.add_argument("--spec", type=pathlib.Path, default=DEFAULT_SPEC)
     parser.add_argument("--vocab", type=pathlib.Path, default=DEFAULT_VOCAB)
     parser.add_argument("--ir-dir", type=pathlib.Path, default=DEFAULT_IR)
+    parser.add_argument("--experiment-id", default="cnn_ctc_v1-ami-smoke-myriad")
+    parser.add_argument(
+        "--work-dir",
+        type=pathlib.Path,
+        default=ROOT / "work" / "speech-asr" / "cnn_ctc_v1" / "evaluation",
+    )
     parser.add_argument("--platform", required=True, choices=("armv7", "arm64", "amd64"))
     parser.add_argument(
         "--output",
@@ -113,7 +119,7 @@ def main() -> int:
             if not path.is_file():
                 raise ValueError(f"required file is missing: {path}")
 
-        work = ROOT / "work" / "speech-asr" / "cnn_ctc_v1" / "evaluation"
+        work = args.work_dir
         work.mkdir(parents=True, exist_ok=True)
         word_counts = []
         char_counts = []
@@ -244,7 +250,7 @@ def main() -> int:
         result = {
             "schema": "speech-asr/experiment-result",
             "version": 1,
-            "experiment_id": "cnn_ctc_v1-ami-smoke-myriad",
+            "experiment_id": args.experiment_id,
             "status": "completed",
             "benchmark": {
                 "id": "ami-smoke-v1",
