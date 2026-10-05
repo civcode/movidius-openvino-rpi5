@@ -122,6 +122,22 @@ small smoke training
 The exact promotion thresholds are experiment-policy parameters and must be
 recorded.
 
+## Phase 10 implementation
+
+The local execution agent is implemented as deterministic repository tooling,
+not a free-form shell agent. Oberon invokes
+`scripts/run-speech-experiment.sh`; the controller consumes only a validated
+Phase 9 experiment request, uses the fixed executor registry, and hands a
+hash-bound deployment manifest to the edge worker.
+
+The initial executor registry contains only `cnn_ctc_v1`. This restriction is
+part of the authority boundary: a new model ID or additional architecture fields
+are rejected until REVIEW/DESIGN adds an explicit executable model path.
+
+Transient retries remain separate Phase 9 attempt IDs. Re-running the same
+top-level experiment command after a retryable terminal failure is permitted
+only when the frozen retry policy allows another attempt.
+
 ## Failure behavior
 
 The local executor may:
