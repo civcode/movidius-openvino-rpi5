@@ -492,6 +492,31 @@ def validate_train_config(document: Any) -> Dict[str, Any]:
         errors.append(
             "$.checkpoint_selection: expected validation_loss or validation_cer"
         )
+    ctc_objective_value = root.get("ctc_objective")
+    if ctc_objective_value is not None:
+        ctc_objective = _mapping(
+            ctc_objective_value,
+            "$.ctc_objective",
+            errors,
+        )
+        if ctc_objective.get("kind") != "blank-logit-penalty-v1":
+            errors.append(
+                "$.ctc_objective.kind: expected 'blank-logit-penalty-v1'"
+            )
+        blank_logit_penalty = ctc_objective.get("blank_logit_penalty")
+        _number(
+            blank_logit_penalty,
+            "$.ctc_objective.blank_logit_penalty",
+            errors,
+        )
+        if (
+            isinstance(blank_logit_penalty, (int, float))
+            and not isinstance(blank_logit_penalty, bool)
+            and not (0 < blank_logit_penalty <= 1.0)
+        ):
+            errors.append(
+                "$.ctc_objective.blank_logit_penalty: must be > 0 and <= 1"
+            )
     augmentation_value = root.get("augmentation")
     if augmentation_value is not None:
         augmentation = _mapping(
