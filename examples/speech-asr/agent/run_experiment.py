@@ -34,13 +34,15 @@ from speech_asr.experiment import (  # noqa: E402
 from speech_asr.orchestration import (  # noqa: E402
     SSH_OPTIONS,
     acceptance_evaluation,
+    compatibility_probe_command,
+    executor_model_basename,
     load_compatibility_result,
     remote_failure_class,
     rsync_pull_command,
     rsync_push_command,
     ssh_command,
     training_command,
-    validate_cnn_ctc_v1_executor_request,
+    validate_model_executor_request,
 )
 
 MANAGER = ROOT / "examples" / "speech-asr" / "tools" / "manage_experiment.py"
@@ -332,15 +334,18 @@ def execute_local(
     *,
     experiment_dir: pathlib.Path,
     attempt_id: str,
+    model_spec: dict[str, Any],
     train_config: dict[str, Any],
     logs_dir: pathlib.Path,
 ) -> tuple[pathlib.Path, dict[str, Any]]:
     attempt_dir = experiment_dir / "attempts" / attempt_id
-    build_dir = attempt_dir / "build" / "cnn_ctc_v1"
+    model_id = executor_model_basename(str(model_spec["model_id"]))
+    build_dir = attempt_dir / "build" / model_id
     command = training_command(
         root=ROOT,
         build_dir=build_dir,
         train_config=train_config,
+        model_spec=model_spec,
     )
     proc = run_process(
         command,
@@ -384,9 +389,9 @@ def execute_local(
 
     artifacts = {
         "checkpoint": build_dir / "training" / "checkpoint.pt",
-        "onnx": build_dir / "export" / "cnn_ctc_v1.onnx",
-        "openvino_xml": build_dir / "openvino" / "fp16" / "cnn_ctc_v1.xml",
-        "openvino_bin": build_dir / "openvino" / "fp16" / "cnn_ctc_v1.bin",
+        "onnx": build_dir / "export" / f"{model_id}.onnx",
+        "openvino_xml": build_dir / "openvino" / "fp16" / f"{model_id}.xml",
+        "openvino_bin": build_dir / "openvino" / "fp16" / f"{model_id}.bin",
     }
     for name, path in artifacts.items():
         if not path.is_file():
@@ -420,6 +425,7 @@ def execute_remote(
     worker: str,
     worker_repo: str,
     request: dict[str, Any],
+    model_spec: dict[str, Any],
     build_dir: pathlib.Path,
     logs_dir: pathlib.Path,
 ) -> tuple[pathlib.Path, dict[str, Any]]:
@@ -462,10 +468,11 @@ def execute_remote(
             failure_class="transport_preflight",
         )
 
+    model_id = executor_model_basename(str(model_spec["model_id"]))
     sources = [
         deployment,
-        build_dir / "openvino" / "fp16" / "cnn_ctc_v1.xml",
-        build_dir / "openvino" / "fp16" / "cnn_ctc_v1.bin",
+        build_dir / "openvino" / "fp16" / f"{model_id}.xml",
+        build_dir / "openvino" / "fp16" / f"{model_id}.bin",
     ]
     push = run_process(
         rsync_push_command(
@@ -668,7 +675,7 @@ def main() -> int:
         )
         del benchmark_path
         try:
-            validate_cnn_ctc_v1_executor_request(model_spec, train_config)
+            validate_model_executor_request(model_spec, train_config)
         except ValueError as exc:
             raise ExecutionFailure(
                 str(exc),
@@ -696,6 +703,27 @@ def main() -> int:
             log_path=logs_dir / "edge-preflight.log",
         )
 
+        probe_build = (
+            attempt_dir / "build" / executor_model_basename(str(model_spec["model_id"]))
+        )
+        probe_command = compatibility_probe_command(
+            root=ROOT,
+            build_dir=probe_build,
+            model_spec=model_spec,
+        )
+        if probe_command is not None:
+            probe = run_process(
+                probe_command,
+                log_path=logs_dir / "controller-compatibility-probe.log",
+            )
+            if probe.returncode != 0:
+                raise ExecutionFailure(
+                    "pre-training compatibility gate failed:\n"
+                    + "\n".join(probe.stdout.splitlines()[-40:]),
+                    outcome="failed",
+                    failure_class="controller_execution",
+                )
+
         manager(
             "transition",
             "--experiment",
@@ -708,6 +736,7 @@ def main() -> int:
         build_dir, compatibility = execute_local(
             experiment_dir=experiment_dir,
             attempt_id=attempt_id,
+            model_spec=model_spec,
             train_config=train_config,
             logs_dir=logs_dir,
         )
@@ -727,6 +756,7 @@ def main() -> int:
             worker=args.worker,
             worker_repo=worker_repo,
             request=request,
+            model_spec=model_spec,
             build_dir=build_dir,
             logs_dir=logs_dir,
         )
