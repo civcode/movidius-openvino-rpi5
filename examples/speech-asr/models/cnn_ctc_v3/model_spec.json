@@ -40,7 +40,7 @@
     "normalization": "none",
     "activation": "relu",
     "dropout": 0.1,
-    "residual_projection_init": "zeros",
+    "residual_projection_init": "kaiming_scaled_0.01",
     "projection_kernel": 1,
     "estimated_parameters": 1346343,
     "estimated_macs_fixed_input": 174804992,
