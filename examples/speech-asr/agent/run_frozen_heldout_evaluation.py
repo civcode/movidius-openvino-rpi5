@@ -24,6 +24,7 @@ from speech_asr.contracts import (  # noqa: E402
 from speech_asr.orchestration import (  # noqa: E402
     rsync_pull_command,
     rsync_push_command,
+    ssh_command,
     validate_worker_alias,
 )
 
@@ -100,20 +101,41 @@ def ssh_run(
     *,
     log_path: pathlib.Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    validate_worker_alias(worker)
     return run(
-        [
-            "ssh",
-            "-o",
-            "BatchMode=yes",
-            "-o",
-            "ConnectTimeout=10",
-            worker,
-            "--",
-            *command,
-        ],
+        ssh_command(worker, command),
         log_path=log_path,
     )
+
+
+def bootstrap_edge(
+    *,
+    worker: str,
+    base_repo: str,
+    worker_repo: str,
+    commit: str,
+    log_path: pathlib.Path,
+) -> None:
+    script_path = ROOT / "scripts" / "edge-speech-bootstrap.sh"
+    script = script_path.read_text(encoding="utf-8")
+    proc = subprocess.run(
+        ssh_command(
+            worker,
+            ["bash", "-s", "--", base_repo, worker_repo, commit],
+        ),
+        cwd=ROOT,
+        input=script,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text(proc.stdout, encoding="utf-8")
+    if proc.returncode != 0:
+        raise ValueError(
+            "could not pin held-out edge worker to evaluation commit:\n"
+            + "\n".join(proc.stdout.splitlines()[-40:])
+        )
 
 
 def resolve_ref(ref: dict[str, str]) -> pathlib.Path:
@@ -275,6 +297,7 @@ def main() -> int:
         default=DEFAULT_QUALIFICATION,
     )
     parser.add_argument("--worker", default="edge")
+    parser.add_argument("--edge-base-repo")
     parser.add_argument("--worker-repo")
     parser.add_argument(
         "--reference-device",
@@ -357,14 +380,29 @@ def main() -> int:
         remote_home = home_proc.stdout.strip().splitlines()[-1]
         if not remote_home.startswith("/"):
             raise ValueError("edge HOME is not absolute")
+        base_repo = (
+            args.edge_base_repo
+            or f"{remote_home}/workspace/movidius-openvino-rpi5"
+        )
         worker_repo = (
             args.worker_repo
             or f"{remote_home}/workspace/movidius-openvino-rpi5-worker"
         )
-        if not worker_repo.startswith("/") or any(
-            char.isspace() for char in worker_repo
-        ):
-            raise ValueError("worker repo must be absolute and whitespace-free")
+        for path in (base_repo, worker_repo):
+            if not path.startswith("/") or any(
+                char.isspace() for char in path
+            ):
+                raise ValueError(
+                    "edge repo paths must be absolute and whitespace-free"
+                )
+
+        bootstrap_edge(
+            worker=args.worker,
+            base_repo=base_repo,
+            worker_repo=worker_repo,
+            commit=repo_commit,
+            log_path=logs_dir / "edge-bootstrap.log",
+        )
 
         deployment = make_deployment(
             source=source,
