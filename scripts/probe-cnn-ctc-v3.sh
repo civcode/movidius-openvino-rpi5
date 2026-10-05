@@ -30,6 +30,11 @@ echo "== compare initialized ONNX =="
 "$ROOT/scripts/python-apps.sh"     "$ROOT/examples/speech-asr/evaluation/compare_cnn_ctc_v3_onnx.py"     "$EXPORT"     --output "$EXPORT/onnx-comparison.json"
 
 echo "== convert initialized graph with OpenVINO 2020.3 =="
-"$ROOT/scripts/prepare-cnn-ctc-v2.sh"     --onnx "$EXPORT/cnn_ctc_v3.onnx"     --output-dir "$IR"
+"$ROOT/scripts/prepare-cnn-ctc-v3.sh"     --onnx "$EXPORT/cnn_ctc_v3.onnx"     --output-dir "$IR"
+
+test -s "$IR/cnn_ctc_v3.xml"
+test -s "$IR/cnn_ctc_v3.bin"
+test -s "$IR/ir-validation.json"
+test -s "$IR/artifacts.json"
 
 echo "cnn_ctc_v3 compatibility graph gate: PASS"
