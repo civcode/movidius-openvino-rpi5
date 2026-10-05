@@ -25,6 +25,7 @@ from speech_asr.cnn_ctc import (  # noqa: E402
     greedy_decode_logits,
     load_spec,
     load_vocab,
+    manifest_record_eligibility,
 )
 from speech_asr.cnn_ctc_frontend import logmel_features  # noqa: E402
 from speech_asr.contracts import validate_experiment_result, validate_speech_sample  # noqa: E402
@@ -119,20 +120,37 @@ def main() -> int:
         latencies = []
         load_times = []
         per_sample = []
+        skipped = {"too_long": [], "target_too_long": []}
+        manifest_samples = 0
         total_audio_samples = 0
         total_infer_seconds = 0.0
-        fixed_audio = int(spec["frontend"]["fixed_audio_samples"])
         output_shape = tuple(int(value) for value in spec["output_contract"]["shape"])
 
         for record in records(args.manifest):
+            manifest_samples += 1
+            decision = manifest_record_eligibility(record, spec, vocab)
+            if not decision["eligible"]:
+                reason = decision["reason"]
+                if reason not in skipped:
+                    raise ValueError(
+                        f"{record['id']}: unknown cnn_ctc_v1 eligibility reason {reason!r}"
+                    )
+                skipped[reason].append(record["id"])
+                continue
+
             audio_path = resolve_audio(args.manifest, record)
             audio = read_f32le(audio_path)
-            if audio.sample_count > fixed_audio:
+            if audio.sample_count != decision["sample_count"]:
                 raise ValueError(
-                    f"{record['id']}: {audio.sample_count} samples exceeds "
-                    f"cnn_ctc_v1 fixed limit {fixed_audio}"
+                    f"{record['id']}: manifest sample count {decision['sample_count']} "
+                    f"does not match audio sample count {audio.sample_count}"
                 )
             features, valid_frames = logmel_features(audio.samples, spec)
+            if valid_frames != decision["valid_feature_frames"]:
+                raise ValueError(
+                    f"{record['id']}: frontend frame count {valid_frames} does not match "
+                    f"eligibility frame count {decision['valid_feature_frames']}"
+                )
             sample_dir = work / record["id"]
             sample_dir.mkdir(parents=True, exist_ok=True)
             feature_path = sample_dir / "features.f32"
@@ -188,6 +206,11 @@ def main() -> int:
                 )
             logits = logits_flat.reshape(output_shape)
             output_frames = acoustic_output_length(valid_frames, spec)
+            if output_frames != decision["valid_output_frames"]:
+                raise ValueError(
+                    f"{record['id']}: output frame count {output_frames} does not match "
+                    f"eligibility output count {decision['valid_output_frames']}"
+                )
             hypothesis = greedy_decode_logits(logits[0, :output_frames, :], vocab)
             reference = record["transcript"]["text"]
             words = word_error_counts(reference, hypothesis)
@@ -207,6 +230,12 @@ def main() -> int:
                     "wer": words.rate,
                     "cer": chars.rate,
                 }
+            )
+
+        if not per_sample:
+            raise ValueError(
+                "no eligible cnn_ctc_v1 samples in manifest; "
+                f"skipped={skipped}"
             )
 
         latency = latency_summary_ms(latencies)
@@ -245,6 +274,9 @@ def main() -> int:
                 "inference_latency_p50_ms": latency["p50_ms"],
                 "inference_latency_p95_ms": latency["p95_ms"],
                 "failures": 0,
+                "manifest_samples": manifest_samples,
+                "evaluated_samples": len(per_sample),
+                "skipped": skipped,
                 "measurement_scope": "MYRIAD inference only; frontend/decoder excluded",
                 "model_load_ms": {
                     "min": min(load_times),
@@ -272,7 +304,9 @@ def main() -> int:
     )
     print(
         f"status: completed\n"
-        f"samples: {len(per_sample)}\n"
+        f"samples: {len(per_sample)} evaluated / {manifest_samples} manifest\n"
+        f"skipped: too_long={len(skipped['too_long'])}, "
+        f"target_too_long={len(skipped['target_too_long'])}\n"
         f"WER: {result['metrics']['wer']:.6f}\n"
         f"CER: {result['metrics']['cer']:.6f}\n"
         f"inference-only RTF: {result['metrics']['realtime_factor']:.6f}\n"
