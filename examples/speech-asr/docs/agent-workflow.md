@@ -89,6 +89,10 @@ raw training logs.
 
 ## Execution pipeline
 
+The controller/worker split for CUDA training on oberon and physical MYRIAD
+execution on edge is specified in
+[`remote-experiment-orchestration.md`](remote-experiment-orchestration.md).
+
 Before expensive training, use a compatibility gate:
 
 ```text
