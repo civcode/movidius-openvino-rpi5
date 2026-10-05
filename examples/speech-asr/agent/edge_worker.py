@@ -223,6 +223,8 @@ def run_evaluator(
         "arm64",
         "--manifest",
         str(dataset_manifest),
+        "--benchmark-id",
+        manifest["benchmark"]["id"],
         "--ir-dir",
         str(bundle),
         "--experiment-id",
