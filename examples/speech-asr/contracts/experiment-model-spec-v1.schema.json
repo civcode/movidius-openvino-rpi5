@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "speech-asr/experiment-model-spec-v1.schema.json",
+  "title": "Speech ASR experiment model specification v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema","version","model_id","family","frontend","architecture","export"],
+  "properties": {
+    "schema": {"const":"speech-asr/experiment-model-spec"},
+    "version": {"const":1},
+    "model_id": {"type":"string","pattern":"^[a-z0-9][a-z0-9._-]*$"},
+    "family": {"type":"string","minLength":1},
+    "frontend": {
+      "type":"object","additionalProperties":true,
+      "required":["kind"],
+      "properties":{"kind":{"type":"string","minLength":1}}
+    },
+    "architecture": {
+      "type":"object","additionalProperties":true,
+      "required":["kind"],
+      "properties":{"kind":{"type":"string","minLength":1}}
+    },
+    "export": {
+      "type":"object","additionalProperties":false,
+      "required":["format","onnx_opset","fixed_shapes"],
+      "properties":{
+        "format":{"const":"onnx"},
+        "onnx_opset":{"const":11},
+        "fixed_shapes":{"const":true}
+      }
+    }
+  }
+}
