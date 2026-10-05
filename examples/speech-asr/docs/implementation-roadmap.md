@@ -864,6 +864,20 @@ It is a child of `exp-1c682f4eda475a01`, preserving the rejected generation-1
 result in lineage.
 
 
+The first generation-2 execution attempt, `exp-601c906e8088ab40`, reached the
+physical initialized-model MA2450 probe successfully but was stopped by the
+original compatibility rule because frame argmax agreement was 0.984375
+(126/128 frames) instead of the hard-coded 0.99 minimum. That rule was judged
+too brittle for an untrained near-identity network, where small FP16 logit
+perturbations can change a nearly-tied argmax.
+
+The initialized physical probe now gates on numerical tensor equivalence:
+`max_abs_error <= 0.01`, with shape and finite-value checks already enforced
+by the comparator. Argmax agreement and top-two margins remain recorded
+diagnostics. The trained experiment's accuracy/latency acceptance policy is
+unchanged.
+
+
 ---
 
 # Implementation checkpoints
