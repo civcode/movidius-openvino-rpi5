@@ -40,6 +40,12 @@ command -v flock >/dev/null 2>&1 || {
     exit 2
 }
 
+# Non-interactive SSH sessions may not source the user's interactive PATH.
+# Exercise the same resolver used by scripts/python.sh before expensive work.
+# shellcheck source=scripts/lib/python-env.sh
+source "$ROOT/scripts/lib/python-env.sh"
+python_env_require_uv || exit $?
+
 manifest="$ROOT/$MANIFEST_REL"
 [[ -f "$manifest" ]] || {
     echo "declared dataset manifest missing: $manifest" >&2
