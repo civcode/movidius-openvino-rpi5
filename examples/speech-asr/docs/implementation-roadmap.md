@@ -25,7 +25,7 @@ The central rule is:
 | 8 — custom PyTorch training skeleton | **complete** — deterministic CUDA training, ONNX/OpenVINO export, physical Pi 5/arm64 + MA2450 execution, and contract-valid AMI smoke evaluation accepted |
 | 9 — experiment lifecycle | **complete** — immutable content-derived requests, attempt state machine, artifact/result provenance, deployment manifests and history index accepted by static checks and the full speech-ASR unit suite |
 | 10 — local execution agent and frontier handoff | **complete** — oberon controller, exact-commit edge worktree, non-interactive SSH/rsync, hash-bound deployment, exclusive MYRIAD locking, result collection and AWAIT_REVIEW handoff physically accepted on Pi 5/MA2450 |
-| 11 | not started |
+| 11 — architecture optimization loop | **generation 1 implemented; evaluation pending** — cnn_ctc_v2 residual large-kernel temporal CTC model, compatibility-first MYRIAD gate, strict hardware/quality policy, and v1 lineage are implemented |
 
 Phase 0 was re-reviewed after later implementation work. The root audio,
 benchmark, model and text contracts now have executable semantic validators,
@@ -757,11 +757,68 @@ Track a Pareto frontier across:
 Hard constraints can include successful OpenVINO conversion and MYRIAD
 execution.
 
+### Generation 1 implementation: cnn_ctc_v2
+
+The first optimization generation is `cnn_ctc_v2`, defined in
+`models/cnn_ctc_v2/model_spec.json` and
+`docs/adr/phase11-cnn-ctc-v2.md`.
+
+The design combines current efficient-ASR principles with the legacy target:
+
+- early 4x temporal reduction, following the low-rate-compute lesson from
+  FastConformer/Zipformer;
+- residual temporal CTC blocks, following QuartzNet/Citrinet;
+- large ordinary kernels `11,19,27,35,43` for a 533-frame receptive field;
+- 96-channel low-rate encoder;
+- BatchNorm + ReLU + training-only dropout;
+- no attention, LayerNorm, Swish/GELU, grouped/depthwise convolution,
+  squeeze/excitation, dilation, dynamic shapes, or autoregressive decoder.
+
+The frozen resource estimate for `[1,64,512]` is:
+
+- 1,347,463 parameters;
+- 174,804,992 MACs;
+- about 2.6 MiB FP16 weights;
+- fixed `[1,128,39]` CTC output.
+
+Generation 1 adds a two-stage compatibility gate before full CUDA training:
+
+```text
+initialized model
+ -> ONNX
+ -> OpenVINO 2020.3 FP16
+ -> edge transfer
+ -> physical MA2450 load/compile/infer
+ -> PyTorch/MYRIAD numerical comparison
+ -> full CUDA training
+```
+
+The reviewed experiment initializer is:
+
+```bash
+./scripts/init-cnn-ctc-v2-experiment.sh
+```
+
+It defaults to parent `exp-f915ec624a63caf6`, the physically accepted
+`cnn_ctc_v1` Phase 10 baseline. The frozen generation-1 acceptance policy
+requires:
+
+- WER <= 1.0;
+- CER <= 0.913043;
+- inference-only RTF <= 0.05;
+- MYRIAD p95 latency <= 100 ms;
+- PyTorch/ONNX frame argmax agreement = 1.0;
+- all training/export/OpenVINO/MYRIAD/accuracy gates to complete.
+
 ### Exit criteria
 
 At least two architecture generations have been proposed, trained, evaluated
 and reviewed through the formal workflow, with lineage and results sufficient
 to explain why the next architecture was chosen.
+
+Generation 1 is implemented but does not satisfy the Phase 11 exit criteria
+until it is executed and reviewed. Generation 2 must be chosen from generation
+1 evidence rather than preselected now.
 
 ---
 
@@ -810,20 +867,31 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-Phase 10 is **complete**.
+Phase 11 generation 1 is **implemented; evaluation pending**.
 
-The next implementation boundary is **Phase 11 — architecture optimization**.
-The execution platform is now qualified, so new work may focus on reviewed
-model-design experiments while preserving the Phase 9/10 lifecycle:
+Run the hardware-free checks on oberon, then initialize and execute
+`cnn_ctc_v2`:
 
-1. REVIEW the accepted `cnn_ctc_v1` evidence and define the first explicit
-   optimization hypothesis;
-2. extend the executable model registry only for reviewed model specs rather
-   than teaching Phase 10 to infer architectures;
-3. keep compatibility gates ahead of expensive CUDA training;
-4. run each approved architecture through the same immutable
-   oberon -> edge -> `AWAIT_REVIEW` path;
-5. compare accuracy, latency, RTF and compatibility evidence across lineage.
+```bash
+git pull --ff-only
+./ci/verify-static.sh
+./scripts/test-speech-asr.sh
 
-Architecture changes remain frontier-design decisions; Phase 10 execution
-continues to be deterministic infrastructure.
+EXP="$(
+  ./scripts/init-cnn-ctc-v2-experiment.sh |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
+)"
+
+./scripts/run-speech-experiment.sh \
+  --experiment "$EXP" \
+  --worker edge
+```
+
+The controller first converts and physically probes the initialized v2 graph on
+MA2450. Only after that gate passes does it spend the declared CUDA training
+budget.
+
+When the attempt reaches `AWAIT_REVIEW`, compare its WER, CER, RTF, p95
+latency, training loss, parameter count and compatibility evidence against the
+v1 parent. REVIEW then chooses generation 2; do not precommit the second
+architecture before those results exist.
