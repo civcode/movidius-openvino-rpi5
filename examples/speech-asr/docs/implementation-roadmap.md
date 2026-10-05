@@ -840,8 +840,7 @@ MACs. The controlled changes are:
 
 - remove BatchNorm from stem and residual blocks;
 - use bias-bearing ordinary Conv1d layers;
-- zero-initialize each residual block's final 1x1 projection so the residual
-  stack begins as an identity perturbation;
+- initialize each residual block's final 1x1 projection with Kaiming weights scaled to 1%, keeping the residual stack near identity without making the compatibility-probe branch exactly zero;
 - change training from 1 epoch / batch 2 to 32 epochs / batch 1;
 - Adam learning rate 3e-4 with cosine decay to 3e-5;
 - deterministic gradient clipping at norm 5.0;
