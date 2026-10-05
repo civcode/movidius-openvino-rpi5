@@ -39,10 +39,10 @@ The execution side is now concrete:
 - `run_experiment.py` is the oberon controller;
 - `edge_worker.py` is the exact-commit, hash-validating MYRIAD worker.
 
-The controller accepts only reviewed Phase 9 files. The initial executor registry
-contains only the qualified `cnn_ctc_v1` declaration. Unknown model IDs or
-undeclared architecture parameters fail instead of being interpreted by a local
-model.
+The controller accepts only reviewed Phase 9 files. The executor registry now
+contains the qualified `cnn_ctc_v1` baseline and the explicitly reviewed
+Phase 11 `cnn_ctc_v2` generation. Unknown model IDs or undeclared architecture
+parameters fail instead of being interpreted by a local model.
 
 The final controller artifact is the compact Phase 9 `results/result.json`,
 which always returns to `AWAIT_REVIEW`. A rejected acceptance policy is
@@ -60,3 +60,16 @@ result collection and acceptance evaluation, then stopped at
 Phase 10 is therefore qualified as execution infrastructure. Phase 11 may add
 new reviewed model executors, but it must not broaden this component's design
 authority.
+
+
+## Phase 11 generation 1
+
+`cnn_ctc_v2` is the first new executor added after REVIEW. Its experiment
+model declaration includes the complete frozen architecture tuple, and the
+controller checks exact equality before execution.
+
+For this generation, compatibility authority is stricter than Phase 10:
+initialized ONNX/OpenVINO conversion and one physical MYRIAD inference must pass
+before the attempt enters full CUDA training. This remains deterministic
+execution logic; the controller still cannot alter kernels, width, depth,
+frontend, thresholds, or training policy in response to a result.
