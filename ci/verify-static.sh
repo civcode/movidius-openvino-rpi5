@@ -225,7 +225,7 @@ for f in \
     test -x "$f" || fail "Phase 11 generation-2 shell entry point is not executable: $f"
 done
 grep -q '"normalization": "none"' examples/speech-asr/models/cnn_ctc_v3/model_spec.json || fail 'cnn_ctc_v3 must remain normalization-free'
-grep -q '"residual_projection_init": "zeros"' examples/speech-asr/models/cnn_ctc_v3/model_spec.json || fail 'cnn_ctc_v3 zero-init residual policy missing'
+grep -q '"residual_projection_init": "kaiming_scaled_0.01"' examples/speech-asr/models/cnn_ctc_v3/model_spec.json || fail 'cnn_ctc_v3 near-identity residual policy missing'
 grep -q '"epochs": 32' examples/speech-asr/models/cnn_ctc_v3/model_spec.json || fail 'cnn_ctc_v3 optimization budget changed'
 grep -q '"batch_size": 1' examples/speech-asr/models/cnn_ctc_v3/model_spec.json || fail 'cnn_ctc_v3 batch size changed'
 grep -q 'clip_grad_norm_' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'cnn_ctc_v3 gradient clipping missing'
