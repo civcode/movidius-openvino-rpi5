@@ -93,6 +93,7 @@ def sum_rate(counts) -> float:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", type=pathlib.Path, default=DEFAULT_MANIFEST)
+    parser.add_argument("--benchmark-id", default="ami-smoke-v1")
     parser.add_argument("--spec", type=pathlib.Path, default=DEFAULT_SPEC)
     parser.add_argument("--vocab", type=pathlib.Path, default=DEFAULT_VOCAB)
     parser.add_argument("--ir-dir", type=pathlib.Path, default=DEFAULT_IR)
@@ -266,7 +267,7 @@ def main() -> int:
             "experiment_id": args.experiment_id,
             "status": "completed",
             "benchmark": {
-                "id": "ami-smoke-v1",
+                "id": args.benchmark_id,
                 "contract_version": 1,
                 "manifest_sha256": manifest_sha,
                 "text_normalization_version": "text-v1",
