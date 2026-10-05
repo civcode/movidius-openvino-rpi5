@@ -190,6 +190,25 @@ class CnnCtcV3ExecutorTests(unittest.TestCase):
         self.assertEqual(command[0], "/repo/scripts/probe-cnn-ctc-v3.sh")
 
 
+    def test_training_command_propagates_blank_logit_objective(self):
+        config = train_config()
+        config["checkpoint_selection"] = "validation_cer"
+        config["ctc_objective"] = {
+            "kind": "blank-logit-penalty-v1",
+            "blank_logit_penalty": 0.25,
+        }
+        validate_model_executor_request(experiment_model_spec(), config)
+        command = training_command(
+            root=pathlib.Path("/repo"),
+            build_dir=pathlib.Path("/repo/work/attempt/cnn_ctc_v3"),
+            train_config=config,
+            model_spec=experiment_model_spec(),
+        )
+        text = " ".join(command)
+        self.assertIn("--ctc-objective-kind blank-logit-penalty-v1", text)
+        self.assertIn("--blank-logit-penalty 0.25", text)
+
+
 class CnnCtcV3DeviceEvidenceTests(unittest.TestCase):
     def test_cuda_request_requires_cuda_model_logits_and_vram(self):
         result = validate_training_device_evidence(
@@ -315,6 +334,8 @@ class Phase11Generation2SourceTests(unittest.TestCase):
             '"augmentation": augmentation_policy',
             '"augmentation_stats": augmentation_stats',
             'batch["feature_lengths"]',
+            "blank_logit_penalty",
+            '"ctc_objective": ctc_objective',
         ):
             self.assertIn(marker, source)
 
@@ -341,6 +362,18 @@ class Phase11Generation2SourceTests(unittest.TestCase):
         self.assertNotIn("prepare-cnn-ctc-v2.sh", source)
         self.assertIn('test -s "$IR/cnn_ctc_v3.xml"', source)
         self.assertIn('test -s "$IR/cnn_ctc_v3.bin"', source)
+
+    def test_blank_penalty_initializer_keeps_v3_graph_and_parent(self):
+        source = (
+            SPEECH / "agent" / "init_cnn_ctc_v3_blank_penalty.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('DEFAULT_PARENT = "exp-3c7727ca3f37ba2c"', source)
+        self.assertIn('"model_id": "cnn_ctc_v3"', source)
+        self.assertIn('"frontend": {"kind": "logmel-v1"}', source)
+        self.assertIn('"kind": "blank-logit-penalty-v1"', source)
+        self.assertIn('"blank_logit_penalty": 0.25', source)
+        self.assertIn('"checkpoint_selection": "validation_cer"', source)
+        self.assertNotIn('"augmentation": {', source)
 
     def test_initializer_uses_generation_one_parent_and_tighter_hw_gates(self):
         source = (
