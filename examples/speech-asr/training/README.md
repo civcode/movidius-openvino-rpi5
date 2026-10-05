@@ -115,3 +115,43 @@ MYRIAD latency p50/p95 4.380/4.407 ms.
 The next project phase is the experiment lifecycle; further architecture work
 should be expressed as explicit experiment records rather than extending this
 bring-up skeleton ad hoc.
+
+
+## Phase 11 generation 1: cnn_ctc_v2
+
+`cnn_ctc_v2` is the first accuracy-oriented architecture generation. It keeps
+the accepted frontend, CTC vocabulary, output rate and benchmark fixed while
+replacing the bring-up encoder with a 1.35M-parameter residual temporal stack.
+
+Direct local graph probe:
+
+```bash
+./scripts/probe-cnn-ctc-v2.sh
+```
+
+Direct CUDA training/export path:
+
+```bash
+./scripts/train-cnn-ctc-v2.sh --device cuda
+```
+
+The normal Phase 11 workflow is the experiment controller rather than these
+manual commands:
+
+```bash
+EXP="$(
+  ./scripts/init-cnn-ctc-v2-experiment.sh |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
+)"
+./scripts/run-speech-experiment.sh --experiment "$EXP" --worker edge
+```
+
+For v2 the controller performs both OpenVINO conversion and a one-inference
+physical MA2450 graph probe from an initialized checkpoint before entering the
+full training state. The probe output is numerically compared against the
+PyTorch golden tensor and retained in the attempt compatibility evidence.
+
+Generation 1 deliberately avoids grouped/depthwise convolution and attention
+despite their use in efficient modern ASR models. The first goal is to learn how
+much accuracy can be recovered with a large-receptive-field residual encoder
+while staying inside an operator family already close to the proven v1 graph.
