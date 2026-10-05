@@ -484,6 +484,14 @@ def validate_train_config(document: Any) -> Dict[str, Any]:
     max_samples = root.get("max_samples")
     if max_samples is not None:
         _integer(max_samples, "$.max_samples", errors, minimum=1)
+    checkpoint_selection = root.get("checkpoint_selection")
+    if checkpoint_selection is not None and checkpoint_selection not in {
+        "validation_loss",
+        "validation_cer",
+    }:
+        errors.append(
+            "$.checkpoint_selection: expected validation_loss or validation_cer"
+        )
     optimizer = _mapping(root.get("optimizer"), "$.optimizer", errors)
     _nonempty_string(optimizer.get("kind"), "$.optimizer.kind", errors)
     learning_rate = optimizer.get("learning_rate")
