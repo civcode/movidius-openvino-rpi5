@@ -37,6 +37,7 @@ from speech_asr.orchestration import (  # noqa: E402
     compatibility_probe_command,
     executor_model_basename,
     load_compatibility_result,
+    pretraining_myriad_compatibility,
     remote_failure_class,
     rsync_pull_command,
     rsync_push_command,
@@ -483,31 +484,11 @@ def physical_compatibility_probe(
 
     comparison_doc = load_json(comparison_path)
     comparison_metrics = comparison_doc.get("comparison", {})
-    max_abs_error = comparison_metrics.get("max_abs_error")
-    unexplained = comparison_metrics.get(
-        "frame_argmax_unexplained_mismatches"
-    )
-    if (
-        not isinstance(max_abs_error, (int, float))
-        or isinstance(max_abs_error, bool)
-        or max_abs_error > 0.01
-    ):
+    numerical_gate = pretraining_myriad_compatibility(comparison_metrics)
+    if numerical_gate["status"] != "accepted":
         raise ExecutionFailure(
-            "pretraining MYRIAD numerical error exceeds compatibility "
-            f"limit: max_abs_error={max_abs_error!r} > 0.01",
-            outcome="failed",
-            failure_class="hardware_execution",
-        )
-    if not isinstance(unexplained, int) or isinstance(unexplained, bool):
-        raise ExecutionFailure(
-            "pretraining MYRIAD comparison lacks argmax explainability evidence",
-            outcome="failed",
-            failure_class="result_contract",
-        )
-    if unexplained != 0:
-        raise ExecutionFailure(
-            "pretraining MYRIAD has argmax flips not explained by measured "
-            f"FP16 error: {unexplained}",
+            "pretraining MYRIAD numerical compatibility failed: "
+            + "; ".join(numerical_gate["reasons"]),
             outcome="failed",
             failure_class="hardware_execution",
         )
@@ -522,6 +503,7 @@ def physical_compatibility_probe(
             "model_id": model_id,
             "output_sha256": sha256_file(collected / "myriad-output.f32"),
             "comparison": comparison_doc["comparison"],
+            "numerical_gate": numerical_gate,
             "log_sha256": sha256_file(logs_dir / "edge-model-probe.log"),
         },
     )
