@@ -161,6 +161,12 @@ def training_command(
     max_samples = train_config.get("max_samples")
     if max_samples is not None:
         command.extend(["--max-samples", str(max_samples)])
+    checkpoint_selection = train_config.get("checkpoint_selection")
+    if checkpoint_selection is not None:
+        command.extend([
+            "--checkpoint-selection",
+            str(checkpoint_selection),
+        ])
     return command
 
 
