@@ -201,6 +201,15 @@ class Phase11Generation2SourceTests(unittest.TestCase):
         )
         self.assertIn('"cnn_ctc_v3": "evaluate-cnn-ctc-v3.sh"', source)
 
+    def test_v3_probe_uses_v3_conversion_and_checks_artifacts(self):
+        source = (ROOT / "scripts" / "probe-cnn-ctc-v3.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("prepare-cnn-ctc-v3.sh", source)
+        self.assertNotIn("prepare-cnn-ctc-v2.sh", source)
+        self.assertIn('test -s "$IR/cnn_ctc_v3.xml"', source)
+        self.assertIn('test -s "$IR/cnn_ctc_v3.bin"', source)
+
     def test_initializer_uses_generation_one_parent_and_tighter_hw_gates(self):
         source = (
             SPEECH / "agent" / "init_cnn_ctc_v3_experiment.py"
