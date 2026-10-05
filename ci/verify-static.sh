@@ -193,6 +193,9 @@ done
 grep -q 'residual-temporal-v1' examples/speech-asr/models/cnn_ctc_v2/model_spec.json || fail 'cnn_ctc_v2 residual architecture missing'
 grep -q '174804992' examples/speech-asr/models/cnn_ctc_v2/model_spec.json || fail 'cnn_ctc_v2 MAC estimate not frozen'
 grep -q 'physical_compatibility_probe' examples/speech-asr/agent/run_experiment.py || fail 'Phase 11 lacks pretraining physical MYRIAD probe'
+grep -q 'acceptance_reasons' examples/speech-asr/agent/run_experiment.py || fail 'controller does not surface review rejection reasons'
+test -f examples/speech-asr/agent/review_experiment.py || fail 'experiment review tool missing'
+test -x scripts/review-speech-experiment.sh || fail 'experiment review wrapper is not executable'
 grep -q 'cnn_ctc_v2' examples/speech-asr/agent/edge_worker.py || fail 'edge worker does not register cnn_ctc_v2'
 if grep -q 'groups=' examples/speech-asr/training/cnn_ctc_v2.py; then
     fail 'cnn_ctc_v2 generation 1 must not use grouped/depthwise convolution'
@@ -217,6 +220,7 @@ for name in [
     "examples/speech-asr/python/speech_asr/orchestration.py",
     "examples/speech-asr/agent/init_cnn_ctc_v1_experiment.py",
     "examples/speech-asr/agent/init_cnn_ctc_v2_experiment.py",
+    "examples/speech-asr/agent/review_experiment.py",
     "examples/speech-asr/agent/run_experiment.py",
     "examples/speech-asr/agent/edge_worker.py",
     "examples/speech-asr/tools/manage_experiment.py",
