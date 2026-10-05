@@ -80,6 +80,8 @@ def attempt_summary(experiment: pathlib.Path, attempt: pathlib.Path) -> dict[str
             "best_epoch": training.get("best_epoch"),
             "checkpoint_selection": training.get("checkpoint_selection"),
             "selected_metric_value": training.get("selected_metric_value"),
+            "augmentation": training.get("augmentation"),
+            "augmentation_stats": training.get("augmentation_stats"),
             "best_validation_loss": training.get("best_validation_loss"),
             "best_validation_loss_epoch": training.get(
                 "best_validation_loss_epoch"
