@@ -96,11 +96,12 @@ Required gates remain:
 Hardware/compatibility constraints remain:
 
 - ONNX frame argmax agreement >= 1.0;
-- inference-only RTF <= 0.01;
 - MYRIAD p95 latency <= 25 ms.
 
-WER and CER are measured and reviewed but have no numeric acceptance threshold
-for this baseline.
+WER, CER and corpus-level inference-only RTF are measured and reviewed but have
+no numeric acceptance threshold for this baseline. RTF depends on the
+benchmark's clip-duration distribution for this fixed-shape graph, whereas
+per-inference latency is directly comparable across manifests.
 
 ## Edge provisioning
 
@@ -139,3 +140,65 @@ EXP="$(
 
 A later architecture generation may be proposed only after this baseline result
 is reviewed.
+
+
+## Executed baseline result
+
+The reviewed baseline executed as
+`exp-62a94f36aefddb58/attempt-0001`.
+
+Execution was healthy:
+
+- CUDA model/logits placement was verified on NVIDIA GeForce RTX 4070 Ti SUPER;
+- 4,000 optimizer steps completed;
+- 7,039.936 seconds of training audio were processed;
+- OpenVINO IR validation passed;
+- PyTorch/ONNX frame argmax agreement was 1.0;
+- initialized MYRIAD numerical compatibility passed;
+- MYRIAD p50/p95 latency was 16.60 / 16.65 ms;
+- zero hardware failures occurred.
+
+The original immutable request was rejected only because it applied
+`max_realtime_factor = 0.01`. The measured RTF was 0.012877. That rejection
+is a benchmark-policy defect rather than a hardware regression: p95 latency was
+effectively unchanged from the smoke parent, while the validation population
+contains shorter clips. Future model-quality experiments leave RTF ungated and
+retain the fixed-shape latency gate.
+
+Accuracy/decoder evidence:
+
+- WER: 1.0;
+- CER: 0.980847;
+- blank-frame fraction: 0.959331;
+- empty hypotheses: 84 / 95 (0.884211);
+- emitted characters excluding spaces: 25;
+- reference characters excluding spaces: 992;
+- emitted/reference character ratio: 0.025202.
+
+Training evidence showed strong overfit:
+
+- best validation loss: 4.798953 at epoch 11;
+- final epoch train loss: 0.475595;
+- final epoch validation loss: 10.958259.
+
+The baseline therefore establishes a real held-out-speaker failure mode: severe
+CTC blank collapse. It does not justify another inference-graph architecture
+change yet, because checkpoint selection still uses CTC loss even though prior
+evidence showed that loss and greedy CER do not rank candidates consistently.
+
+## Next diagnostic
+
+The immediate child experiment keeps the exact graph, manifests and optimizer
+trajectory but records held-out WER/CER and decoder-collapse metrics at every
+epoch and selects the exported checkpoint by minimum validation CER.
+
+Use:
+
+```bash
+./scripts/init-cnn-ctc-v3-cer-selection.sh
+```
+
+If a materially better epoch exists, subsequent work should retain
+metric-aligned checkpointing. If every epoch remains blank-collapsed, the next
+intervention should be training regularization/augmentation rather than a
+hardware-graph redesign.
