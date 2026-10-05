@@ -13,6 +13,12 @@ runtime provenance and benchmark results.
 - `streaming-v1.json` — Phase 7 chunk/event/timing semantics.
 - `streaming-replay-result-v1.schema.json` — deterministic recorded-audio replay result.
 - `model-v1.yaml` — model-package and provenance boundary.
+- `experiment-proposal-v1.schema.json` — reviewed architecture hypothesis/change request.
+- `experiment-model-spec-v1.schema.json` — reviewed model/frontend/export declaration.
+- `train-config-v1.schema.json` — deterministic training and dataset inputs.
+- `acceptance-policy-v1.schema.json` — required gates, thresholds and retry policy.
+- `experiment-lifecycle-v1.schema.json` — immutable request, attempts, summaries and history.
+- `deployment-manifest-v1.schema.json` — hash-bound controller-to-edge deployment handoff.
 
 The three `.yaml` files intentionally contain JSON syntax. JSON is valid YAML
 1.2, and this keeps the root contracts parseable with the Python standard
@@ -72,3 +78,14 @@ result.
 
 The scripted update fixture is deliberately separate from a model contract. It
 lets the project validate streaming mechanics before a raw-audio model exists.
+
+## Phase 9 experiment lifecycle
+
+Phase 9 experiment identity is content-derived from the immutable reviewed
+request. Semantic validation additionally enforces parent lineage, request/document
+hashes, legal attempt state transitions, immutable artifact/result references,
+retry-policy structure, deterministic history ordering, and exact controller /
+worker Git revision matching for a deployment manifest.
+
+The JSON schemas describe the portable shape; `speech_asr.contracts` and
+`speech_asr.experiment` enforce cross-field identity and lifecycle invariants.
