@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "speech-asr/edge-worker-result-v1.schema.json",
+  "title": "Speech ASR edge worker result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "version",
+    "status",
+    "failure_class",
+    "experiment_id",
+    "attempt_id",
+    "worker_commit",
+    "deployment_sha256"
+  ],
+  "properties": {
+    "schema": {"const": "speech-asr/edge-worker-result"},
+    "version": {"const": 1},
+    "status": {"enum": ["completed", "failed"]},
+    "failure_class": {
+      "type": ["string", "null"],
+      "enum": [
+        null,
+        "request_config",
+        "transport_preflight",
+        "hardware_execution",
+        "hardware_transient",
+        "result_contract"
+      ]
+    },
+    "experiment_id": {
+      "type": ["string", "null"],
+      "pattern": "^exp-[0-9a-f]{16}$"
+    },
+    "attempt_id": {
+      "type": ["string", "null"],
+      "pattern": "^attempt-[0-9]{4}$"
+    },
+    "worker_commit": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "deployment_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "hardware_result": {"$ref": "#/$defs/artifact"},
+    "evaluator_log": {"$ref": "#/$defs/artifact"},
+    "metrics": {"type": "object", "additionalProperties": true},
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["summary"],
+      "properties": {"summary": {"type": "string", "minLength": 1}}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "completed"}}},
+      "then": {
+        "required": [
+          "hardware_result",
+          "evaluator_log",
+          "metrics"
+        ],
+        "properties": {
+          "failure_class": {"const": null},
+          "experiment_id": {"type": "string"},
+          "attempt_id": {"type": "string"},
+          "worker_commit": {"type": "string"},
+          "deployment_sha256": {"type": "string"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "failed"}}},
+      "then": {
+        "required": ["diagnostics"],
+        "properties": {"failure_class": {"type": "string"}}
+      }
+    }
+  ],
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}
