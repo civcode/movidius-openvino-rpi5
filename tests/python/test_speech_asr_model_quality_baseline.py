@@ -23,7 +23,7 @@ class ModelQualityBaselineSourceTests(unittest.TestCase):
         self.assertIn('"records") != 95', source)
         self.assertIn('"max_wer": None', source)
         self.assertIn('"max_cer": None', source)
-        self.assertIn('"max_realtime_factor": 0.01', source)
+        self.assertIn('"max_realtime_factor": None', source)
         self.assertIn('"max_latency_p95_ms": 25.0', source)
 
     def test_baseline_keeps_v3_training_policy(self):
