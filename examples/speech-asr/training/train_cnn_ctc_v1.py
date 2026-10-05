@@ -123,6 +123,8 @@ def main() -> int:
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--batch-size", type=int)
+    parser.add_argument("--seed", type=int)
+    parser.add_argument("--learning-rate", type=float)
     parser.add_argument("--max-samples", type=int)
     parser.add_argument("--init-only", action="store_true")
     args = parser.parse_args()
@@ -130,14 +132,23 @@ def main() -> int:
     try:
         spec = load_spec(args.spec)
         vocab = load_vocab(args.vocab)
-        seed = int(spec["training"]["seed"])
+        seed = args.seed if args.seed is not None else int(spec["training"]["seed"])
+        if seed < 0:
+            raise ValueError("seed must be >= 0")
         set_deterministic(seed)
         device = choose_device(args.device)
 
         batch_size = args.batch_size or int(spec["training"]["batch_size"])
         epochs = args.epochs if args.epochs is not None else int(spec["training"]["epochs"])
-        if epochs < 0 or batch_size < 1:
-            raise ValueError("epochs must be >= 0 and batch size must be >= 1")
+        learning_rate = (
+            args.learning_rate
+            if args.learning_rate is not None
+            else float(spec["training"]["learning_rate"])
+        )
+        if epochs < 0 or batch_size < 1 or learning_rate <= 0:
+            raise ValueError(
+                "epochs must be >= 0, batch size >= 1 and learning rate > 0"
+            )
 
         train_dataset = None
         validation_dataset = None
@@ -184,7 +195,7 @@ def main() -> int:
         )
         optimizer = torch.optim.Adam(
             model.parameters(),
-            lr=float(spec["training"]["learning_rate"]),
+            lr=learning_rate,
         )
 
         history = []
@@ -253,6 +264,7 @@ def main() -> int:
             "seed": seed,
             "epochs": 0 if args.init_only else epochs,
             "batch_size": batch_size,
+            "learning_rate": learning_rate,
             "train_samples": 0 if train_dataset is None else len(train_dataset),
             "validation_samples": (
                 0 if validation_dataset is None else len(validation_dataset)
