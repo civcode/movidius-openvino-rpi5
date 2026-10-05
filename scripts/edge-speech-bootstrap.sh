@@ -54,7 +54,7 @@ base_ami="$BASE_REPO/work/speech-asr/ami"
 worker_speech="$WORKER_REPO/work/speech-asr"
 worker_ami="$worker_speech/ami"
 mkdir -p "$worker_speech"
-if [[ ! -e "$worker_ami" && -e "$base_ami" ]]; then
+if [[ ! -e "$worker_ami" && ! -L "$worker_ami" && -e "$base_ami" ]]; then
     ln -s "$base_ami" "$worker_ami"
 fi
 
