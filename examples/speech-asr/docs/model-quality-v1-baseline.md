@@ -250,3 +250,55 @@ Validation, checkpoint scoring, export and inference remain unaugmented.
 
 This isolates whether modest input regularization improves held-out emission
 without changing the OpenVINO 2020.3 / MA2450 graph.
+
+
+## SpecAugment result
+
+The deterministic SpecAugment child completed as
+`exp-2de4643d351299ec/attempt-0001` and was accepted by the execution policy,
+but it was a negative model-quality result relative to its parent
+`exp-3c7727ca3f37ba2c`.
+
+Same-manifest deltas:
+
+- CER regressed from 0.866935 to 0.903226;
+- WER improved from 1.161417 to 1.027559;
+- blank-frame fraction regressed from 0.613316 to 0.832404;
+- empty hypotheses regressed from 19/95 to 36/95;
+- emitted/reference character ratio regressed from 0.479839 to 0.207661;
+- p95 MA2450 latency remained effectively unchanged at 16.65 ms.
+
+The augmentation policy was exercised across all 4,000 samples/optimizer
+updates, with 7,104 nonzero frequency masks and 7,219 nonzero time masks.
+Training regularization therefore changed optimization materially, but moved
+the decoder back toward blank collapse.
+
+Decision: do not stack stronger augmentation or weight decay on this branch.
+Retain the unaugmented CER-selected v3 result as the reference parent.
+
+## Frontend normalization correction
+
+Inspection of the frozen `logmel-v1` frontend found that
+`per_mel_bin_mean` is computed after zero-padding every utterance to the fixed
+512-frame input. Padding frames therefore influence CMVN even though they are
+not real speech and are excluded from CTC input lengths.
+
+For short utterances this creates a clip-length-dependent feature offset and
+leaves nonzero normalized values in padded frames. That is a structural
+preprocessing issue, not an OpenVINO graph issue.
+
+`cnn_ctc_v4` introduces `logmel-v2`:
+
+1. determine the valid frontend-frame count from the real audio;
+2. compute each mel-bin mean using valid frames only;
+3. subtract that mean;
+4. set all padded feature frames exactly to zero.
+
+The v3 inference graph, vocabulary, train/validation manifests, optimizer
+schedule and validation-CER checkpoint selection remain unchanged.
+
+The reviewed child initializer is:
+
+```bash
+./scripts/init-cnn-ctc-v4-valid-cmvn.sh
+```
