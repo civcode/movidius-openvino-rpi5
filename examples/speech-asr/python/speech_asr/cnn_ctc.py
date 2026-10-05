@@ -185,6 +185,55 @@ def greedy_decode_logits_diagnostics(
     }
 
 
+def aggregate_decoder_diagnostics(per_sample: Sequence[dict]) -> dict:
+    if not per_sample:
+        raise ValueError("decoder diagnostics require at least one evaluated sample")
+
+    frame_count = sum(int(item["decoder"]["frame_count"]) for item in per_sample)
+    blank_frames = sum(
+        int(item["decoder"]["blank_argmax_frames"]) for item in per_sample
+    )
+    nonblank_frames = sum(
+        int(item["decoder"]["nonblank_argmax_frames"]) for item in per_sample
+    )
+    collapsed_tokens = sum(
+        int(item["decoder"]["collapsed_token_count"]) for item in per_sample
+    )
+    emitted_words = sum(
+        int(item["decoder"]["emitted_words"]) for item in per_sample
+    )
+    emitted_characters = sum(
+        int(item["decoder"]["emitted_characters_no_spaces"])
+        for item in per_sample
+    )
+    reference_words = sum(int(item["reference_words"]) for item in per_sample)
+    reference_characters = sum(
+        int(item["reference_characters_no_spaces"]) for item in per_sample
+    )
+    empty_hypotheses = sum(
+        1 for item in per_sample if not str(item["hypothesis"]).strip()
+    )
+
+    return {
+        "frame_count": frame_count,
+        "blank_argmax_frames": blank_frames,
+        "nonblank_argmax_frames": nonblank_frames,
+        "blank_frame_fraction": (
+            blank_frames / frame_count if frame_count else 0.0
+        ),
+        "collapsed_token_count": collapsed_tokens,
+        "emitted_words": emitted_words,
+        "reference_words": reference_words,
+        "emitted_characters_no_spaces": emitted_characters,
+        "reference_characters_no_spaces": reference_characters,
+        "emitted_to_reference_character_ratio": (
+            emitted_characters / max(1, reference_characters)
+        ),
+        "empty_hypotheses": empty_hypotheses,
+        "empty_hypothesis_fraction": empty_hypotheses / len(per_sample),
+    }
+
+
 def conv1d_output_length(
     length: int,
     *,
