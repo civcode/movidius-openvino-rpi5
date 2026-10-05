@@ -291,7 +291,7 @@ class FrozenHeldoutControllerSourceTests(unittest.TestCase):
         self.assertIn("[heldout-reference]", evaluator)
         self.assertIn("flush=True", evaluator)
 
-    def test_heldout_hardware_retry_resumes_completed_samples(self):
+    def test_heldout_hardware_uses_persistent_resumable_server(self):
         evaluator = (
             SPEECH / "evaluation" / "evaluate_cnn_ctc_v3.py"
         ).read_text(encoding="utf-8")
@@ -301,15 +301,30 @@ class FrozenHeldoutControllerSourceTests(unittest.TestCase):
         controller = (
             SPEECH / "agent" / "run_frozen_heldout_evaluation.py"
         ).read_text(encoding="utf-8")
+        runner = (ROOT / "run.sh").read_text(encoding="utf-8")
+        smoke = (ROOT / "smoke-test" / "main.cpp").read_text(
+            encoding="utf-8"
+        )
 
-        self.assertIn("def load_sample_cache(", evaluator)
-        self.assertIn('"sample-cache.json"', evaluator)
+        self.assertIn(
+            'EXECUTION_MODE = "persistent-tensor-stream-v1"',
+            evaluator,
+        )
+        self.assertIn("class PersistentMyriadServer:", evaluator)
+        self.assertIn('"custom-server"', evaluator)
+        self.assertIn("CACHE_VERSION = 2", evaluator)
+        self.assertIn('"execution_mode": EXECUTION_MODE', evaluator)
         self.assertIn('"feature_sha256"', evaluator)
         self.assertIn('"xml_sha256"', evaluator)
         self.assertIn('"bin_sha256"', evaluator)
         self.assertIn('"logits_sha256"', evaluator)
-        self.assertIn('"RESULT: PASS"', evaluator)
+        self.assertIn('"evaluator_sha256"', evaluator)
+        self.assertIn("select.select(", evaluator)
         self.assertIn("[myriad-eval]", evaluator)
+        self.assertIn("custom-server)", runner)
+        self.assertIn("--stdin", runner)
+        self.assertIn("READY protocol=tensor-stream-v1", smoke)
+        self.assertIn("TIMING request=", smoke)
         self.assertIn("subprocess.Popen(", edge_worker)
         self.assertIn("worker_proc = run_streaming(", controller)
 
