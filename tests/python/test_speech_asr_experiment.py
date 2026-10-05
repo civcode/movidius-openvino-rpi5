@@ -180,6 +180,26 @@ class ExperimentContractTests(unittest.TestCase):
         ):
             validate_train_config(invalid)
 
+    def test_ctc_objective_is_reviewed_training_identity(self):
+        changed = train_config()
+        changed["ctc_objective"] = {
+            "kind": "blank-logit-penalty-v1",
+            "blank_logit_penalty": 0.25,
+        }
+        validated = validate_train_config(changed)
+        self.assertEqual(
+            validated["ctc_objective"]["blank_logit_penalty"],
+            0.25,
+        )
+
+        invalid = copy.deepcopy(changed)
+        invalid["ctc_objective"]["blank_logit_penalty"] = 1.5
+        with self.assertRaisesRegex(
+            ContractValidationError,
+            "blank_logit_penalty",
+        ):
+            validate_train_config(invalid)
+
     def test_training_change_creates_new_experiment(self):
         first = request()
         changed = train_config()
