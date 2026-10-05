@@ -16,6 +16,7 @@ SSH_OPTIONS = (
 )
 RSYNC_RSH = "ssh -o BatchMode=yes -o ConnectTimeout=10"
 _WORKER_RE = re.compile(r"^[A-Za-z0-9_.@-]+$")
+PRETRAINING_MYRIAD_MAX_ABS_ERROR = 0.01
 
 
 V2_ARCHITECTURE = {
@@ -189,6 +190,36 @@ def load_compatibility_result(build_dir: pathlib.Path) -> dict[str, Any]:
         "version": 1,
         "status": "completed",
         **documents,
+    }
+
+
+def pretraining_myriad_compatibility(
+    comparison: Mapping[str, Any],
+) -> dict[str, Any]:
+    max_abs_error = comparison.get("max_abs_error")
+    reasons: list[str] = []
+    if (
+        not isinstance(max_abs_error, (int, float))
+        or isinstance(max_abs_error, bool)
+        or max_abs_error < 0
+    ):
+        reasons.append("max_abs_error is missing or invalid")
+    elif max_abs_error > PRETRAINING_MYRIAD_MAX_ABS_ERROR:
+        reasons.append(
+            f"max_abs_error {max_abs_error!r} exceeds "
+            f"{PRETRAINING_MYRIAD_MAX_ABS_ERROR!r}"
+        )
+
+    return {
+        "status": "accepted" if not reasons else "rejected",
+        "max_abs_error_limit": PRETRAINING_MYRIAD_MAX_ABS_ERROR,
+        "max_abs_error": max_abs_error,
+        "frame_argmax_agreement": comparison.get("frame_argmax_agreement"),
+        "frame_argmax_mismatches": comparison.get("frame_argmax_mismatches"),
+        "min_reference_top2_margin": comparison.get(
+            "min_reference_top2_margin"
+        ),
+        "reasons": reasons,
     }
 
 
