@@ -340,7 +340,8 @@ def physical_compatibility_probe(
     model_spec: dict[str, Any],
     logs_dir: pathlib.Path,
 ) -> pathlib.Path | None:
-    if model_spec["model_id"] != "cnn_ctc_v2":
+    model_id = str(model_spec["model_id"])
+    if model_id not in {"cnn_ctc_v2", "cnn_ctc_v3"}:
         return None
 
     attempt_dir = experiment_dir / "attempts" / attempt_id
@@ -348,8 +349,8 @@ def physical_compatibility_probe(
     export_dir = probe_dir / "export"
     ir_dir = probe_dir / "openvino" / "fp16"
     local_files = [
-        ir_dir / "cnn_ctc_v2.xml",
-        ir_dir / "cnn_ctc_v2.bin",
+        ir_dir / f"{model_id}.xml",
+        ir_dir / f"{model_id}.bin",
         export_dir / "golden-input.f32",
     ]
     for path in local_files:
@@ -398,9 +399,9 @@ def physical_compatibility_probe(
             "bash",
             f"{worker_repo}/scripts/edge-speech-model-probe.sh",
             "--model",
-            f"{remote_stage}/cnn_ctc_v2.xml",
+            f"{remote_stage}/{model_id}.xml",
             "--weights",
-            f"{remote_stage}/cnn_ctc_v2.bin",
+            f"{remote_stage}/{model_id}.bin",
             "--tensor",
             f"{remote_stage}/golden-input.f32",
             "--output",
@@ -463,7 +464,7 @@ def physical_compatibility_probe(
                 / "examples"
                 / "speech-asr"
                 / "models"
-                / "cnn_ctc_v2"
+                / model_id
                 / "model_spec.json"
             ),
             "--candidate-name",
@@ -498,7 +499,7 @@ def physical_compatibility_probe(
             "schema": "speech-asr/pretraining-myriad-probe",
             "version": 1,
             "status": "completed",
-            "model_id": "cnn_ctc_v2",
+            "model_id": model_id,
             "output_sha256": sha256_file(collected / "myriad-output.f32"),
             "comparison": comparison_doc["comparison"],
             "log_sha256": sha256_file(logs_dir / "edge-model-probe.log"),
