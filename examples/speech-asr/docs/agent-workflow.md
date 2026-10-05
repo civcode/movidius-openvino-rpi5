@@ -57,29 +57,34 @@ from prompt wording.
 Natural-language chat is not the API between phases. Each experiment is
 represented by versioned files.
 
-A design handoff should contain:
+A design handoff is the reviewed Phase 9 request bundle:
 
 ```text
-proposal.yaml
-hypothesis.md
-model_spec.yaml
-train_config.yaml
-acceptance.yaml
+request/experiment.json
+request/proposal.json
+request/model-spec.json
+request/train-config.json
+request/acceptance.json
 ```
 
-Execution/evaluation should add:
+The proposal document contains the hypothesis/rationale directly. The immutable
+experiment ID is derived from the parent, source revision, benchmark identity
+and canonical hashes of the four reviewed request documents.
+
+Execution/evaluation adds per-attempt evidence:
 
 ```text
-training.json
-compatibility.json
-hardware.json
-accuracy.json
-result.json
-artifacts/checkpoint.pt
-artifacts/model.onnx
-artifacts/model.xml
-artifacts/model.bin
+attempts/attempt-NNNN/attempt.json
+attempts/attempt-NNNN/deployment-manifest.json
+attempts/attempt-NNNN/results/training.json
+attempts/attempt-NNNN/results/compatibility.json
+attempts/attempt-NNNN/results/hardware.json
+attempts/attempt-NNNN/results/accuracy.json
+attempts/attempt-NNNN/results/result.json
 ```
+
+Large model artifacts remain in controller storage and are referenced by
+repository-relative path plus SHA-256 from the attempt record.
 
 Large generated artifacts are storage concerns and do not need to live in Git.
 
