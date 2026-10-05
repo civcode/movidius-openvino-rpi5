@@ -191,9 +191,12 @@ committed here unless a later decision explicitly says otherwise.
 
 ## Trainable custom-model skeleton
 
-Milestone B now contains `cnn_ctc_v1`, the first custom PyTorch/CTC skeleton.
-The model keeps log-mel extraction on the host so the deployment graph remains
-small and fixed-shape for OpenVINO 2020.3/MYRIAD.
+Milestone B is complete with `cnn_ctc_v1`, the first custom PyTorch/CTC
+skeleton. The model keeps log-mel extraction on the host so the deployment
+graph remains small and fixed-shape for OpenVINO 2020.3/MYRIAD. The accepted
+2026-10-05 lifecycle includes deterministic CUDA training, ONNX export,
+OpenVINO 2020.3 FP16 conversion, physical Pi 5/arm64 + MA2450 execution, and a
+contract-valid AMI smoke result.
 
 Always run compatibility before training:
 
@@ -202,5 +205,6 @@ Always run compatibility before training:
 ./scripts/train-cnn-ctc-v1.sh --device cuda
 ```
 
-On the Pi, rebuild the arm64 runtime image after pulling the Phase 8 changes,
-then run the physical compatibility probe and trained-model evaluator.
+On the Pi, run the physical compatibility probe and trained-model evaluator.
+Further model-development automation belongs to Phase 9's explicit experiment
+lifecycle rather than changing benchmark or model contracts implicitly.
