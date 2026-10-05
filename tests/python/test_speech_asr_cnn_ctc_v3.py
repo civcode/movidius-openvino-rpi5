@@ -219,6 +219,12 @@ class Phase11Generation2SourceTests(unittest.TestCase):
             "best_epoch",
             "clip_grad_norm_",
             "CosineAnnealingLR",
+            '"event": "training_device"',
+            '"model_device": model_device',
+            '"observed_logits_device": observed_logits_device',
+            '"cuda_peak_memory_allocated_bytes"',
+            '"cuda_peak_memory_reserved_bytes"',
+            '"ctc_loss_device": ctc_loss_device',
         ):
             self.assertIn(marker, source)
 
@@ -227,6 +233,15 @@ class Phase11Generation2SourceTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn('"cnn_ctc_v3": "evaluate-cnn-ctc-v3.sh"', source)
+
+    def test_v3_training_pipeline_uses_v3_conversion_and_checks_artifacts(self):
+        source = (ROOT / "scripts" / "train-cnn-ctc-v3.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("prepare-cnn-ctc-v3.sh", source)
+        self.assertNotIn("prepare-cnn-ctc-v2.sh", source)
+        self.assertIn('test -s "$IR/cnn_ctc_v3.xml"', source)
+        self.assertIn('test -s "$IR/cnn_ctc_v3.bin"', source)
 
     def test_v3_probe_uses_v3_conversion_and_checks_artifacts(self):
         source = (ROOT / "scripts" / "probe-cnn-ctc-v3.sh").read_text(
