@@ -141,3 +141,48 @@ def acoustic_output_length(feature_frames: int, spec: dict) -> int:
             padding=int(padding),
         )
     return length
+
+
+def manifest_record_eligibility(record: dict, spec: dict, vocab: dict) -> dict:
+    """Return the fixed-shape CTC eligibility decision for one manifest record."""
+    sample_count = int(record["audio"]["end_sample"]) - int(record["audio"]["start_sample"])
+    fixed_audio = int(spec["frontend"]["fixed_audio_samples"])
+    window = int(spec["frontend"]["window_samples"])
+    hop = int(spec["frontend"]["hop_samples"])
+    fixed_frames = int(spec["frontend"]["fixed_frames"])
+
+    if sample_count > fixed_audio:
+        return {
+            "eligible": False,
+            "reason": "too_long",
+            "sample_count": sample_count,
+            "valid_feature_frames": None,
+            "valid_output_frames": None,
+            "target_length": None,
+        }
+
+    valid_frames = (
+        1
+        if sample_count < window
+        else min(fixed_frames, 1 + (sample_count - window) // hop)
+    )
+    output_frames = acoustic_output_length(valid_frames, spec)
+    target_length = len(encode_text(record["transcript"]["text"], vocab))
+    if target_length > output_frames:
+        return {
+            "eligible": False,
+            "reason": "target_too_long",
+            "sample_count": sample_count,
+            "valid_feature_frames": valid_frames,
+            "valid_output_frames": output_frames,
+            "target_length": target_length,
+        }
+
+    return {
+        "eligible": True,
+        "reason": None,
+        "sample_count": sample_count,
+        "valid_feature_frames": valid_frames,
+        "valid_output_frames": output_frames,
+        "target_length": target_length,
+    }
