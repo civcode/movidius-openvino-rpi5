@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate converted cnn_ctc_v1 IR against its declared external tensor contract."""
+"""Validate converted cnn_ctc IR against its declared external tensor contract."""
 
 from __future__ import annotations
 
@@ -10,21 +10,22 @@ import sys
 
 
 def validate(spec: dict, contract: dict) -> dict:
-    if spec.get("id") != "cnn_ctc_v1":
-        raise ValueError("model spec id must be cnn_ctc_v1")
+    model_id = spec.get("id")
+    if model_id not in {"cnn_ctc_v1", "cnn_ctc_v2"}:
+        raise ValueError("unsupported cnn_ctc model spec id")
     if contract.get("schema") != "speech-asr/openvino-ir-contract":
         raise ValueError("unexpected IR contract schema")
     if contract.get("ir_version") not in {"7", "10"}:
         raise ValueError(
-            f"unsupported IR version for cnn_ctc_v1: {contract.get('ir_version')!r}"
+            f"unsupported IR version for {model_id}: {contract.get('ir_version')!r}"
         )
 
     inputs = contract.get("inputs")
     outputs = contract.get("outputs")
     if not isinstance(inputs, list) or len(inputs) != 1:
-        raise ValueError("cnn_ctc_v1 IR must expose exactly one input")
+        raise ValueError("cnn_ctc IR must expose exactly one input")
     if not isinstance(outputs, list) or len(outputs) != 1:
-        raise ValueError("cnn_ctc_v1 IR must expose exactly one output")
+        raise ValueError("cnn_ctc IR must expose exactly one output")
 
     declared_input = spec["input_contract"]
     declared_output = spec["output_contract"]
@@ -45,9 +46,9 @@ def validate(spec: dict, contract: dict) -> dict:
     input_ports = actual_input.get("ports")
     output_ports = actual_output.get("ports")
     if not isinstance(input_ports, list) or len(input_ports) != 1:
-        raise ValueError("cnn_ctc_v1 IR input must expose exactly one port")
+        raise ValueError("cnn_ctc IR input must expose exactly one port")
     if not isinstance(output_ports, list) or len(output_ports) != 1:
-        raise ValueError("cnn_ctc_v1 IR output must expose exactly one port")
+        raise ValueError("cnn_ctc IR output must expose exactly one port")
 
     input_shape = input_ports[0].get("shape")
     output_shape = output_ports[0].get("shape")
