@@ -294,3 +294,37 @@ Initialize with:
 
 Training results and REVIEW include both the augmentation policy and aggregate
 mask application counts. The inference graph is unchanged.
+
+
+## Valid-frame CMVN generation
+
+The deterministic SpecAugment child increased blank collapse and regressed CER,
+so stronger regularization is not the next step.
+
+The frozen `logmel-v1` frontend was found to compute per-mel-bin mean over the
+entire fixed 512-frame tensor. For short utterances, many of those frames come
+only from zero-padded audio. That makes normalized speech values depend on the
+amount of padding and leaves padding non-neutral after normalization.
+
+`cnn_ctc_v4` introduces `logmel-v2` while reusing the exact v3 inference
+graph. Valid frames are normalized to zero per-bin mean; padded frames are then
+set exactly to zero.
+
+The v4 training experiment keeps:
+
+- the exact reviewed 125/95 manifests;
+- seed 1337;
+- 32 epochs / 4,000 optimizer steps;
+- Adam 3e-4 with cosine decay;
+- gradient clipping;
+- validation-CER checkpoint selection;
+- no SpecAugment.
+
+Initialize with:
+
+```bash
+./scripts/init-cnn-ctc-v4-valid-cmvn.sh
+```
+
+Because the graph topology is unchanged, any accuracy/emission change can be
+attributed to frontend semantics rather than extra MA2450 capacity.
