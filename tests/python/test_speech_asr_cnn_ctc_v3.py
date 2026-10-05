@@ -80,13 +80,17 @@ class CnnCtcV3ContractTests(unittest.TestCase):
     def test_inference_graph_policy_is_normalization_free(self):
         network = self.spec["network"]
         self.assertEqual(network["normalization"], "none")
-        self.assertEqual(network["residual_projection_init"], "zeros")
+        self.assertEqual(
+            network["residual_projection_init"],
+            "kaiming_scaled_0.01",
+        )
         source = (SPEECH / "training" / "cnn_ctc_v3.py").read_text(
             encoding="utf-8"
         )
         self.assertIn("nn.Conv1d", source)
         self.assertIn("value = value + residual", source)
-        self.assertIn("nn.init.zeros_(self.projection.weight)", source)
+        self.assertIn("nn.init.kaiming_normal_", source)
+        self.assertIn("self.projection.weight.mul_(0.01)", source)
         self.assertNotIn("BatchNorm", source)
         self.assertNotIn("groups=", source)
         self.assertNotIn("MultiheadAttention", source)
