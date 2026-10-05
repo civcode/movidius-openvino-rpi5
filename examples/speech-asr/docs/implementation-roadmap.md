@@ -25,7 +25,7 @@ The central rule is:
 | 8 — custom PyTorch training skeleton | **complete** — deterministic CUDA training, ONNX/OpenVINO export, physical Pi 5/arm64 + MA2450 execution, and contract-valid AMI smoke evaluation accepted |
 | 9 — experiment lifecycle | **complete** — immutable content-derived requests, attempt state machine, artifact/result provenance, deployment manifests and history index accepted by static checks and the full speech-ASR unit suite |
 | 10 — local execution agent and frontier handoff | **complete** — oberon controller, exact-commit edge worktree, non-interactive SSH/rsync, hash-bound deployment, exclusive MYRIAD locking, result collection and AWAIT_REVIEW handoff physically accepted on Pi 5/MA2450 |
-| 11 — architecture optimization loop | **generation 1 implemented; evaluation pending** — cnn_ctc_v2 residual large-kernel temporal CTC model, compatibility-first MYRIAD gate, strict hardware/quality policy, and v1 lineage are implemented |
+| 11 — architecture optimization loop | **generation 1 evaluated; review pending** — cnn_ctc_v2 completed the full physical lifecycle to AWAIT_REVIEW but the frozen acceptance policy rejected the result; generation 2 awaits evidence review |
 
 Phase 0 was re-reviewed after later implementation work. The root audio,
 benchmark, model and text contracts now have executable semantic validators,
@@ -816,9 +816,13 @@ At least two architecture generations have been proposed, trained, evaluated
 and reviewed through the formal workflow, with lineage and results sufficient
 to explain why the next architecture was chosen.
 
-Generation 1 is implemented but does not satisfy the Phase 11 exit criteria
-until it is executed and reviewed. Generation 2 must be chosen from generation
-1 evidence rather than preselected now.
+Generation 1 was physically executed on 2026-10-05 as
+`exp-1c682f4eda475a01/attempt-0001`. The execution itself completed and reached
+`AWAIT_REVIEW`, but the frozen acceptance policy returned `rejected`.
+The rejection is therefore model/threshold evidence, not an execution failure.
+
+Generation 2 must be chosen after reviewing the authoritative metric and
+threshold evidence from that attempt rather than preselected now.
 
 ---
 
@@ -867,31 +871,21 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-Phase 11 generation 1 is **implemented; evaluation pending**.
+Phase 11 generation 1 is **evaluated; REVIEW pending**.
 
-Run the hardware-free checks on oberon, then initialize and execute
-`cnn_ctc_v2`:
+The accepted workflow now has a dedicated review command:
 
 ```bash
 git pull --ff-only
-./ci/verify-static.sh
-./scripts/test-speech-asr.sh
 
-EXP="$(
-  ./scripts/init-cnn-ctc-v2-experiment.sh |
-  python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
-)"
-
-./scripts/run-speech-experiment.sh \
-  --experiment "$EXP" \
-  --worker edge
+./scripts/review-speech-experiment.sh \
+  --experiment work/speech-asr/experiments/exp-1c682f4eda475a01
 ```
 
-The controller first converts and physically probes the initialized v2 graph on
-MA2450. Only after that gate passes does it spend the declared CUDA training
-budget.
+That emits the candidate metrics, failed acceptance thresholds, training
+summary, ONNX/OpenVINO/MYRIAD compatibility evidence, and deltas against the
+accepted v1 parent.
 
-When the attempt reaches `AWAIT_REVIEW`, compare its WER, CER, RTF, p95
-latency, training loss, parameter count and compatibility evidence against the
-v1 parent. REVIEW then chooses generation 2; do not precommit the second
-architecture before those results exist.
+Do not implement generation 2 until that evidence has been reviewed. The next
+architecture should respond to the measured bottleneck: accuracy, hardware
+latency/RTF, numerical compatibility, or training behavior.
