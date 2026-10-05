@@ -227,3 +227,63 @@ The accepted v2 result is scaled to three official scenario teams by
 This yields 4,429 eligible training utterances and 7,150.12 seconds while
 retaining the same validation contract. See
 [`../../docs/adr/model-quality-v3-scaled-ami.md`](../../docs/adr/model-quality-v3-scaled-ami.md).
+
+
+## Sealed held-out Full-corpus-ASR evaluation
+
+After the three-team model-quality-v3 training scale was accepted, ES2002a was
+retired as unbiased test evidence. It remains checkpoint/model-selection
+evidence only.
+
+The held-out ASR boundary is pinned by:
+
+`splits/eval-full-corpus-asr-sc-v1.json`
+
+It contains the AMI Full-corpus-ASR unseen scenario-component evaluation
+meetings:
+
+- EN2002a-d;
+- ES2004a-d;
+- IS1009a-d;
+- TS3003a-d.
+
+All A/B/C/D annotated segments are selected from each meeting. The split pins
+manual annotations v1.6.2 plus the exact Mix-Headset WAV SHA-256 identities.
+
+Prepare and qualify:
+
+```bash
+./scripts/prepare-speech-heldout-eval.sh
+```
+
+This creates:
+
+```text
+work/speech-asr/ami/ami-eval-full-corpus-asr-sc-v1/
+├── audio/
+├── manifest.jsonl
+└── provenance.json
+
+work/speech-asr/ami/heldout-eval-v1/
+├── manifest.jsonl
+└── qualification.json
+```
+
+Qualification applies the exact `cnn_ctc_v3` fixed-shape CTC eligibility
+contract and refuses any record/meeting overlap with:
+
+- model-quality-v3 training (ES2005a-d, ES2006a-d, ES2007a-d);
+- the ES2002a model-selection manifest.
+
+The qualified output is immutable once written. Provisioning later invokes the
+qualifier in `--verify-only` mode and cannot regenerate the reviewed test
+manifest.
+
+This partition has two hard policy flags:
+
+- `training_allowed=false`;
+- `checkpoint_selection_allowed=false`.
+
+See
+[`../docs/adr/heldout-full-corpus-asr-sc-v1.md`](../../docs/adr/heldout-full-corpus-asr-sc-v1.md)
+for the evaluation policy and frozen-artifact execution path.
