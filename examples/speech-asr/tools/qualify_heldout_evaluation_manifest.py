@@ -383,10 +383,31 @@ def verify_existing(
     if model.get("vocab_sha256") != canonical_sha256(vocab):
         raise ValueError("held-out qualification vocabulary hash changed")
 
+    source_all = load_records(source_manifest)
+    expected_records, expected_excluded = eligible_records(
+        source_all,
+        spec,
+        vocab,
+    )
+    expected_relocated = relocate(
+        expected_records,
+        source_dir=source_manifest.parent,
+        output_dir=output_dir,
+    )
+    expected_payload = manifest_text(expected_relocated)
+    actual_payload = manifest_path.read_text(encoding="utf-8")
+    if actual_payload != expected_payload:
+        raise ValueError(
+            "held-out qualified manifest differs from deterministic "
+            "eligibility output"
+        )
+
     test_records = load_records(manifest_path)
     if meetings(test_records) != set(OFFICIAL_MEETINGS):
         raise ValueError("held-out qualified manifest meetings changed")
     test_ref = qualification.get("test", {})
+    if test_ref.get("excluded") != expected_excluded:
+        raise ValueError("held-out exclusion counts changed")
     if test_ref.get("manifest_sha256") != sha256_path(manifest_path):
         raise ValueError("held-out qualified manifest hash changed")
     if test_ref.get("stats") != stats(test_records):
