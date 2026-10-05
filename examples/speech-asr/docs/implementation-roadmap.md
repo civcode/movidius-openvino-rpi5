@@ -24,7 +24,8 @@ The central rule is:
 | 7 — streaming layer | **complete** — real prepared AMI replay accepted: byte-identical repeated results, contract-valid, WER/CER 0 |
 | 8 — custom PyTorch training skeleton | **complete** — deterministic CUDA training, ONNX/OpenVINO export, physical Pi 5/arm64 + MA2450 execution, and contract-valid AMI smoke evaluation accepted |
 | 9 — experiment lifecycle | **complete** — immutable content-derived requests, attempt state machine, artifact/result provenance, deployment manifests and history index accepted by static checks and the full speech-ASR unit suite |
-| 10+ | not started |
+| 10 — local execution agent and frontier handoff | **implemented; physical acceptance pending** — oberon controller, exact-commit edge worktree, non-interactive SSH/rsync, hash-bound deployment, exclusive MYRIAD locking, result collection and AWAIT_REVIEW handoff implemented |
+| 11 | not started |
 
 Phase 0 was re-reviewed after later implementation work. The root audio,
 benchmark, model and text contracts now have executable semantic validators,
@@ -652,11 +653,58 @@ DESIGN / REVIEW     -> frontier model
 EXECUTE / EVALUATE -> local model
 ```
 
+### Implemented Phase 10 execution path
+
+The Phase 10 controller is:
+
+```bash
+./scripts/run-speech-experiment.sh \
+  --experiment work/speech-asr/experiments/exp-... \
+  --worker edge
+```
+
+For the already-qualified `cnn_ctc_v1` baseline, an approved experiment can
+be initialized with:
+
+```bash
+./scripts/init-cnn-ctc-v1-experiment.sh
+```
+
+The executor intentionally supports only the frozen `cnn_ctc_v1` declaration
+at this phase. Unknown model IDs or extra architecture fields fail as
+`request_config`; Phase 10 never guesses how to train a new architecture.
+
+The controller:
+
+1. validates the immutable Phase 9 bundle, exact Git revision and dataset hashes;
+2. starts a numbered attempt and records preflight failures in that lifecycle;
+3. prepares a dedicated exact-commit automation worktree on edge without
+   changing the human checkout;
+4. validates the edge dataset/runtime and non-interactive transport;
+5. runs training/export/OpenVINO conversion into attempt-local storage on oberon;
+6. records checkpoint/ONNX/XML/BIN hashes and compatibility evidence;
+7. transfers only the deployment manifest plus XML/BIN;
+8. acquires the edge MYRIAD lock with non-blocking `flock`;
+9. runs the repository-owned evaluator and validates returned provenance;
+10. collects hardware/accuracy evidence, applies the frozen acceptance policy
+    and transitions the attempt to `AWAIT_REVIEW`.
+
+A threshold rejection is evidence for REVIEW, not permission for the executor
+to redesign the network.
+
 ### Exit criteria
 
 A declared experiment can be executed end-to-end by the local agent, while a
 new architecture cannot be created without crossing the explicit frontier
 design/review boundary.
+
+Phase 10 acceptance requires:
+
+- `./ci/verify-static.sh` and `./scripts/test-speech-asr.sh` to pass on oberon;
+- one baseline `cnn_ctc_v1` experiment to complete from oberon through the
+  dedicated edge worktree and physical MA2450;
+- the returned attempt to validate and end in `AWAIT_REVIEW` with a compact
+  result and acceptance-policy evidence.
 
 ---
 
@@ -755,20 +803,29 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-Phase 9 is **complete**.
+Phase 10 is **implemented; physical acceptance pending**.
 
-The next implementation boundary is **Phase 10 — local execution agent and
-frontier handoff**. Its first slice should implement the accepted oberon -> edge
-worker protocol using the Phase 9 deployment manifest:
+Run the hardware-free checks on oberon, then create and execute the frozen
+baseline experiment:
 
-1. dedicated automation checkout on edge pinned to the experiment commit;
-2. non-interactive SSH preflight with normal host-key verification;
-3. worker/runtime/dataset hash verification;
-4. exclusive MYRIAD device lock with immediate `worker_busy` result;
-5. minimal XML/BIN deployment bundle with post-transfer hash verification;
-6. repository-owned evaluator invocation on edge;
-7. result/log collection back to the owning attempt on oberon;
-8. Phase 9 bundle validation and transition to `AWAIT_REVIEW`.
+```bash
+git pull --ff-only
+./ci/verify-static.sh
+./scripts/test-speech-asr.sh
 
-Architecture design, benchmark changes and runtime-image rebuilds remain outside
-ordinary experiment execution.
+./scripts/init-cnn-ctc-v1-experiment.sh
+# Use the returned experiment path:
+./scripts/run-speech-experiment.sh \
+  --experiment work/speech-asr/experiments/exp-... \
+  --worker edge
+```
+
+The first controller run will create/update the dedicated automation worktree on
+edge at `~/workspace/movidius-openvino-rpi5-worker`. It reuses the already
+prepared AMI tree from the human edge checkout via a symlink when available.
+The normal edge checkout remains on its current branch and is not reset or
+pulled by experiment execution.
+
+If the run reaches `AWAIT_REVIEW`, validate the experiment bundle and freeze
+the evidence; Phase 10 can then be marked complete and Phase 11 architecture
+optimization can begin.
