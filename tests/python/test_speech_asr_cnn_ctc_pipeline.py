@@ -106,6 +106,16 @@ class CnnCtcPipelineSourceTests(unittest.TestCase):
         self.assertLess(guard, dataset)
         self.assertIn('"manifest": None if args.init_only else str(args.manifest)', source)
 
+    def test_cuda_ctc_loss_stays_deterministic(self):
+        source = (
+            ROOT / "examples" / "speech-asr" / "training" / "train_cnn_ctc_v1.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("def deterministic_ctc_loss", source)
+        self.assertIn('if log_probs.device.type == "cuda":', source)
+        self.assertIn("log_probs = log_probs.cpu()", source)
+        self.assertNotIn('batch["targets"].to(device)', source)
+        self.assertIn('"ctc_loss_device": "cpu" if device.type == "cuda"', source)
+
     def test_full_pipeline_exports_before_mo(self):
         pipeline = (ROOT / "scripts" / "train-cnn-ctc-v1.sh").read_text(encoding="utf-8")
         self.assertLess(
