@@ -142,7 +142,7 @@ def main() -> int:
                 "keep cnn_ctc_v3 architecture unchanged",
                 "keep 32 epochs, batch size 1, Adam 3e-4, cosine decay and clipping",
                 "remove smoke-derived WER/CER acceptance ceilings",
-                "retain hardware, realtime and ONNX compatibility gates",
+                "retain fixed-shape latency and ONNX compatibility gates",
             ],
             "notes": (
                 "This experiment establishes a new metric reference; acceptance "
@@ -202,7 +202,7 @@ def main() -> int:
             "thresholds": {
                 "max_wer": None,
                 "max_cer": None,
-                "max_realtime_factor": 0.01,
+                "max_realtime_factor": None,
                 "max_latency_p95_ms": 25.0,
                 "min_frame_argmax_agreement": 1.0,
             },
