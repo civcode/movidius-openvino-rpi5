@@ -245,6 +245,8 @@ def rsync_pull_command(
         "rsync",
         "-a",
         "--checksum",
+        "-e",
+        RSYNC_RSH,
         "--",
         f"{worker}:{remote_dir.rstrip('/')}/",
         str(local_dir) + "/",
