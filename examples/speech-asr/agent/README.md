@@ -28,3 +28,22 @@ The project state should explicitly identify the current phase
 model based on authority and task class rather than prompt wording alone.
 
 See `../docs/agent-workflow.md` for the full state machine and handoff rules.
+
+
+## Phase 10 implementation
+
+The execution side is now concrete:
+
+- `init_cnn_ctc_v1_experiment.py` creates the frozen baseline acceptance
+  request without mutating architecture;
+- `run_experiment.py` is the oberon controller;
+- `edge_worker.py` is the exact-commit, hash-validating MYRIAD worker.
+
+The controller accepts only reviewed Phase 9 files. The initial executor registry
+contains only the qualified `cnn_ctc_v1` declaration. Unknown model IDs or
+undeclared architecture parameters fail instead of being interpreted by a local
+model.
+
+The final controller artifact is the compact Phase 9 `results/result.json`,
+which always returns to `AWAIT_REVIEW`. A rejected acceptance policy is
+reported as evidence; it does not authorize the execution side to enter DESIGN.
