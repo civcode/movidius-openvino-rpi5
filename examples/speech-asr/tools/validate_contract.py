@@ -18,6 +18,7 @@ from speech_asr.contracts import (  # noqa: E402
     validate_benchmark_contract,
     validate_acceptance_policy,
     validate_deployment_manifest,
+    validate_edge_worker_result,
     validate_experiment_attempt,
     validate_experiment_history,
     validate_experiment_model_spec,
@@ -54,6 +55,7 @@ VALIDATORS = {
     "experiment-summary": validate_experiment_summary,
     "experiment-history": validate_experiment_history,
     "deployment-manifest": validate_deployment_manifest,
+    "edge-worker-result": validate_edge_worker_result,
 }
 
 SCHEMA_TO_KIND = {
@@ -76,6 +78,7 @@ SCHEMA_TO_KIND = {
     "speech-asr/experiment-summary": "experiment-summary",
     "speech-asr/experiment-history": "experiment-history",
     "speech-asr/deployment-manifest": "deployment-manifest",
+    "speech-asr/edge-worker-result": "edge-worker-result",
 }
 
 
