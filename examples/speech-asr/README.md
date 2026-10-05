@@ -290,3 +290,27 @@ EXP="$(
 
 The acceptance policy retains the v1 CER ceiling while tightening the already
 comfortable v2 hardware limits to RTF <= 0.01 and p95 <= 25 ms.
+
+
+## Phase 11 completion and next data boundary
+
+Phase 11 completed after two physical architecture generations. `cnn_ctc_v2`
+and `cnn_ctc_v3` both remained comfortably realtime on MA2450, but the
+two-eligible-record smoke population could not rank model changes reliably:
+v3 substantially reduced CTC loss while greedy CER regressed to 1.0.
+
+The final review is in
+`docs/phase11-final-review.md`.
+
+Before another architecture generation, derive and review the larger
+speaker-disjoint model-quality manifests:
+
+```bash
+./scripts/python.sh examples/speech-asr/datasets/ami/prepare_ami.py \
+  --subset benchmark
+./scripts/qualify-speech-model-data.sh
+```
+
+Future custom-model evaluation results include per-sample CTC collapse and edit
+diagnostics so blank collapse or pathological emission can be distinguished
+from ordinary substitution/deletion errors.
