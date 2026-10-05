@@ -95,6 +95,7 @@ def evaluate(
     device_name: str,
     source_experiment_id: str,
     source_attempt_id: str,
+    progress_every: int,
 ) -> dict[str, Any]:
     for path in (
         checkpoint_path,
@@ -145,6 +146,11 @@ def evaluate(
     onnx_words = []
     onnx_chars = []
     per_sample = []
+    manifest_total = sum(
+        1
+        for line in manifest_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    )
     manifest_samples = 0
     skipped = {"too_long": [], "target_too_long": []}
     compared_frames = 0
@@ -159,8 +165,26 @@ def evaluate(
     decoded_hypothesis_mismatches = 0
     decoded_hypothesis_mismatch_examples: list[dict[str, str]] = []
 
+    print(
+        "[heldout-reference] "
+        f"device={device} manifest_records={manifest_total} "
+        f"progress_every={progress_every}",
+        file=sys.stderr,
+        flush=True,
+    )
+
     for record in load_records(manifest_path):
         manifest_samples += 1
+        if progress_every > 0 and (
+            manifest_samples == 1 or manifest_samples % progress_every == 0
+        ):
+            print(
+                "[heldout-reference] "
+                f"processed={manifest_samples}/{manifest_total} "
+                f"evaluated={len(per_sample)}",
+                file=sys.stderr,
+                flush=True,
+            )
         decision = manifest_record_eligibility(record, spec, vocab)
         if not decision["eligible"]:
             reason = str(decision["reason"])
@@ -305,6 +329,14 @@ def evaluate(
     if not per_sample:
         raise ValueError("held-out manifest has no eligible samples")
 
+    print(
+        "[heldout-reference] "
+        f"processed={manifest_samples}/{manifest_total} "
+        f"evaluated={len(per_sample)} reference_pass_complete=true",
+        file=sys.stderr,
+        flush=True,
+    )
+
     frame_argmax_agreement = matching_frames / max(1, compared_frames)
     pytorch_wer = sum_rate(pytorch_words)
     pytorch_cer = sum_rate(pytorch_chars)
@@ -428,6 +460,13 @@ def main() -> int:
     parser.add_argument("--spec", type=pathlib.Path, default=DEFAULT_SPEC)
     parser.add_argument("--vocab", type=pathlib.Path, default=DEFAULT_VOCAB)
     parser.add_argument("--device", choices=("cuda", "cpu"), default="cuda")
+    parser.add_argument(
+        "--progress-every",
+        type=int,
+        default=250,
+        help="emit progress every N manifest records; 0 disables progress",
+    )
+    parser.add_argument("--quiet-result", action="store_true")
     parser.add_argument("--output", type=pathlib.Path, required=True)
     args = parser.parse_args()
 
@@ -442,6 +481,7 @@ def main() -> int:
             device_name=args.device,
             source_experiment_id=args.source_experiment_id,
             source_attempt_id=args.source_attempt_id,
+            progress_every=args.progress_every,
         )
     except Exception as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -452,7 +492,8 @@ def main() -> int:
         json.dumps(result, sort_keys=True, indent=2) + "\n",
         encoding="utf-8",
     )
-    print(json.dumps(result, sort_keys=True))
+    if not args.quiet_result:
+        print(json.dumps(result, sort_keys=True))
     return 0
 
 
