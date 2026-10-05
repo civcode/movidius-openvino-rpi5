@@ -437,6 +437,62 @@ if grep -q '"ctc_objective": {' examples/speech-asr/agent/init_cnn_ctc_v3_expand
     fail 'expanded-data experiment must use standard CTC'
 fi
 
+# Held-out Full-corpus-ASR SC evaluation boundary.
+test -f examples/speech-asr/datasets/ami/splits/eval-full-corpus-asr-sc-v1.json || fail 'held-out AMI split missing'
+test -f examples/speech-asr/tools/qualify_heldout_evaluation_manifest.py || fail 'held-out qualifier missing'
+test -f examples/speech-asr/evaluation/evaluate_frozen_cnn_ctc_v3_reference.py || fail 'frozen held-out reference evaluator missing'
+test -f examples/speech-asr/agent/run_frozen_heldout_evaluation.py || fail 'sealed held-out controller missing'
+for f in \
+    scripts/prepare-speech-heldout-eval.sh \
+    scripts/qualify-speech-heldout-eval.sh \
+    scripts/provision-speech-heldout-eval-edge.sh \
+    scripts/run-speech-heldout-eval.sh; do
+    test -x "$f" || fail "held-out shell entry point is not executable: $f"
+done
+python3 - <<'PY_HELDOUT'
+import json
+from pathlib import Path
+
+path = Path("examples/speech-asr/datasets/ami/splits/eval-full-corpus-asr-sc-v1.json")
+value = json.loads(path.read_text())
+expected = {
+    f"{prefix}{suffix}"
+    for prefix in ("EN2002", "ES2004", "IS1009", "TS3003")
+    for suffix in ("a", "b", "c", "d")
+}
+actual = {source["meeting"] for source in value["sources"]}
+assert actual == expected, (sorted(actual), sorted(expected))
+assert len(value["sources"]) == 16
+assert value["partition"]["name"] == "Full-corpus-ASR"
+assert value["partition"]["role"] == "SC-unseen-evaluation"
+assert value["partition"]["training_allowed"] is False
+assert value["partition"]["checkpoint_selection_allowed"] is False
+for source in value["sources"]:
+    assert source["audio"]["stream"] == "Mix-Headset"
+    assert len(source["audio"]["sha256"]) == 64
+    assert [entry["speaker"] for entry in source["selections"]] == ["A", "B", "C", "D"]
+    assert all(entry.get("all_segments") is True for entry in source["selections"])
+PY_HELDOUT
+grep -q 'OFFICIAL_MEETINGS' examples/speech-asr/tools/qualify_heldout_evaluation_manifest.py || fail 'held-out qualifier lacks exact meeting authority'
+grep -q '"role": "test_only"' examples/speech-asr/tools/qualify_heldout_evaluation_manifest.py || fail 'held-out qualifier does not label test-only role'
+grep -q '"training_allowed": False' examples/speech-asr/tools/qualify_heldout_evaluation_manifest.py || fail 'held-out qualifier permits training'
+grep -q '"checkpoint_selection_allowed": False' examples/speech-asr/tools/qualify_heldout_evaluation_manifest.py || fail 'held-out qualifier permits checkpoint selection'
+grep -q 'SOURCE_EXPERIMENT_ID = "exp-87538823d2bf1562"' examples/speech-asr/agent/run_frozen_heldout_evaluation.py || fail 'held-out source checkpoint changed'
+grep -q 'SOURCE_ATTEMPT_ID = "attempt-0001"' examples/speech-asr/agent/run_frozen_heldout_evaluation.py || fail 'held-out source attempt changed'
+grep -q 'held-out evaluation is already sealed' examples/speech-asr/agent/run_frozen_heldout_evaluation.py || fail 'held-out controller permits resealing/rerun'
+grep -q 'edge-speech-bootstrap.sh' examples/speech-asr/agent/run_frozen_heldout_evaluation.py || fail 'held-out controller does not pin edge revision'
+grep -q 'frame_argmax_agreement' examples/speech-asr/evaluation/evaluate_frozen_cnn_ctc_v3_reference.py || fail 'held-out reference lacks PyTorch/ONNX agreement gate'
+if grep -q 'training_command(' examples/speech-asr/agent/run_frozen_heldout_evaluation.py; then
+    fail 'held-out controller must not invoke training'
+fi
+if grep -q 'train-cnn' examples/speech-asr/agent/run_frozen_heldout_evaluation.py; then
+    fail 'held-out controller must not invoke a training wrapper'
+fi
+grep -q 'BatchMode=yes' scripts/provision-speech-heldout-eval-edge.sh || fail 'held-out data provisioning is not non-interactive'
+if grep -q 'StrictHostKeyChecking=no' scripts/provision-speech-heldout-eval-edge.sh; then
+    fail 'held-out data provisioning disables host-key verification'
+fi
+
 # Scaled three-team follow-up after accepted expanded-data result.
 test -f examples/speech-asr/datasets/ami/splits/train-es2005-es2007-v1.json || fail 'scaled AMI split missing'
 test -f examples/speech-asr/agent/init_cnn_ctc_v3_scaled_data.py || fail 'scaled-data initializer missing'
@@ -476,6 +532,7 @@ for name in [
     "examples/speech-asr/agent/init_cnn_ctc_v6_interctc.py",
     "examples/speech-asr/agent/init_cnn_ctc_v3_expanded_data.py",
     "examples/speech-asr/agent/init_cnn_ctc_v3_scaled_data.py",
+    "examples/speech-asr/agent/run_frozen_heldout_evaluation.py",
     "examples/speech-asr/agent/review_experiment.py",
     "examples/speech-asr/agent/run_experiment.py",
     "examples/speech-asr/agent/edge_worker.py",
@@ -483,6 +540,7 @@ for name in [
     "examples/speech-asr/tools/validate_contract.py",
     "examples/speech-asr/tools/qualify_model_quality_manifests.py",
     "examples/speech-asr/tools/qualify_expanded_model_quality_manifests.py",
+    "examples/speech-asr/tools/qualify_heldout_evaluation_manifest.py",
     "examples/speech-asr/training/cnn_ctc_v1.py",
     "examples/speech-asr/training/train_cnn_ctc_v1.py",
     "examples/speech-asr/training/export_cnn_ctc_v1.py",
@@ -512,6 +570,7 @@ for name in [
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v5.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v6_onnx.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v6.py",
+    "examples/speech-asr/evaluation/evaluate_frozen_cnn_ctc_v3_reference.py",
 ]:
     src = Path(name).read_text()
     compile(src, name, "exec")
