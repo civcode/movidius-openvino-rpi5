@@ -957,45 +957,61 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-Phase 11 and Milestone C are **complete**.
+Phase 11 and Milestone C are **complete**. The post-Phase-11 data qualification
+has now been reviewed and accepted for an interim model-quality baseline.
 
-Do not create `cnn_ctc_v4` from the smoke-set result. The next research
-boundary is data/evaluation quality rather than architecture.
+Reviewed model-quality-v1 identity:
 
-The first part of that boundary is implemented. On oberon:
+- source: `ami-benchmark-v1`, 277 records;
+- train: speakers A/B/C, 125 eligible records, 219.998 seconds,
+  manifest `89a8624a5dc46ef28845f35591fc1e623dfbd3026d7a4729b7578153d03baf5a`;
+- validation: speaker D, 95 eligible records, 122.52 seconds,
+  manifest `07ebc41041238c1ec374ad64eefe7209fd6c11d1050e8f6f72f0226d358c8923`;
+- record overlap: 0;
+- speaker overlap: 0;
+- meeting: ES2002a on both sides.
+
+This is approved for the next controlled baseline, but remains an interim
+speaker-holdout experiment rather than final cross-meeting generalization
+evidence. See `docs/model-quality-v1-baseline.md`.
+
+The next experiment must keep `cnn_ctc_v3` architecture and optimization
+policy unchanged so data quality is the only substantive experimental change.
+Its 32-epoch/batch-1 schedule corresponds to 4,000 optimizer steps on the
+reviewed training manifest.
+
+Before execution, provision the reviewed dataset once to edge. This is an
+explicit infrastructure operation and is not part of ordinary experiment
+transfer:
 
 ```bash
 git pull --ff-only
 ./ci/verify-static.sh
 ./scripts/test-speech-asr.sh
 
-./scripts/python.sh examples/speech-asr/datasets/ami/prepare_ami.py \
-  --subset benchmark
-
-./scripts/qualify-speech-model-data.sh
+./scripts/provision-speech-model-data-edge.sh
 ```
 
-The qualification command derives an interim speaker-disjoint split from the
-frozen 277-record ES2002a benchmark source:
+Then create and run the exact-hash baseline:
 
-- train: speakers A/B/C;
-- validation: speaker D;
-- both sides filtered through the exact `cnn_ctc_v3` fixed-shape eligibility
-  contract;
-- no audio duplication;
-- deterministic manifest and corpus-statistics hashes.
+```bash
+EXP="$(
+  ./scripts/init-cnn-ctc-v3-quality-baseline.sh |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
+)"
 
-Because all records still come from ES2002a, this is not meeting/session
-disjoint and must not be presented as final generalization evidence.
+echo "$EXP"
 
-The custom-model evaluators now also record decoder-collapse diagnostics:
-blank-frame fraction, nonblank frames, collapsed-token count, emitted
-word/character lengths, and full per-sample word/character S/D/I counts.
+./scripts/run-speech-experiment.sh \
+  --experiment "$EXP" \
+  --worker edge
 
-REVIEW `work/speech-asr/ami/model-quality-v1/qualification.json` before
-creating any new training experiment. Freeze whether its eligible population
-and duration are sufficient first; only then add a baseline experiment using
-those exact train/validation hashes.
+./scripts/review-speech-experiment.sh \
+  --experiment "$EXP"
+```
 
-The Phase 9/10 orchestration and Phase 11 v2/v3 hardware envelopes remain the
-qualified execution platform.
+This baseline intentionally has no numeric WER/CER acceptance ceiling. WER/CER
+are the measurements being established. Hardware/compatibility gates remain
+RTF <= 0.01, p95 <= 25 ms and PyTorch/ONNX frame argmax agreement = 1.0.
+
+REVIEW the larger-data baseline before proposing another architecture.
