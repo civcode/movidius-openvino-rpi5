@@ -117,6 +117,24 @@ test -x scripts/probe-cnn-ctc-v1.sh || fail 'cnn_ctc_v1 compatibility probe miss
 test -x scripts/train-cnn-ctc-v1.sh || fail 'cnn_ctc_v1 training pipeline missing'
 test -x scripts/evaluate-cnn-ctc-v1.sh || fail 'cnn_ctc_v1 evaluator wrapper missing'
 
+# Phase 9 immutable experiment lifecycle invariants.
+for f in \
+    examples/speech-asr/contracts/experiment-proposal-v1.schema.json \
+    examples/speech-asr/contracts/experiment-model-spec-v1.schema.json \
+    examples/speech-asr/contracts/train-config-v1.schema.json \
+    examples/speech-asr/contracts/acceptance-policy-v1.schema.json \
+    examples/speech-asr/contracts/experiment-lifecycle-v1.schema.json \
+    examples/speech-asr/contracts/deployment-manifest-v1.schema.json; do
+    test -f "$f" || fail "Phase 9 contract missing: $f"
+done
+test -f examples/speech-asr/python/speech_asr/experiment.py || fail 'Phase 9 experiment core missing'
+test -f examples/speech-asr/tools/manage_experiment.py || fail 'Phase 9 experiment manager missing'
+grep -q 'experiment_id_from_identity' examples/speech-asr/python/speech_asr/experiment.py || fail 'experiment identity derivation missing'
+grep -q 'stage result is immutable once recorded' examples/speech-asr/python/speech_asr/experiment.py || fail 'experiment stage immutability missing'
+grep -q 'artifact is immutable once recorded' examples/speech-asr/python/speech_asr/experiment.py || fail 'experiment artifact immutability missing'
+grep -q 'must match \$.controller_commit' examples/speech-asr/python/speech_asr/contracts.py || fail 'deployment worker revision pin missing'
+grep -q 'retryable_failure_classes' examples/speech-asr/tools/manage_experiment.py || fail 'experiment retry policy enforcement missing'
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
 for name in [
@@ -128,6 +146,8 @@ for name in [
     "examples/speech-asr/python/speech_asr/cnn_ctc.py",
     "examples/speech-asr/python/speech_asr/cnn_ctc_frontend.py",
     "examples/speech-asr/python/speech_asr/cnn_ctc_compare.py",
+    "examples/speech-asr/python/speech_asr/experiment.py",
+    "examples/speech-asr/tools/manage_experiment.py",
     "examples/speech-asr/training/cnn_ctc_v1.py",
     "examples/speech-asr/training/train_cnn_ctc_v1.py",
     "examples/speech-asr/training/export_cnn_ctc_v1.py",
