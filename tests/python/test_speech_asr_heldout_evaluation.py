@@ -261,6 +261,21 @@ class FrozenHeldoutControllerSourceTests(unittest.TestCase):
         self.assertIn('"cer_delta"', source)
         self.assertIn("json.dumps(agreement, sort_keys=True)", source)
 
+    def test_reference_progress_is_streamed(self):
+        controller = (
+            SPEECH / "agent" / "run_frozen_heldout_evaluation.py"
+        ).read_text(encoding="utf-8")
+        evaluator = (
+            SPEECH / "evaluation" / "evaluate_frozen_cnn_ctc_v3_reference.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("def run_streaming(", controller)
+        self.assertIn("reference_proc = run_streaming(", controller)
+        self.assertIn('"--progress-every"', controller)
+        self.assertIn('"--quiet-result"', controller)
+        self.assertIn("[heldout-reference]", evaluator)
+        self.assertIn("flush=True", evaluator)
+
     def test_reference_runtime_dependencies_are_declared(self):
         requirements = (
             ROOT / "requirements" / "training.txt"
