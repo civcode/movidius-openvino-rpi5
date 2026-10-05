@@ -244,6 +244,8 @@ class FrozenHeldoutControllerSourceTests(unittest.TestCase):
         self.assertIn('dict(artifacts["openvino_xml"])', source)
         self.assertIn('dict(artifacts["openvino_bin"])', source)
         self.assertIn("frame_argmax_agreement", source)
+        self.assertIn("qualify-speech-heldout-eval.sh", source)
+        self.assertIn('"--verify-only"', source)
 
     def test_edge_provisioning_keeps_dataset_out_of_band(self):
         source = (
