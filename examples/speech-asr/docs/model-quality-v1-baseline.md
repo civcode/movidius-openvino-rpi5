@@ -302,3 +302,49 @@ The reviewed child initializer is:
 ```bash
 ./scripts/init-cnn-ctc-v4-valid-cmvn.sh
 ```
+
+
+## Valid-frame CMVN result
+
+The `cnn_ctc_v4` valid-frame-CMVN child completed as
+`exp-92ee80e9dfdfcc79/attempt-0001` and passed all execution/compatibility
+gates, but it did not improve the accepted v3 quality reference.
+
+Compared with parent `exp-3c7727ca3f37ba2c` on the exact same validation
+manifest:
+
+- CER regressed from 0.866935 to 0.884073;
+- WER improved from 1.161417 to 1.106299;
+- blank-frame fraction regressed from 0.613316 to 0.685799;
+- empty hypotheses regressed from 19/95 to 26/95;
+- emitted/reference non-space character ratio moved only slightly from
+  0.479839 to 0.488911;
+- p95 MA2450 latency remained effectively unchanged at 16.64/16.65 ms;
+- best validation loss worsened from 4.798953 to 5.540991;
+- both runs selected epoch 21 by validation CER.
+
+The frontend correction was therefore technically valid but not a model-quality
+improvement. Keep `exp-3c7727ca3f37ba2c` as the reference parent.
+
+## CTC blank-logit objective diagnostic
+
+The next isolated test keeps the exact accepted v3 graph, `logmel-v1`
+frontend, manifests, optimizer schedule, CER checkpoint selection, export,
+decoder and MA2450 graph.
+
+Training alone uses:
+
+```json
+{
+  "kind": "blank-logit-penalty-v1",
+  "blank_logit_penalty": 0.25
+}
+```
+
+The trainer subtracts 0.25 from the blank channel immediately before the
+training CTC `log_softmax`. Validation CTC loss and all exported/inference
+logits remain unmodified.
+
+This tests whether persistent under-emission is being reinforced by the CTC
+blank preference without confounding the result with a new encoder, frontend,
+decoder bias or hardware workload.
