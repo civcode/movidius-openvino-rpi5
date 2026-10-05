@@ -169,6 +169,38 @@ if grep -q 'build.sh --platform' examples/speech-asr/agent/run_experiment.py; th
     fail 'ordinary experiment execution must not rebuild the edge runtime'
 fi
 
+# Phase 11 generation-1 model research invariants.
+for f in \
+    examples/speech-asr/models/cnn_ctc_v2/model_spec.json \
+    examples/speech-asr/models/cnn_ctc_v2/vocab.json \
+    examples/speech-asr/training/cnn_ctc_v2.py \
+    examples/speech-asr/training/train_cnn_ctc_v2.py \
+    examples/speech-asr/training/export_cnn_ctc_v2.py \
+    examples/speech-asr/evaluation/compare_cnn_ctc_v2_onnx.py \
+    examples/speech-asr/evaluation/evaluate_cnn_ctc_v2.py \
+    examples/speech-asr/agent/init_cnn_ctc_v2_experiment.py; do
+    test -f "$f" || fail "Phase 11 cnn_ctc_v2 file missing: $f"
+done
+for f in \
+    scripts/init-cnn-ctc-v2-experiment.sh \
+    scripts/train-cnn-ctc-v2.sh \
+    scripts/probe-cnn-ctc-v2.sh \
+    scripts/prepare-cnn-ctc-v2.sh \
+    scripts/evaluate-cnn-ctc-v2.sh \
+    scripts/edge-speech-model-probe.sh; do
+    test -x "$f" || fail "Phase 11 shell entry point is not executable: $f"
+done
+grep -q 'residual-temporal-v1' examples/speech-asr/models/cnn_ctc_v2/model_spec.json || fail 'cnn_ctc_v2 residual architecture missing'
+grep -q '174804992' examples/speech-asr/models/cnn_ctc_v2/model_spec.json || fail 'cnn_ctc_v2 MAC estimate not frozen'
+grep -q 'physical_compatibility_probe' examples/speech-asr/agent/run_experiment.py || fail 'Phase 11 lacks pretraining physical MYRIAD probe'
+grep -q 'cnn_ctc_v2' examples/speech-asr/agent/edge_worker.py || fail 'edge worker does not register cnn_ctc_v2'
+if grep -q 'groups=' examples/speech-asr/training/cnn_ctc_v2.py; then
+    fail 'cnn_ctc_v2 generation 1 must not use grouped/depthwise convolution'
+fi
+if grep -Eq 'MultiheadAttention|LayerNorm' examples/speech-asr/training/cnn_ctc_v2.py; then
+    fail 'cnn_ctc_v2 generation 1 must not use attention/layer normalization'
+fi
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
 for name in [
@@ -184,6 +216,7 @@ for name in [
     "examples/speech-asr/python/speech_asr/experiment.py",
     "examples/speech-asr/python/speech_asr/orchestration.py",
     "examples/speech-asr/agent/init_cnn_ctc_v1_experiment.py",
+    "examples/speech-asr/agent/init_cnn_ctc_v2_experiment.py",
     "examples/speech-asr/agent/run_experiment.py",
     "examples/speech-asr/agent/edge_worker.py",
     "examples/speech-asr/tools/manage_experiment.py",
@@ -191,9 +224,14 @@ for name in [
     "examples/speech-asr/training/cnn_ctc_v1.py",
     "examples/speech-asr/training/train_cnn_ctc_v1.py",
     "examples/speech-asr/training/export_cnn_ctc_v1.py",
+    "examples/speech-asr/training/cnn_ctc_v2.py",
+    "examples/speech-asr/training/train_cnn_ctc_v2.py",
+    "examples/speech-asr/training/export_cnn_ctc_v2.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v1_onnx.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v1_tensor.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v1.py",
+    "examples/speech-asr/evaluation/compare_cnn_ctc_v2_onnx.py",
+    "examples/speech-asr/evaluation/evaluate_cnn_ctc_v2.py",
 ]:
     src = Path(name).read_text()
     compile(src, name, "exec")
