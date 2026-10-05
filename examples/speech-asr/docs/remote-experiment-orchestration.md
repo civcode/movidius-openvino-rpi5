@@ -1,6 +1,6 @@
 # Remote experiment orchestration specification
 
-Status: **accepted for Phase 9/10 implementation**
+Status: **accepted; Phase 10 implementation available, physical acceptance pending**
 
 This document defines the multi-host execution architecture for speech-ASR
 experiments. It separates experiment control and model production on the CUDA
@@ -355,6 +355,27 @@ Edge has one physical MYRIAD execution slot unless the hardware topology is
 explicitly expanded. Remote runs therefore serialize at the device lock.
 
 The later execution agent should queue work rather than bypass this constraint.
+
+## Implemented commands
+
+Controller-side execution:
+
+```bash
+./scripts/run-speech-experiment.sh \
+  --experiment work/speech-asr/experiments/exp-... \
+  --worker edge
+```
+
+The edge side is split into repository-owned components:
+
+- `scripts/edge-speech-bootstrap.sh` — exact-commit automation worktree setup;
+- `scripts/edge-speech-preflight.sh` — arm64, dataset hash and runtime-capability checks;
+- `scripts/edge-speech-worker.sh` — non-blocking exclusive MYRIAD lock;
+- `examples/speech-asr/agent/edge_worker.py` — deployment/hash validation,
+  evaluator execution and result provenance checks.
+
+SSH and rsync use `BatchMode=yes` with normal host-key verification.
+Ordinary experiment execution contains no runtime-image rebuild path.
 
 ## Relationship to Phase 9 and Phase 10
 
