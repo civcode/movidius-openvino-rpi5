@@ -26,7 +26,7 @@ target. The immediate problem is optimization fidelity.
 
 Generation 2 keeps the v2 temporal geometry and removes BatchNorm. Residual
 blocks use only ordinary Conv1d, ReLU, Dropout during training, 1x1 Conv, Add
-and ReLU. The final 1x1 residual projection is zero-initialized so each block
+and ReLU. The final 1x1 residual projection is small-initialized so each block
 starts near an identity mapping.
 
 Training changes from one epoch/batch 2 to 32 epochs/batch 1. On the current
@@ -105,3 +105,13 @@ prevent accuracy work from silently consuming the available realtime margin.
 - Fast Conformer, arXiv:2305.05084
 - QuartzNet, arXiv:1910.10261
 - Citrinet, arXiv:2104.01721
+
+
+### Compatibility-probe note
+
+Generation 2 originally considered exact zero initialization for the residual
+projection. That was rejected before execution because a legacy graph optimizer
+could simplify an exactly-zero branch during the initialized compatibility
+probe. Using nonzero Kaiming weights scaled to 1% preserves the near-identity
+optimization goal while ensuring the pretraining OpenVINO/MYRIAD probe sees the
+same residual Conv/Add topology that will exist after training.
