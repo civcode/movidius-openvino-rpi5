@@ -140,6 +140,20 @@ class ExperimentContractTests(unittest.TestCase):
         self.assertEqual(validate_request_identity(first)["experiment_id"], first["experiment_id"])
         self.assertEqual(validate_experiment_request(first)["state"], "APPROVED")
 
+    def test_checkpoint_selection_is_reviewed_training_identity(self):
+        changed = train_config()
+        changed["checkpoint_selection"] = "validation_cer"
+        validated = validate_train_config(changed)
+        self.assertEqual(validated["checkpoint_selection"], "validation_cer")
+
+        invalid = train_config()
+        invalid["checkpoint_selection"] = "lossish"
+        with self.assertRaisesRegex(
+            ContractValidationError,
+            "checkpoint_selection",
+        ):
+            validate_train_config(invalid)
+
     def test_training_change_creates_new_experiment(self):
         first = request()
         changed = train_config()
