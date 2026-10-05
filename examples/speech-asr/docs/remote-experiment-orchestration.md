@@ -1,6 +1,6 @@
 # Remote experiment orchestration specification
 
-Status: **accepted; Phase 10 implementation available, physical acceptance pending**
+Status: **accepted; Phase 10 physically qualified on 2026-10-05**
 
 This document defines the multi-host execution architecture for speech-ASR
 experiments. It separates experiment control and model production on the CUDA
@@ -441,3 +441,19 @@ performed automatically by an ordinary model experiment.
 These six decisions are intentionally explicit. Details such as rsync flags,
 temporary filenames, SSH ControlMaster use, compression and log formatting are
 implementation choices and do not belong in the experiment contract.
+
+
+## Physical acceptance
+
+The orchestration path was accepted on 2026-10-05 with
+`exp-f915ec624a63caf6/attempt-0001`. The controller on oberon completed the
+approved `cnn_ctc_v1` request through the dedicated exact-commit edge worktree,
+physical Pi 5/arm64 + MA2450 evaluation, result collection and validation. The
+frozen acceptance policy returned `accepted`, and the lifecycle ended in
+`AWAIT_REVIEW`.
+
+The run also confirmed why worker Python setup must not depend on an interactive
+shell: non-interactive SSH exposed only
+`/usr/local/bin:/usr/bin:/bin:/usr/games`, while `uv` was installed at
+`~/.local/bin/uv`. The shared Python-environment helper now resolves that
+location explicitly, and edge preflight checks it before CUDA training begins.
