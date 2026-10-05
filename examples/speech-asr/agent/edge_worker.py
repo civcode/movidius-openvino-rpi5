@@ -279,6 +279,8 @@ def validate_hardware_result(
         errors.append("experiment_id mismatch")
     if result["status"] != "completed":
         errors.append("hardware result is not completed")
+    if result["benchmark"]["id"] != manifest["benchmark"]["id"]:
+        errors.append("benchmark id mismatch")
     if result["benchmark"]["manifest_sha256"] != manifest["benchmark"]["manifest_sha256"]:
         errors.append("benchmark manifest hash mismatch")
     runtime = result["runtime"]
