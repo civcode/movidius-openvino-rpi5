@@ -345,6 +345,24 @@ grep -q 'DEFAULT_PARENT = "exp-3c7727ca3f37ba2c"' examples/speech-asr/agent/init
 grep -q '"frontend": {"kind": "logmel-v2"}' examples/speech-asr/agent/init_cnn_ctc_v4_valid_cmvn.py || fail 'cnn_ctc_v4 experiment frontend changed'
 grep -q '"checkpoint_selection": "validation_cer"' examples/speech-asr/agent/init_cnn_ctc_v4_valid_cmvn.py || fail 'cnn_ctc_v4 must retain CER checkpoint selection'
 
+# CTC-objective diagnostic: exact v3 graph/frontend, training-only blank pressure.
+test -f examples/speech-asr/agent/init_cnn_ctc_v3_blank_penalty.py || fail 'v3 blank-penalty initializer missing'
+test -x scripts/init-cnn-ctc-v3-blank-penalty.sh || fail 'v3 blank-penalty wrapper is not executable'
+grep -q 'blank-logit-penalty-v1' examples/speech-asr/contracts/train-config-v1.schema.json || fail 'train config lacks blank-logit objective contract'
+grep -q 'blank_logit_penalty' examples/speech-asr/python/speech_asr/contracts.py || fail 'semantic train-config validator lacks blank-logit objective'
+grep -q -- '--ctc-objective-kind' scripts/train-cnn-ctc-v3.sh || fail 'v3 training wrapper lacks CTC objective argument'
+grep -q -- '--blank-logit-penalty' scripts/train-cnn-ctc-v3.sh || fail 'v3 training wrapper lacks blank penalty argument'
+grep -q 'adjusted_logits\[\.\.\., blank_index\]' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'v3 trainer does not adjust only blank logits'
+grep -q '"ctc_objective": ctc_objective' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'v3 trainer does not record CTC objective provenance'
+grep -q 'DEFAULT_PARENT = "exp-3c7727ca3f37ba2c"' examples/speech-asr/agent/init_cnn_ctc_v3_blank_penalty.py || fail 'blank-penalty parent changed'
+grep -q '"model_id": "cnn_ctc_v3"' examples/speech-asr/agent/init_cnn_ctc_v3_blank_penalty.py || fail 'blank-penalty experiment changed model graph identity'
+grep -q '"frontend": {"kind": "logmel-v1"}' examples/speech-asr/agent/init_cnn_ctc_v3_blank_penalty.py || fail 'blank-penalty experiment changed frontend'
+grep -q '"blank_logit_penalty": 0.25' examples/speech-asr/agent/init_cnn_ctc_v3_blank_penalty.py || fail 'blank-penalty diagnostic value changed'
+grep -q '"checkpoint_selection": "validation_cer"' examples/speech-asr/agent/init_cnn_ctc_v3_blank_penalty.py || fail 'blank-penalty experiment must retain CER checkpoint selection'
+if grep -q '"augmentation": {' examples/speech-asr/agent/init_cnn_ctc_v3_blank_penalty.py; then
+    fail 'blank-penalty experiment must not add augmentation'
+fi
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
 for name in [
@@ -366,6 +384,7 @@ for name in [
     "examples/speech-asr/agent/init_cnn_ctc_v3_cer_selection.py",
     "examples/speech-asr/agent/init_cnn_ctc_v3_specaugment.py",
     "examples/speech-asr/agent/init_cnn_ctc_v4_valid_cmvn.py",
+    "examples/speech-asr/agent/init_cnn_ctc_v3_blank_penalty.py",
     "examples/speech-asr/agent/review_experiment.py",
     "examples/speech-asr/agent/run_experiment.py",
     "examples/speech-asr/agent/edge_worker.py",
