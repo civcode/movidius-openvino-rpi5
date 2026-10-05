@@ -176,21 +176,21 @@ class PersistentMyriadServer:
         while not self._ready.wait(0.1):
             if self.proc.poll() is not None:
                 raise RuntimeError(
-                    "persistent MYRIAD server exited during startup:\\n"
-                    + "\\n".join(self._stderr_tail[-30:])
+                    "persistent MYRIAD server exited during startup:\n"
+                    + "\n".join(self._stderr_tail[-30:])
                 )
             if time.monotonic() >= deadline:
                 self.close()
                 raise RuntimeError(
-                    "persistent MYRIAD server startup timed out:\\n"
-                    + "\\n".join(self._stderr_tail[-30:])
+                    "persistent MYRIAD server startup timed out:\n"
+                    + "\n".join(self._stderr_tail[-30:])
                 )
 
     def _drain_stderr(self) -> None:
         assert self.proc.stderr is not None
         for raw in iter(self.proc.stderr.readline, b""):
-            line = raw.decode("utf-8", errors="replace").rstrip("\\r\\n")
-            self._log_handle.write(line + "\\n")
+            line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+            self._log_handle.write(line + "\n")
             self._log_handle.flush()
             self._stderr_tail.append(line)
             if len(self._stderr_tail) > 60:
@@ -257,8 +257,8 @@ class PersistentMyriadServer:
     def infer(self, features: np.ndarray, request_index: int) -> tuple[np.ndarray, float]:
         if self.proc.poll() is not None:
             raise RuntimeError(
-                "persistent MYRIAD server is not running:\\n"
-                + "\\n".join(self._stderr_tail[-30:])
+                "persistent MYRIAD server is not running:\n"
+                + "\n".join(self._stderr_tail[-30:])
             )
         values = np.ascontiguousarray(features, dtype="<f4")
         if values.size != self.input_elements:
@@ -276,8 +276,8 @@ class PersistentMyriadServer:
                 count = 0
             if count <= 0:
                 raise RuntimeError(
-                    "persistent MYRIAD server input pipe closed:\\n"
-                    + "\\n".join(self._stderr_tail[-30:])
+                    "persistent MYRIAD server input pipe closed:\n"
+                    + "\n".join(self._stderr_tail[-30:])
                 )
             sent += count
         self.proc.stdin.flush()
@@ -287,8 +287,8 @@ class PersistentMyriadServer:
             timing_index, infer_ms = self._timings.get(timeout=self.request_timeout)
         except queue.Empty as exc:
             raise RuntimeError(
-                "persistent MYRIAD server did not report request timing:\\n"
-                + "\\n".join(self._stderr_tail[-30:])
+                "persistent MYRIAD server did not report request timing:\n"
+                + "\n".join(self._stderr_tail[-30:])
             ) from exc
         if timing_index != request_index:
             raise RuntimeError(
@@ -369,7 +369,7 @@ def write_sample_cache(
         "server_load_ms": server_load_ms,
     }
     cache_path.write_text(
-        json.dumps(value, sort_keys=True, indent=2) + "\\n",
+        json.dumps(value, sort_keys=True, indent=2) + "\n",
         encoding="utf-8",
     )
 
@@ -787,19 +787,19 @@ def main() -> int:
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
-        json.dumps(result, sort_keys=True, indent=2) + "\\n",
+        json.dumps(result, sort_keys=True, indent=2) + "\n",
         encoding="utf-8",
     )
     print(
-        f"status: completed\\n"
-        f"samples: {len(per_sample)} evaluated / {manifest_samples} manifest\\n"
+        f"status: completed\n"
+        f"samples: {len(per_sample)} evaluated / {manifest_samples} manifest\n"
         f"skipped: too_long={len(skipped['too_long'])}, "
-        f"target_too_long={len(skipped['target_too_long'])}\\n"
-        f"WER: {result['metrics']['wer']:.6f}\\n"
-        f"CER: {result['metrics']['cer']:.6f}\\n"
-        f"inference-only RTF: {result['metrics']['realtime_factor']:.6f}\\n"
-        f"latency p50/p95 ms: {latency['p50_ms']:.3f}/{latency['p95_ms']:.3f}\\n"
-        f"persistent server sessions: {len(session_loads)}\\n"
+        f"target_too_long={len(skipped['target_too_long'])}\n"
+        f"WER: {result['metrics']['wer']:.6f}\n"
+        f"CER: {result['metrics']['cer']:.6f}\n"
+        f"inference-only RTF: {result['metrics']['realtime_factor']:.6f}\n"
+        f"latency p50/p95 ms: {latency['p50_ms']:.3f}/{latency['p95_ms']:.3f}\n"
+        f"persistent server sessions: {len(session_loads)}\n"
         f"result: {args.output}"
     )
     return 0
