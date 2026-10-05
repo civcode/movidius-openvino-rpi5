@@ -177,3 +177,20 @@ benchmark source contains only ES2002a. It is suitable for the next controlled
 learnability baseline, but it is not yet a final generalization benchmark.
 Later corpus expansion should use disjoint meetings/sessions before strong ASR
 quality claims are made.
+
+
+### Reviewed model-quality-v1 identity
+
+The first real qualification completed on 2026-10-05 with the following
+reviewed result:
+
+| Role | Speakers | Eligible | Audio seconds | Manifest SHA-256 |
+|---|---|---:|---:|---|
+| train | A/B/C | 125 | 219.998 | `89a8624a5dc46ef28845f35591fc1e623dfbd3026d7a4729b7578153d03baf5a` |
+| validation | D | 95 | 122.52 | `07ebc41041238c1ec374ad64eefe7209fd6c11d1050e8f6f72f0226d358c8923` |
+
+Training exclusions were 36 `too_long` and 1 `target_too_long`; validation
+exclusions were 19 `too_long` and 1 `target_too_long`. Record and speaker
+overlap are both zero.
+
+These exact identities are frozen by the model-quality baseline initializer.
