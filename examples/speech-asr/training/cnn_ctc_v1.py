@@ -114,7 +114,7 @@ class ManifestCtcDataset(Dataset):
                     skipped_target.append(record["id"])
                 else:
                     raise ValueError(
-                        f"{record['id']}: unknown cnn_ctc_v1 eligibility reason "
+                        f"{record['id']}: unknown {spec['id']} eligibility reason "
                         f"{decision['reason']!r}"
                     )
                 continue
@@ -124,7 +124,7 @@ class ManifestCtcDataset(Dataset):
             eligible = eligible[: max(0, int(max_samples))]
         if not eligible:
             raise ValueError(
-                "no eligible manifest samples for cnn_ctc_v1; "
+                f"no eligible manifest samples for {spec['id']}; "
                 f"too_long={skipped_long}, target_too_long={skipped_target}"
             )
         self.records = eligible
