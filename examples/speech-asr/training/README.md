@@ -177,3 +177,25 @@ Use the experiment lifecycle rather than editing those defaults during a run:
 ./scripts/init-cnn-ctc-v3-experiment.sh
 ./scripts/run-speech-experiment.sh --experiment work/.../exp-... --worker edge
 ```
+
+
+### CUDA placement for cnn_ctc_v3
+
+The reviewed generation-2 request uses `device: cuda`. The CNN model,
+features, logits and convolution backward pass execute on CUDA. With pinned
+PyTorch 2.2.2, CTC loss is intentionally evaluated on CPU to preserve the
+project's deterministic-training contract; autograd propagates through the
+device copy back into the CUDA model.
+
+Because the smoke manifest contains only two eligible samples, GPU utilization
+can appear very low even when the model is on CUDA. Training results therefore
+record and the controller verifies:
+
+- requested and actual device;
+- model and observed logits device;
+- CTC-loss device;
+- CUDA device name;
+- peak allocated and reserved CUDA memory.
+
+A `device: cuda` experiment fails if the model/logits are not actually on CUDA
+or peak allocated VRAM is zero.
