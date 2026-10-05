@@ -131,6 +131,9 @@ class CnnCtcPipelineSourceTests(unittest.TestCase):
         self.assertIn('"speech-asr/experiment-result"', source)
         self.assertIn("validate_experiment_result", source)
         self.assertIn('"backend": "MYRIAD"', source)
+        self.assertIn("manifest_record_eligibility", source)
+        self.assertIn('"skipped": skipped', source)
+        self.assertNotIn("exceeds cnn_ctc_v1 fixed limit", source)
 
 
 if __name__ == "__main__":
