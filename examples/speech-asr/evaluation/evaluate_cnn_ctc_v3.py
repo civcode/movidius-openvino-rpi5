@@ -91,6 +91,122 @@ def sum_rate(counts) -> float:
     return errors / max(1, refs)
 
 
+def parse_myriad_timing(text: str) -> tuple[float, float] | None:
+    if "RESULT: PASS" not in text:
+        return None
+    infer_match = INFER_RE.search(text)
+    load_match = LOAD_RE.search(text)
+    if infer_match is None or load_match is None:
+        return None
+    return float(infer_match.group(1)), float(load_match.group(1))
+
+
+def write_sample_cache(
+    *,
+    cache_path: pathlib.Path,
+    record_id: str,
+    platform: str,
+    feature_path: pathlib.Path,
+    logits_path: pathlib.Path,
+    log_path: pathlib.Path,
+    feature_sha256: str,
+    xml_sha256: str,
+    bin_sha256: str,
+    output_elements: int,
+    infer_ms: float,
+    load_ms: float,
+) -> None:
+    value = {
+        "schema": "speech-asr/myriad-sample-cache",
+        "version": 1,
+        "sample_id": record_id,
+        "platform": platform,
+        "feature_sha256": feature_sha256,
+        "xml_sha256": xml_sha256,
+        "bin_sha256": bin_sha256,
+        "output_elements": output_elements,
+        "logits_sha256": sha256_path(logits_path),
+        "log_sha256": sha256_path(log_path),
+        "inference_ms": infer_ms,
+        "load_ms": load_ms,
+    }
+    cache_path.write_text(
+        json.dumps(value, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def load_sample_cache(
+    *,
+    cache_path: pathlib.Path,
+    record_id: str,
+    platform: str,
+    feature_path: pathlib.Path,
+    logits_path: pathlib.Path,
+    log_path: pathlib.Path,
+    feature_sha256: str,
+    xml_sha256: str,
+    bin_sha256: str,
+    output_elements: int,
+) -> tuple[float, float] | None:
+    required = (feature_path, logits_path, log_path)
+    if any(not path.is_file() for path in required):
+        return None
+    if feature_path.stat().st_size == 0:
+        return None
+    if sha256_path(feature_path) != feature_sha256:
+        return None
+    if logits_path.stat().st_size != output_elements * np.dtype(np.float32).itemsize:
+        return None
+
+    log_text = log_path.read_text(encoding="utf-8")
+    timing = parse_myriad_timing(log_text)
+    if timing is None:
+        return None
+    infer_ms, load_ms = timing
+
+    if cache_path.is_file():
+        try:
+            cache = json.loads(cache_path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+        expected = {
+            "schema": "speech-asr/myriad-sample-cache",
+            "version": 1,
+            "sample_id": record_id,
+            "platform": platform,
+            "feature_sha256": feature_sha256,
+            "xml_sha256": xml_sha256,
+            "bin_sha256": bin_sha256,
+            "output_elements": output_elements,
+            "logits_sha256": sha256_path(logits_path),
+            "log_sha256": sha256_path(log_path),
+            "inference_ms": infer_ms,
+            "load_ms": load_ms,
+        }
+        if cache != expected:
+            return None
+    else:
+        # Adopt successful outputs from runs made before resumable caches existed.
+        # The held-out work directory is manifest-hash scoped, and current
+        # feature/model hashes are recorded when the legacy result is adopted.
+        write_sample_cache(
+            cache_path=cache_path,
+            record_id=record_id,
+            platform=platform,
+            feature_path=feature_path,
+            logits_path=logits_path,
+            log_path=log_path,
+            feature_sha256=feature_sha256,
+            xml_sha256=xml_sha256,
+            bin_sha256=bin_sha256,
+            output_elements=output_elements,
+            infer_ms=infer_ms,
+            load_ms=load_ms,
+        )
+    return infer_ms, load_ms
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", type=pathlib.Path, default=DEFAULT_MANIFEST)
@@ -133,6 +249,19 @@ def main() -> int:
         total_audio_samples = 0
         total_infer_seconds = 0.0
         output_shape = tuple(int(value) for value in spec["output_contract"]["shape"])
+        output_elements = int(np.prod(output_shape))
+        xml_sha = sha256_path(xml)
+        bin_sha = sha256_path(binary)
+        reused_samples = 0
+        manifest_total = sum(
+            1
+            for line in args.manifest.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        )
+        print(
+            f"[myriad-eval] manifest_records={manifest_total} resumable=true",
+            flush=True,
+        )
 
         for record in records(args.manifest):
             manifest_samples += 1
@@ -163,54 +292,90 @@ def main() -> int:
             sample_dir.mkdir(parents=True, exist_ok=True)
             feature_path = sample_dir / "features.f32"
             logits_path = sample_dir / "logits.f32"
-            features.astype(np.float32).tofile(feature_path)
+            log_path = sample_dir / "myriad.log"
+            cache_path = sample_dir / "sample-cache.json"
+            feature_values = features.astype(np.float32, copy=False)
+            feature_sha = hashlib.sha256(
+                feature_values.tobytes(order="C")
+            ).hexdigest()
 
-            command = [
-                str(ROOT / "run.sh"),
-                "--platform",
-                args.platform,
-                "custom",
-                "--model",
-                container_work(xml),
-                "--weights",
-                container_work(binary),
-                "--tensor",
-                container_work(feature_path),
-                "--output",
-                container_work(logits_path),
-                "--iterations",
-                "1",
-            ]
-            proc = subprocess.run(
-                command,
-                cwd=ROOT,
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                check=False,
+            cached_timing = load_sample_cache(
+                cache_path=cache_path,
+                record_id=str(record["id"]),
+                platform=args.platform,
+                feature_path=feature_path,
+                logits_path=logits_path,
+                log_path=log_path,
+                feature_sha256=feature_sha,
+                xml_sha256=xml_sha,
+                bin_sha256=bin_sha,
+                output_elements=output_elements,
             )
-            (sample_dir / "myriad.log").write_text(proc.stdout, encoding="utf-8")
-            if proc.returncode != 0:
-                raise RuntimeError(
-                    f"{record['id']}: MYRIAD inference failed ({proc.returncode})\n"
-                    + "\n".join(proc.stdout.splitlines()[-20:])
+            if cached_timing is not None:
+                infer_ms, load_ms = cached_timing
+                reused_samples += 1
+            else:
+                feature_values.tofile(feature_path)
+                command = [
+                    str(ROOT / "run.sh"),
+                    "--platform",
+                    args.platform,
+                    "custom",
+                    "--model",
+                    container_work(xml),
+                    "--weights",
+                    container_work(binary),
+                    "--tensor",
+                    container_work(feature_path),
+                    "--output",
+                    container_work(logits_path),
+                    "--iterations",
+                    "1",
+                ]
+                proc = subprocess.run(
+                    command,
+                    cwd=ROOT,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    check=False,
                 )
-            infer_match = INFER_RE.search(proc.stdout)
-            load_match = LOAD_RE.search(proc.stdout)
-            if infer_match is None or load_match is None:
-                raise RuntimeError(f"{record['id']}: could not parse MYRIAD timing")
-            infer_ms = float(infer_match.group(1))
-            load_ms = float(load_match.group(1))
+                log_path.write_text(proc.stdout, encoding="utf-8")
+                if proc.returncode != 0:
+                    raise RuntimeError(
+                        f"{record['id']}: MYRIAD inference failed ({proc.returncode})\n"
+                        + "\n".join(proc.stdout.splitlines()[-20:])
+                    )
+                timing = parse_myriad_timing(proc.stdout)
+                if timing is None:
+                    raise RuntimeError(
+                        f"{record['id']}: could not parse MYRIAD timing"
+                    )
+                infer_ms, load_ms = timing
+                write_sample_cache(
+                    cache_path=cache_path,
+                    record_id=str(record["id"]),
+                    platform=args.platform,
+                    feature_path=feature_path,
+                    logits_path=logits_path,
+                    log_path=log_path,
+                    feature_sha256=feature_sha,
+                    xml_sha256=xml_sha,
+                    bin_sha256=bin_sha,
+                    output_elements=output_elements,
+                    infer_ms=infer_ms,
+                    load_ms=load_ms,
+                )
             latencies.append(infer_ms)
             load_times.append(load_ms)
             total_infer_seconds += infer_ms / 1000.0
             total_audio_samples += audio.sample_count
 
             logits_flat = np.fromfile(logits_path, dtype=np.float32)
-            if logits_flat.size != int(np.prod(output_shape)):
+            if logits_flat.size != output_elements:
                 raise RuntimeError(
                     f"{record['id']}: output elements {logits_flat.size} != "
-                    f"{int(np.prod(output_shape))}"
+                    f"{output_elements}"
                 )
             logits = logits_flat.reshape(output_shape)
             output_frames = acoustic_output_length(valid_frames, spec)
@@ -252,6 +417,21 @@ def main() -> int:
                     },
                 }
             )
+            if manifest_samples == 1 or manifest_samples % 100 == 0:
+                print(
+                    "[myriad-eval] "
+                    f"processed={manifest_samples}/{manifest_total} "
+                    f"evaluated={len(per_sample)} reused={reused_samples}",
+                    flush=True,
+                )
+
+        print(
+            "[myriad-eval] "
+            f"processed={manifest_samples}/{manifest_total} "
+            f"evaluated={len(per_sample)} reused={reused_samples} "
+            "hardware_pass_complete=true",
+            flush=True,
+        )
 
         if not per_sample:
             raise ValueError(
@@ -279,8 +459,8 @@ def main() -> int:
                 "family": spec["family"],
                 "spec_sha256": spec_sha,
                 "artifact_sha256": {
-                    "cnn_ctc_v3.xml": sha256_path(xml),
-                    "cnn_ctc_v3.bin": sha256_path(binary),
+                    "cnn_ctc_v3.xml": xml_sha,
+                    "cnn_ctc_v3.bin": bin_sha,
                 },
             },
             "runtime": {
