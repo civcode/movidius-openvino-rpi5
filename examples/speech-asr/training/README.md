@@ -216,3 +216,27 @@ another architecture immediately.
 The next training baseline must use reviewed, disjoint manifests produced by
 `scripts/qualify-speech-model-data.sh`. Training and validation must not reuse
 the same manifest for model-quality claims.
+
+
+## Model-quality v1 training baseline
+
+The reviewed larger-data baseline keeps the `cnn_ctc_v3` training policy
+unchanged while replacing the smoke manifest with disjoint speaker partitions.
+
+The 125-record training manifest contains 219.998 seconds of eligible audio.
+At batch size 1 and 32 epochs this is 4,000 optimizer steps and approximately
+7,039.936 seconds of processed training audio. Training results now record both
+the per-epoch and total processed-audio budget so future schedules can be
+compared without relying on epoch count alone.
+
+The 95-record validation manifest is speaker D only. It is used for checkpoint
+selection and as the physical MYRIAD accuracy benchmark.
+
+Initialize only through:
+
+```bash
+./scripts/init-cnn-ctc-v3-quality-baseline.sh
+```
+
+The initializer refuses modified manifest hashes, record counts, speaker
+partition, model-spec hash or vocabulary hash.
