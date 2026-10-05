@@ -39,33 +39,31 @@ def compare_arrays(reference, candidate) -> dict:
         )
         top_two = np.partition(
             ref_frames.astype(np.float64),
-            kth=-2,
+            kth=ref_frames.shape[-1] - 2,
             axis=-1,
         )[:, -2:]
         top1 = np.max(top_two, axis=-1)
         top2 = np.min(top_two, axis=-1)
         reference_margin = top1 - top2
-
-        # If every candidate logit differs from reference by at most e, the
-        # top two can exchange order only when the reference margin is <= 2e.
-        # This distinguishes harmless FP16 tie-breaking from a disagreement
-        # too large to be explained by the measured numerical error.
-        explainable = reference_margin <= (2.0 * frame_abs_error + 1e-12)
         mismatches = ~matches
-        unexplained = mismatches & ~explainable
+        mismatch_margins = reference_margin[mismatches]
 
         result["frame_argmax_agreement"] = float(np.mean(matches))
         result["frame_argmax_matches"] = int(np.sum(matches))
         result["frame_count"] = int(ref_argmax.size)
         result["frame_argmax_mismatches"] = int(np.sum(mismatches))
-        result["frame_argmax_explainable_mismatches"] = int(
-            np.sum(mismatches & explainable)
-        )
-        result["frame_argmax_unexplained_mismatches"] = int(
-            np.sum(unexplained)
-        )
         result["min_reference_top2_margin"] = float(
             np.min(reference_margin)
         )
         result["max_frame_abs_error"] = float(np.max(frame_abs_error))
+        result["max_mismatched_reference_top2_margin"] = (
+            float(np.max(mismatch_margins))
+            if mismatch_margins.size
+            else 0.0
+        )
+        result["mean_mismatched_reference_top2_margin"] = (
+            float(np.mean(mismatch_margins))
+            if mismatch_margins.size
+            else 0.0
+        )
     return result
