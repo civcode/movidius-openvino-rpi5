@@ -957,26 +957,27 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-The training-only blank-logit experiment
-`exp-1fabf702c0aa324d/attempt-0001` is complete. It passed compatibility and
-hardware gates but failed the quality decision against the accepted v3
-reference `exp-3c7727ca3f37ba2c`:
+The compact `cnn_ctc_v5` objective/encoder redesign completed as
+`exp-fc2f3424d95c843e/attempt-0001`. It passed compatibility and hardware gates
+and established an efficient device point, but failed the primary quality rule
+against `exp-3c7727ca3f37ba2c`:
 
-- CER: 0.866935 -> 0.877016 (worse);
-- WER: 1.161417 -> 1.086614 (better, but secondary);
-- blank-frame fraction: 61.33% -> 70.74% (worse);
-- empty hypotheses: 19/95 -> 22/95 (worse);
-- emitted/reference characters: 47.98% -> 39.31% (worse);
-- p95 MA2450 latency: 16.64 -> 16.63 ms (flat).
+- CER: 0.866935 -> 0.917339 (worse);
+- WER: 1.161417 -> 1.047244 (better, but secondary);
+- blank-frame fraction: 61.33% -> 79.50% (worse);
+- empty hypotheses: 19/95 -> 39/95 (worse);
+- emitted/reference characters: 47.98% -> 23.59% (worse);
+- deployed parameters: 1,346,343 -> 304,343;
+- p95 MA2450 latency: 16.64 -> 8.11 ms.
 
-Stop CTC-local blank-bias tuning. The next reviewed generation is `cnn_ctc_v5`,
-defined by [`adr/phase11-cnn-ctc-v5.md`](adr/phase11-cnn-ctc-v5.md). It combines
-a compact 304,343-parameter local-context residual encoder with a training-only
-middle-layer InterCTC objective at weight 0.3. The fixed tensor contracts,
-logmel-v1 frontend, vocabulary and qualified Conv/ReLU/Add inference operator
-set remain unchanged.
+The compact model selected epoch 31 while both training heads were still
+improving, so encoder downsizing confounded the InterCTC test. Preserve v5 as a
+latency/size Pareto point but do not promote it as the quality reference.
 
-Run:
+The next controlled experiment is `cnn_ctc_v6`, defined by
+[`adr/phase11-cnn-ctc-v6.md`](adr/phase11-cnn-ctc-v6.md). It restores the exact
+v3 deployed capacity, context and initialization while retaining only the
+training-only middle-layer InterCTC objective.
 
 ```bash
 git pull --ff-only
@@ -984,7 +985,7 @@ git pull --ff-only
 ./scripts/test-speech-asr.sh
 
 EXP="$(
-  ./scripts/init-cnn-ctc-v5-interctc.sh |
+  ./scripts/init-cnn-ctc-v6-interctc.sh |
   python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
 )"
 
@@ -996,9 +997,7 @@ EXP="$(
   --experiment "$EXP"
 ```
 
-No dataset reprovisioning is required while the reviewed
-`model-quality-v1` manifest hashes remain unchanged. Review CER first, then
-blank-frame fraction, empty hypotheses, emitted/reference-character ratio,
-WER, ONNX agreement and MA2450 latency. This validation set is used for
-checkpoint selection, so the result is model-selection evidence rather than an
-unbiased final test estimate.
+No dataset reprovisioning is required. Review CER and emission against v3. If
+v6 does not beat v3, reject InterCTC for this data/model boundary rather than
+tuning its weight. The validation set is used for checkpoint selection, so all
+results remain model-selection evidence rather than an unbiased final test.

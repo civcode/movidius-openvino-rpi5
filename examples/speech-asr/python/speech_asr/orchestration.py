@@ -62,6 +62,12 @@ V5_ARCHITECTURE = {
     "intermediate_ctc_after_block": 3,
 }
 
+V6_ARCHITECTURE = {
+    **V3_ARCHITECTURE,
+    "kind": "residual-temporal-v4",
+    "intermediate_ctc_after_block": 3,
+}
+
 
 def executor_model_basename(model_id: str) -> str:
     if model_id in {
@@ -70,6 +76,7 @@ def executor_model_basename(model_id: str) -> str:
         "cnn_ctc_v3",
         "cnn_ctc_v4",
         "cnn_ctc_v5",
+        "cnn_ctc_v6",
     }:
         return model_id
     raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
@@ -86,6 +93,7 @@ def validate_model_executor_request(
         "cnn_ctc_v3",
         "cnn_ctc_v4",
         "cnn_ctc_v5",
+        "cnn_ctc_v6",
     }:
         raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
     if model_spec.get("family") != "cnn_ctc":
@@ -105,6 +113,7 @@ def validate_model_executor_request(
         "cnn_ctc_v3": V3_ARCHITECTURE,
         "cnn_ctc_v4": V4_ARCHITECTURE,
         "cnn_ctc_v5": V5_ARCHITECTURE,
+        "cnn_ctc_v6": V6_ARCHITECTURE,
     }[model_id]
     if model_spec.get("architecture") != expected_architecture:
         raise ValueError(
@@ -150,9 +159,9 @@ def validate_model_executor_request(
             ):
                 raise ValueError("blank_logit_penalty must be > 0 and <= 1")
         elif kind == "intermediate-ctc-v1":
-            if model_id != "cnn_ctc_v5":
+            if model_id not in {"cnn_ctc_v5", "cnn_ctc_v6"}:
                 raise ValueError(
-                    "intermediate CTC objective is supported only by cnn_ctc_v5"
+                    "intermediate CTC objective requires cnn_ctc_v5 or cnn_ctc_v6"
                 )
             if set(ctc_objective) != {"kind", "intermediate_ctc_weight"}:
                 raise ValueError(
@@ -167,8 +176,8 @@ def validate_model_executor_request(
                 raise ValueError("intermediate_ctc_weight must be between 0 and 1")
         else:
             raise ValueError("unsupported ctc_objective kind")
-    elif model_id == "cnn_ctc_v5":
-        raise ValueError("cnn_ctc_v5 requires intermediate-ctc-v1")
+    elif model_id in {"cnn_ctc_v5", "cnn_ctc_v6"}:
+        raise ValueError(f"{model_id} requires intermediate-ctc-v1")
 
 
 def validate_cnn_ctc_v1_executor_request(
@@ -192,6 +201,7 @@ def compatibility_probe_command(
         "cnn_ctc_v3",
         "cnn_ctc_v4",
         "cnn_ctc_v5",
+        "cnn_ctc_v6",
     }:
         return [
             str(root / "scripts" / f"probe-{model_id.replace('_', '-')}.sh"),
@@ -219,6 +229,7 @@ def training_command(
         "cnn_ctc_v3": "train-cnn-ctc-v3.sh",
         "cnn_ctc_v4": "train-cnn-ctc-v4.sh",
         "cnn_ctc_v5": "train-cnn-ctc-v5.sh",
+        "cnn_ctc_v6": "train-cnn-ctc-v6.sh",
     }.get(model_id)
     if executable is None:
         raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
@@ -258,7 +269,7 @@ def training_command(
                 "--blank-logit-penalty",
                 str(ctc_objective["blank_logit_penalty"]),
             ])
-        elif model_id == "cnn_ctc_v5":
+        elif model_id in {"cnn_ctc_v5", "cnn_ctc_v6"}:
             command.extend([
                 "--intermediate-ctc-weight",
                 str(ctc_objective["intermediate_ctc_weight"]),

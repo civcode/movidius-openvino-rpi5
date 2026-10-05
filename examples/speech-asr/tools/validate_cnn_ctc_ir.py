@@ -17,6 +17,7 @@ def validate(spec: dict, contract: dict) -> dict:
         "cnn_ctc_v3",
         "cnn_ctc_v4",
         "cnn_ctc_v5",
+        "cnn_ctc_v6",
     }:
         raise ValueError("unsupported cnn_ctc model spec id")
     if contract.get("schema") != "speech-asr/openvino-ir-contract":

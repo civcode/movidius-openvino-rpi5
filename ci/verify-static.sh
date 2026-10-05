@@ -393,6 +393,33 @@ grep -q 'return self.projection(encoded)' examples/speech-asr/training/cnn_ctc_v
 grep -q '"intermediate_ctc_weight": 0.3' examples/speech-asr/agent/init_cnn_ctc_v5_interctc.py || fail 'v5 InterCTC weight changed'
 grep -q 'DEFAULT_PARENT = "exp-3c7727ca3f37ba2c"' examples/speech-asr/agent/init_cnn_ctc_v5_interctc.py || fail 'v5 parent changed'
 
+# Controlled v3-capacity InterCTC ablation after compact v5 regressed.
+for f in \
+    examples/speech-asr/models/cnn_ctc_v6/model_spec.json \
+    examples/speech-asr/models/cnn_ctc_v6/vocab.json \
+    examples/speech-asr/training/cnn_ctc_v6.py \
+    examples/speech-asr/training/train_cnn_ctc_v6.py \
+    examples/speech-asr/training/export_cnn_ctc_v6.py \
+    examples/speech-asr/evaluation/compare_cnn_ctc_v6_onnx.py \
+    examples/speech-asr/evaluation/evaluate_cnn_ctc_v6.py \
+    examples/speech-asr/agent/init_cnn_ctc_v6_interctc.py; do
+    test -f "$f" || fail "cnn_ctc_v6 file missing: $f"
+done
+for f in \
+    scripts/init-cnn-ctc-v6-interctc.sh \
+    scripts/train-cnn-ctc-v6.sh \
+    scripts/probe-cnn-ctc-v6.sh \
+    scripts/prepare-cnn-ctc-v6.sh \
+    scripts/evaluate-cnn-ctc-v6.sh; do
+    test -x "$f" || fail "cnn_ctc_v6 shell entry point is not executable: $f"
+done
+grep -q 'V6_ARCHITECTURE' examples/speech-asr/python/speech_asr/orchestration.py || fail 'controller lacks frozen v6 architecture'
+grep -q '"cnn_ctc_v6": "train-cnn-ctc-v6.sh"' examples/speech-asr/python/speech_asr/orchestration.py || fail 'controller lacks v6 trainer'
+grep -q '"cnn_ctc_v6": "evaluate-cnn-ctc-v6.sh"' examples/speech-asr/agent/edge_worker.py || fail 'edge lacks v6 evaluator'
+grep -q 'self.projection = nn.Conv1d' examples/speech-asr/training/cnn_ctc_v6.py || fail 'v6 deployed head missing'
+grep -q '"intermediate_ctc_weight": 0.3' examples/speech-asr/agent/init_cnn_ctc_v6_interctc.py || fail 'v6 InterCTC weight changed'
+grep -q 'DEFAULT_PARENT = "exp-3c7727ca3f37ba2c"' examples/speech-asr/agent/init_cnn_ctc_v6_interctc.py || fail 'v6 reference parent changed'
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
 for name in [
@@ -416,6 +443,7 @@ for name in [
     "examples/speech-asr/agent/init_cnn_ctc_v4_valid_cmvn.py",
     "examples/speech-asr/agent/init_cnn_ctc_v3_blank_penalty.py",
     "examples/speech-asr/agent/init_cnn_ctc_v5_interctc.py",
+    "examples/speech-asr/agent/init_cnn_ctc_v6_interctc.py",
     "examples/speech-asr/agent/review_experiment.py",
     "examples/speech-asr/agent/run_experiment.py",
     "examples/speech-asr/agent/edge_worker.py",
@@ -434,6 +462,9 @@ for name in [
     "examples/speech-asr/training/cnn_ctc_v5.py",
     "examples/speech-asr/training/train_cnn_ctc_v5.py",
     "examples/speech-asr/training/export_cnn_ctc_v5.py",
+    "examples/speech-asr/training/cnn_ctc_v6.py",
+    "examples/speech-asr/training/train_cnn_ctc_v6.py",
+    "examples/speech-asr/training/export_cnn_ctc_v6.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v1_onnx.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v1_tensor.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v1.py",
@@ -446,6 +477,8 @@ for name in [
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v4.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v5_onnx.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v5.py",
+    "examples/speech-asr/evaluation/compare_cnn_ctc_v6_onnx.py",
+    "examples/speech-asr/evaluation/evaluate_cnn_ctc_v6.py",
 ]:
     src = Path(name).read_text()
     compile(src, name, "exec")

@@ -34,6 +34,7 @@ def load_spec(path: Path) -> dict:
         "cnn_ctc_v3",
         "cnn_ctc_v4",
         "cnn_ctc_v5",
+        "cnn_ctc_v6",
     }:
         raise ValueError("unsupported cnn_ctc model spec id")
 
@@ -93,6 +94,7 @@ def load_spec(path: Path) -> dict:
             "cnn_ctc_v3": "residual-temporal-v2",
             "cnn_ctc_v4": "residual-temporal-v2",
             "cnn_ctc_v5": "residual-temporal-v3",
+            "cnn_ctc_v6": "residual-temporal-v4",
         }[model_id]
         if network.get("kind") != expected_kind:
             raise ValueError(f"{model_id} network.kind must be {expected_kind}")
@@ -122,17 +124,22 @@ def load_spec(path: Path) -> dict:
                 f"{model_id} residual channels must remain {expected_channels}"
             )
         if (
-            model_id in {"cnn_ctc_v3", "cnn_ctc_v4", "cnn_ctc_v5"}
+            model_id in {
+                "cnn_ctc_v3",
+                "cnn_ctc_v4",
+                "cnn_ctc_v5",
+                "cnn_ctc_v6",
+            }
             and network.get("residual_projection_init") != "kaiming_scaled_0.01"
         ):
             raise ValueError(
                 f"{model_id} residual projection init must be kaiming_scaled_0.01"
             )
         if (
-            model_id == "cnn_ctc_v5"
+            model_id in {"cnn_ctc_v5", "cnn_ctc_v6"}
             and network.get("intermediate_ctc_after_block") != 3
         ):
-            raise ValueError("cnn_ctc_v5 intermediate CTC block must remain 3")
+            raise ValueError(f"{model_id} intermediate CTC block must remain 3")
     return value
 
 
@@ -295,6 +302,7 @@ def acoustic_output_length(feature_frames: int, spec: dict) -> int:
         "cnn_ctc_v3",
         "cnn_ctc_v4",
         "cnn_ctc_v5",
+        "cnn_ctc_v6",
     }:
         layers = network["stem"]
         for layer in layers:
@@ -327,8 +335,9 @@ def model_resource_estimate(spec: dict, vocab_size: int = 39) -> dict:
         "cnn_ctc_v3",
         "cnn_ctc_v4",
         "cnn_ctc_v5",
+        "cnn_ctc_v6",
     }:
-        raise ValueError("resource estimator targets cnn_ctc_v2/v3/v4/v5")
+        raise ValueError("resource estimator targets cnn_ctc_v2/v3/v4/v5/v6")
 
     network = spec["network"]
     input_frames = int(spec["input_contract"]["shape"][2])

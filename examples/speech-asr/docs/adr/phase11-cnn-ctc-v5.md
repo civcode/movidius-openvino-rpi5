@@ -1,6 +1,6 @@
 # ADR: cnn_ctc_v5 compact encoder with intermediate CTC
 
-Status: accepted design for implementation
+Status: executed; retained as efficiency Pareto point, rejected as quality reference
 Date: 2026-10-05
 Parent: exp-3c7727ca3f37ba2c (`cnn_ctc_v3` CER-selected reference)
 
@@ -95,3 +95,12 @@ than an unbiased final test estimate.
 - S. Kriman et al., “QuartzNet: Deep Automatic Speech Recognition with 1D
   Time-Channel Separable Convolutions,” 2019,
   https://arxiv.org/abs/1910.10261
+
+## Result
+
+`exp-fc2f3424d95c843e/attempt-0001` passed every compatibility and physical
+hardware gate. Relative to v3, p95 latency improved from 16.64 to 8.11 ms and
+deployed parameters fell from 1,346,343 to 304,343. Quality regressed: CER was
+0.91734, blank-frame fraction 79.50%, empty hypotheses 39/95 and emitted to
+reference characters 23.59%. The candidate is rejected as the accuracy parent
+but retained as a measured latency/size point.
