@@ -20,6 +20,7 @@ sys.path.insert(0, str(SPEECH_ROOT / "python"))
 from speech_asr.contracts import (  # noqa: E402
     canonical_json_sha256,
     validate_acceptance_policy,
+    validate_edge_worker_result,
     validate_experiment_model_spec,
     validate_experiment_result,
     validate_train_config,
@@ -512,7 +513,9 @@ def execute_remote(
         details = "\n".join(worker_proc.stdout.splitlines()[-40:])
         if pull.returncode == 0 and (collected / "worker-result.json").is_file():
             try:
-                worker_result = load_json(collected / "worker-result.json")
+                worker_result = validate_edge_worker_result(
+                    load_json(collected / "worker-result.json")
+                )
                 failure_class = worker_result.get("failure_class") or failure_class
                 if failure_class == "request_config":
                     outcome = "failed"
@@ -541,7 +544,7 @@ def execute_remote(
             failure_class="result_contract",
         )
 
-    worker_result = load_json(worker_result_path)
+    worker_result = validate_edge_worker_result(load_json(worker_result_path))
     if worker_result.get("status") != "completed":
         raise ExecutionFailure(
             "edge worker result is not completed",
