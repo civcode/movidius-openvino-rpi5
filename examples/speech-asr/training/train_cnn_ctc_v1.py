@@ -78,6 +78,25 @@ def set_deterministic(seed: int) -> None:
         torch.backends.cudnn.deterministic = True
 
 
+def deterministic_ctc_loss(loss_fn, logits, batch):
+    """Compute CTC loss without invoking PyTorch's nondeterministic CUDA backward.
+
+    PyTorch 2.2.x does not provide a deterministic CUDA implementation of
+    ctc_loss_backward. Keep the model and activations on CUDA, but move the small
+    [T,N,V] log-probability tensor to CPU for CTCLoss. Autograd propagates the
+    resulting gradient back across the device copy to the CUDA model.
+    """
+    log_probs = logits.log_softmax(dim=-1).transpose(0, 1)
+    if log_probs.device.type == "cuda":
+        log_probs = log_probs.cpu()
+    return loss_fn(
+        log_probs,
+        batch["targets"],
+        batch["input_lengths"],
+        batch["target_lengths"],
+    )
+
+
 def evaluate_loss(model, loader, loss_fn, device) -> float:
     model.eval()
     losses = []
@@ -85,13 +104,7 @@ def evaluate_loss(model, loader, loss_fn, device) -> float:
         for batch in loader:
             features = batch["features"].to(device)
             logits = model(features)
-            log_probs = logits.log_softmax(dim=-1).transpose(0, 1)
-            loss = loss_fn(
-                log_probs,
-                batch["targets"].to(device),
-                batch["input_lengths"],
-                batch["target_lengths"],
-            )
+            loss = deterministic_ctc_loss(loss_fn, logits, batch)
             losses.append(float(loss.detach().cpu()))
     return float(sum(losses) / max(1, len(losses)))
 
@@ -186,13 +199,7 @@ def main() -> int:
                     features = batch["features"].to(device)
                     optimizer.zero_grad(set_to_none=True)
                     logits = model(features)
-                    log_probs = logits.log_softmax(dim=-1).transpose(0, 1)
-                    loss = loss_fn(
-                        log_probs,
-                        batch["targets"].to(device),
-                        batch["input_lengths"],
-                        batch["target_lengths"],
-                    )
+                    loss = deterministic_ctc_loss(loss_fn, logits, batch)
                     loss.backward()
                     optimizer.step()
                     batch_losses.append(float(loss.detach().cpu()))
@@ -234,6 +241,7 @@ def main() -> int:
             "init_only": args.init_only,
             "device_requested": args.device,
             "device_used": str(device),
+            "ctc_loss_device": "cpu" if device.type == "cuda" else str(device),
             "cuda_available": bool(torch.cuda.is_available()),
             "cuda_device_name": (
                 torch.cuda.get_device_name(device)
