@@ -164,6 +164,63 @@ def training_command(
     return command
 
 
+def validate_training_device_evidence(
+    *,
+    train_config: Mapping[str, Any],
+    training_result: Mapping[str, Any],
+) -> dict[str, Any]:
+    requested = str(train_config.get("device"))
+    device_used = training_result.get("device_used")
+    model_device = training_result.get("model_device", device_used)
+    logits_device = training_result.get("observed_logits_device")
+    ctc_loss_device = training_result.get("ctc_loss_device")
+    cuda_available = training_result.get("cuda_available")
+    cuda_name = training_result.get("cuda_device_name")
+    peak_allocated = training_result.get(
+        "cuda_peak_memory_allocated_bytes",
+        0,
+    )
+    peak_reserved = training_result.get(
+        "cuda_peak_memory_reserved_bytes",
+        0,
+    )
+
+    if requested == "cuda":
+        for label, value in (
+            ("device_used", device_used),
+            ("model_device", model_device),
+            ("observed_logits_device", logits_device),
+        ):
+            if not isinstance(value, str) or not value.startswith("cuda"):
+                raise ValueError(
+                    f"CUDA training requested but {label}={value!r}"
+                )
+        if cuda_available is not True:
+            raise ValueError(
+                "CUDA training requested but cuda_available is not true"
+            )
+        if (
+            not isinstance(peak_allocated, int)
+            or isinstance(peak_allocated, bool)
+            or peak_allocated <= 0
+        ):
+            raise ValueError(
+                "CUDA training requested but peak allocated VRAM is not positive"
+            )
+
+    return {
+        "requested": requested,
+        "device_used": device_used,
+        "model_device": model_device,
+        "observed_logits_device": logits_device,
+        "ctc_loss_device": ctc_loss_device,
+        "cuda_available": cuda_available,
+        "cuda_device_name": cuda_name,
+        "cuda_peak_memory_allocated_bytes": peak_allocated,
+        "cuda_peak_memory_reserved_bytes": peak_reserved,
+    }
+
+
 def load_compatibility_result(build_dir: pathlib.Path) -> dict[str, Any]:
     paths = {
         "onnx_comparison": build_dir / "export" / "onnx-comparison.json",
