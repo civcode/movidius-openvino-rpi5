@@ -64,9 +64,29 @@ Observed device evidence:
 - RMS error: 0.0000625072.
 
 This proves deployment compatibility for the declared `cnn_ctc_v1` graph.
-It does not complete Milestone B by itself: a trained checkpoint must still be
-exported, converted, executed on MYRIAD and evaluated through the standard
-experiment-result contract.
+
+### Trained lifecycle evidence
+
+Milestone B was accepted on 2026-10-05 with a real one-epoch trained checkpoint.
+The CUDA run used seed 1337 with the model/optimizer on an NVIDIA GeForce RTX
+4070 Ti SUPER and deterministic CTC loss on CPU.
+
+Frozen trained artifacts from that run:
+
+- checkpoint SHA-256: `300ec0b9b1d30bae66b91cbab94eebb50ee92c8e6fec1dbb0720d242f81726f0`;
+- ONNX SHA-256: `ed1e0be0533193f5de75834b02c975ef2743f6e37ea5e2d529e0e4fcafe4a4b3`;
+- FP16 BIN SHA-256: `0c5f35b004da996b7c5b0d55ac68f4cb726760b4f1ee65337e85e561844f5f36`;
+- workstation XML SHA-256: `2b11c4b24d951ff6687fb8a98b3543ab25e37c96bb0121a0a8871a7109d5893e`.
+
+The trained ONNX output matched PyTorch at 128/128 frame argmaxes with maximum
+absolute error `4.4703484e-08`. The exact trained IR was then copied to the Pi
+and evaluated on MA2450 without reconversion. The AMI smoke evaluation completed
+with 2 eligible records from the 4-record manifest, 2 fixed-length skips, WER
+1.000000, CER 0.913043, inference-only RTF 0.001209, and MYRIAD latency
+p50/p95 4.380/4.407 ms.
+
+These quality values are lifecycle evidence only; `cnn_ctc_v1` is not an
+accuracy baseline.
 
 If the legacy MYRIAD compiler rejects the current rank-3 Conv1D graph, treat
 that as a compatibility failure before training. The architecture can then be
