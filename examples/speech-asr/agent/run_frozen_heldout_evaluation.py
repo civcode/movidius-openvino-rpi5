@@ -558,7 +558,39 @@ def main() -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    print(json.dumps(result, sort_keys=True))
+    summary = {
+        "status": result["status"],
+        "role": result["role"],
+        "sealed": result["sealed"],
+        "source_experiment_id": SOURCE_EXPERIMENT_ID,
+        "source_attempt_id": SOURCE_ATTEMPT_ID,
+        "benchmark_id": BENCHMARK_ID,
+        "manifest_sha256": result["evaluation"]["manifest_sha256"],
+        "reference": {
+            "wer": result["reference"]["metrics"]["wer"],
+            "cer": result["reference"]["metrics"]["cer"],
+            "decoder": result["reference"]["metrics"]["decoder"],
+            "onnx_frame_argmax_agreement": result["reference"][
+                "agreement"
+            ]["frame_argmax_agreement"],
+        },
+        "hardware": {
+            "wer": result["hardware"]["metrics"]["wer"],
+            "cer": result["hardware"]["metrics"]["cer"],
+            "decoder": result["hardware"]["metrics"]["decoder"],
+            "inference_latency_p50_ms": result["hardware"]["metrics"][
+                "inference_latency_p50_ms"
+            ],
+            "inference_latency_p95_ms": result["hardware"]["metrics"][
+                "inference_latency_p95_ms"
+            ],
+            "realtime_factor": result["hardware"]["metrics"][
+                "realtime_factor"
+            ],
+        },
+        "result": str(final_path),
+    }
+    print(json.dumps(summary, sort_keys=True))
     return 0
 
 
