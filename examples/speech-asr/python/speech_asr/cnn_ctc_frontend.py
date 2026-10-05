@@ -87,13 +87,6 @@ def logmel_features(samples: Sequence[float], spec: dict):
     if frames.shape != (fixed_frames, window_samples):
         raise ValueError(f"unexpected frame shape: {frames.shape}")
 
-    spectrum = np.fft.rfft(frames * window[None, :], n=fft_size, axis=1)
-    power = (spectrum.real * spectrum.real + spectrum.imag * spectrum.imag).astype(np.float32)
-    mel = mel_filterbank(spec) @ power.T
-    logged = np.log(np.maximum(mel, log_floor)).astype(np.float32)
-    if frontend.get("normalization") == "per_mel_bin_mean":
-        logged = logged - logged.mean(axis=1, keepdims=True)
-
     if original_samples < window_samples:
         valid_frames = 1
     else:
@@ -101,4 +94,27 @@ def logmel_features(samples: Sequence[float], spec: dict):
             fixed_frames,
             1 + (original_samples - window_samples) // hop_samples,
         )
+
+    spectrum = np.fft.rfft(frames * window[None, :], n=fft_size, axis=1)
+    power = (spectrum.real * spectrum.real + spectrum.imag * spectrum.imag).astype(np.float32)
+    mel = mel_filterbank(spec) @ power.T
+    logged = np.log(np.maximum(mel, log_floor)).astype(np.float32)
+
+    normalization = frontend.get("normalization")
+    if normalization == "per_mel_bin_mean":
+        # logmel-v1 historical behavior: the mean includes fixed-shape padding.
+        logged = logged - logged.mean(axis=1, keepdims=True)
+    elif normalization == "per_mel_bin_mean_valid_zero_pad":
+        # logmel-v2: padding is an execution-shape artifact and must not affect
+        # utterance CMVN. Normalize only real frames, then keep padded feature
+        # frames neutral in normalized space.
+        valid_mean = logged[:, :valid_frames].mean(axis=1, keepdims=True)
+        logged = logged - valid_mean
+        if valid_frames < fixed_frames:
+            logged[:, valid_frames:] = 0.0
+    else:
+        raise ValueError(
+            f"unsupported cnn_ctc frontend normalization: {normalization!r}"
+        )
+
     return logged[None, :, :], int(valid_frames)
