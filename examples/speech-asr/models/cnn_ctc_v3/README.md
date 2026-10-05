@@ -14,7 +14,7 @@ training dynamics:
 - same 96-channel, five-block, full-window receptive field;
 - remove BatchNorm entirely;
 - keep only ordinary Conv1d, ReLU, Add and final Transpose at inference;
-- zero-initialize each residual block's final 1x1 projection so the residual
+- initialize each residual block's final 1x1 projection with 1%-scaled Kaiming weights so the residual
   stack begins as an identity perturbation;
 - train 32 epochs with batch size 1 and Adam at 3e-4;
 - cosine-decay learning rate to 3e-5;
