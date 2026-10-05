@@ -27,12 +27,13 @@ def load_spec(path: Path) -> dict:
         raise ValueError("model spec schema must be speech-asr/custom-model-spec")
     if value.get("version") != 1:
         raise ValueError("model spec version must be 1")
-    if value.get("id") != "cnn_ctc_v1":
-        raise ValueError("model spec id must be cnn_ctc_v1")
+    model_id = value.get("id")
+    if model_id not in {"cnn_ctc_v1", "cnn_ctc_v2"}:
+        raise ValueError("unsupported cnn_ctc model spec id")
 
     frontend = value.get("frontend")
     if not isinstance(frontend, dict) or frontend.get("kind") != "logmel-v1":
-        raise ValueError("cnn_ctc_v1 frontend must be logmel-v1")
+        raise ValueError(f"{model_id} frontend must be logmel-v1")
     expected = {
         "sample_rate_hz": 16000,
         "window_samples": 400,
@@ -48,13 +49,39 @@ def load_spec(path: Path) -> dict:
 
     input_contract = value.get("input_contract")
     if not isinstance(input_contract, dict) or input_contract.get("shape") != [1, 64, 512]:
-        raise ValueError("cnn_ctc_v1 input shape must be [1,64,512]")
+        raise ValueError(f"{model_id} input shape must be [1,64,512]")
     output_contract = value.get("output_contract")
     if not isinstance(output_contract, dict) or output_contract.get("shape") != [1, 128, 39]:
-        raise ValueError("cnn_ctc_v1 output shape must be [1,128,39]")
+        raise ValueError(f"{model_id} output shape must be [1,128,39]")
     export = value.get("export")
     if not isinstance(export, dict) or export.get("onnx_opset") != 11:
-        raise ValueError("cnn_ctc_v1 ONNX opset must be 11")
+        raise ValueError(f"{model_id} ONNX opset must be 11")
+
+    network = value.get("network")
+    if not isinstance(network, dict):
+        raise ValueError(f"{model_id} network must be an object")
+    if model_id == "cnn_ctc_v1":
+        for key in ("channels", "kernels", "strides", "paddings"):
+            values = network.get(key)
+            if not isinstance(values, list) or len(values) != 3:
+                raise ValueError(f"cnn_ctc_v1 network.{key} must contain three values")
+    else:
+        if network.get("kind") != "residual-temporal-v1":
+            raise ValueError("cnn_ctc_v2 network.kind must be residual-temporal-v1")
+        stem = network.get("stem")
+        blocks = network.get("residual_blocks")
+        if not isinstance(stem, list) or len(stem) != 2:
+            raise ValueError("cnn_ctc_v2 network.stem must contain two layers")
+        if not isinstance(blocks, list) or len(blocks) != 5:
+            raise ValueError("cnn_ctc_v2 residual_blocks must contain five blocks")
+        if network.get("normalization") != "batchnorm":
+            raise ValueError("cnn_ctc_v2 normalization must be batchnorm")
+        if network.get("activation") != "relu":
+            raise ValueError("cnn_ctc_v2 activation must be relu")
+        if [int(block.get("kernel", 0)) for block in blocks] != [11, 19, 27, 35, 43]:
+            raise ValueError("cnn_ctc_v2 residual kernel schedule is frozen")
+        if any(int(block.get("channels", 0)) != 96 for block in blocks):
+            raise ValueError("cnn_ctc_v2 residual channels must remain 96")
     return value
 
 
@@ -68,7 +95,7 @@ def load_vocab(path: Path) -> dict:
     if len(tokens) != len(set(tokens)):
         raise ValueError("CTC vocabulary tokens must be unique")
     if value.get("blank_index") != 0:
-        raise ValueError("cnn_ctc_v1 blank index must be 0")
+        raise ValueError("cnn_ctc blank index must be 0")
     return value
 
 
@@ -78,7 +105,7 @@ def encode_text(text: str, vocab: dict) -> tuple[int, ...]:
     encoded = []
     for char in normalized:
         if char not in index:
-            raise ValueError(f"character is not in cnn_ctc_v1 vocabulary: {char!r}")
+            raise ValueError(f"character is not in cnn_ctc vocabulary: {char!r}")
         encoded.append(index[char])
     return tuple(encoded)
 
@@ -129,6 +156,17 @@ def conv1d_output_length(
 def acoustic_output_length(feature_frames: int, spec: dict) -> int:
     length = int(feature_frames)
     network = spec["network"]
+    if spec.get("id") == "cnn_ctc_v2":
+        layers = network["stem"]
+        for layer in layers:
+            length = conv1d_output_length(
+                length,
+                kernel=int(layer["kernel"]),
+                stride=int(layer["stride"]),
+                padding=int(layer["padding"]),
+            )
+        return length
+
     for kernel, stride, padding in zip(
         network["kernels"],
         network["strides"],
