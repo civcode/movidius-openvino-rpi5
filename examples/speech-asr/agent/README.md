@@ -73,3 +73,16 @@ initialized ONNX/OpenVINO conversion and one physical MYRIAD inference must pass
 before the attempt enters full CUDA training. This remains deterministic
 execution logic; the controller still cannot alter kernels, width, depth,
 frontend, thresholds, or training policy in response to a result.
+
+
+## Phase 11 generation 2
+
+After REVIEW of `exp-1c682f4eda475a01`, the executor registry now also
+contains the explicitly reviewed `cnn_ctc_v3` declaration. It is not a generic
+architecture template: the controller checks exact equality against the frozen
+normalization-free residual architecture and training request.
+
+The same pretraining physical MYRIAD gate applies before CUDA training. The
+local executor still has no authority to change the v3 update budget,
+normalization policy, kernels, widths, thresholds or benchmark after execution
+begins.
