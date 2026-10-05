@@ -41,7 +41,7 @@ V3_ARCHITECTURE = {
     "normalization": "none",
     "activation": "relu",
     "dropout": 0.1,
-    "residual_projection_init": "zeros",
+    "residual_projection_init": "kaiming_scaled_0.01",
 }
 
 
