@@ -957,44 +957,80 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-The v3-capacity InterCTC ablation completed as
-`exp-1d4836d8b6639c0d/attempt-0001`. It passed every compatibility/hardware gate
-but failed against `exp-3c7727ca3f37ba2c`:
+The three-team scaled-data result
+`exp-87538823d2bf1562/attempt-0001` remains the frozen quality reference:
 
-- CER: 0.866935 -> 0.898185 (worse);
-- WER: 1.161417 -> 1.098425 (better, but secondary);
-- blank-frame fraction: 61.33% -> 71.53% (worse);
-- empty hypotheses: 19/95 -> 25/95 (worse);
-- emitted/reference characters: 47.98% -> 35.28% (worse);
-- p95 MA2450 latency: 16.64 -> 16.64 ms.
+- CER: 0.786290;
+- WER: 1.070866;
+- blank-frame fraction: 63.82%;
+- empty hypotheses: 12/95;
+- emitted/reference characters: 72.08%;
+- p95 MA2450 latency: 16.63 ms.
 
-Reject InterCTC for this boundary and do not tune its weight. V5 remains only a
-size/latency Pareto point.
+ES2002a has been reused for checkpoint/model/data selection and is no longer an
+unbiased test. No further architecture, objective or training-data decision
+should be made from it before measuring the frozen reference once on an unseen
+official AMI ASR evaluation partition.
 
-The meeting-disjoint v2 data expansion completed as
-`exp-aa5380b542b0d784/attempt-0001`. It passed every gate and is the new quality
-reference:
+The held-out boundary is now implemented as AMI **Full-corpus-ASR** unseen
+scenario-component evaluation:
 
-- CER: 0.866935 -> 0.844758 (better);
-- WER: 1.161417 -> 1.043307 (better);
-- blank-frame fraction: 61.33% -> 73.34% (worse);
-- empty hypotheses: 19/95 -> 14/95 (better);
-- emitted/reference characters: 47.98% -> 50.60% (better);
-- p95 MA2450 latency: 16.64 -> 16.63 ms.
+- EN2002a-d;
+- ES2004a-d;
+- IS1009a-d;
+- TS3003a-d.
 
-The three-team data scale completed as
-`exp-87538823d2bf1562/attempt-0001`. It passed every gate and becomes the new
-quality reference:
+The split pins official Mix-Headset source identities. Qualification applies
+the frozen v3 fixed-shape eligibility contract and requires zero record and
+meeting overlap with both model-quality-v3 training and the ES2002a
+checkpoint-selection manifest.
 
-- CER: 0.844758 -> 0.786290 (better);
-- WER: 1.043307 -> 1.070866 (slightly worse);
-- blank-frame fraction: 73.34% -> 63.82% (better);
-- empty hypotheses: 14/95 -> 12/95 (better);
-- emitted/reference characters: 50.60% -> 72.08% (better);
-- p95 MA2450 latency: 16.63 -> 16.63 ms.
+This is a test-only boundary:
 
-The primary CER and both under-emission measures improved materially, so accept
-this candidate despite the secondary WER regression. Do not make another model
-or data-selection decision from ES2002a before measuring this frozen checkpoint
-on a held-out official AMI scenario evaluation partition. Repeated experiments
-have made ES2002a model-selection evidence only; it is not an unbiased test.
+- training is forbidden;
+- checkpoint selection is forbidden;
+- the source model is hard-bound to
+  `exp-87538823d2bf1562/attempt-0001`;
+- recorded checkpoint/ONNX/XML/BIN hashes are verified before use;
+- PyTorch and frozen ONNX are scored first and must retain exact frame-argmax
+  agreement;
+- only the already-recorded XML/BIN are deployed to MA2450;
+- a completed held-out result is sealed and refuses another run for model
+  selection.
+
+Run on oberon:
+
+```bash
+git pull --ff-only
+./ci/verify-static.sh
+./scripts/test-speech-asr.sh
+
+./scripts/prepare-speech-heldout-eval.sh
+cat work/speech-asr/ami/heldout-eval-v1/qualification.json
+```
+
+Review that qualification before exposing the test partition to the frozen
+checkpoint. It must report `role: test_only`, all four overlap counts as zero,
+and the expected 16 official meetings.
+
+Then provision the already-reviewed test corpus once:
+
+```bash
+./scripts/provision-speech-heldout-eval-edge.sh
+```
+
+Execute the single sealed evaluation:
+
+```bash
+./scripts/run-speech-heldout-eval.sh
+```
+
+Review without rerunning inference:
+
+```bash
+./scripts/review-speech-heldout-eval.sh
+```
+
+The next model-development decision is made only after this held-out result is
+reviewed. Do not use the test metrics to choose retrospectively among v3/v4/v5/
+v6 or prior training-objective variants.
