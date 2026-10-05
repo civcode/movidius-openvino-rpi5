@@ -135,6 +135,18 @@ class CnnCtcV3ExecutorTests(unittest.TestCase):
         self.assertIn("--batch-size 1", text)
         self.assertIn("--learning-rate 0.0003", text)
 
+    def test_training_command_propagates_cer_checkpoint_selection(self):
+        config = train_config()
+        config["checkpoint_selection"] = "validation_cer"
+        command = training_command(
+            root=pathlib.Path("/repo"),
+            build_dir=pathlib.Path("/repo/work/attempt/cnn_ctc_v3"),
+            train_config=config,
+            model_spec=experiment_model_spec(),
+        )
+        text = " ".join(command)
+        self.assertIn("--checkpoint-selection validation_cer", text)
+
     def test_v3_has_pretraining_compatibility_probe(self):
         command = compatibility_probe_command(
             root=pathlib.Path("/repo"),
@@ -262,6 +274,11 @@ class Phase11Generation2SourceTests(unittest.TestCase):
             '"cuda_peak_memory_allocated_bytes"',
             '"cuda_peak_memory_reserved_bytes"',
             '"ctc_loss_device": ctc_loss_device',
+            '"validation_cer": validation_cer',
+            '"validation_blank_frame_fraction"',
+            '"validation_empty_hypothesis_fraction"',
+            '"best_validation_cer"',
+            'checkpoint_selection == "validation_loss"',
         ):
             self.assertIn(marker, source)
 
