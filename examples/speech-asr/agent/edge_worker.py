@@ -164,9 +164,10 @@ def require_supported_request(
     manifest: dict[str, Any],
     artifacts: dict[str, pathlib.Path],
 ) -> tuple[pathlib.Path, pathlib.Path]:
-    if manifest["model"]["id"] != "cnn_ctc_v1":
+    model_id = manifest["model"]["id"]
+    if model_id not in {"cnn_ctc_v1", "cnn_ctc_v2"}:
         raise WorkerError(
-            f"unsupported Phase 10 model executor: {manifest['model']['id']!r}",
+            f"unsupported Phase 11 model executor: {model_id!r}",
             "request_config",
             EXIT_PREFLIGHT,
         )
@@ -181,14 +182,14 @@ def require_supported_request(
         binary = artifacts["openvino_bin"]
     except KeyError as exc:
         raise WorkerError(
-            "cnn_ctc_v1 deployment requires openvino_xml and openvino_bin",
+            f"{model_id} deployment requires openvino_xml and openvino_bin",
             "request_config",
             EXIT_PREFLIGHT,
         ) from exc
-    if xml.name != "cnn_ctc_v1.xml" or binary.name != "cnn_ctc_v1.bin":
+    if xml.name != f"{model_id}.xml" or binary.name != f"{model_id}.bin":
         raise WorkerError(
-            "cnn_ctc_v1 deployment artifact filenames must remain "
-            "cnn_ctc_v1.xml and cnn_ctc_v1.bin",
+            f"{model_id} deployment artifact filenames must remain "
+            f"{model_id}.xml and {model_id}.bin",
             "request_config",
             EXIT_PREFLIGHT,
         )
@@ -204,8 +205,19 @@ def run_evaluator(
     output_dir.mkdir(parents=True, exist_ok=True)
     result_path = output_dir / "hardware.json"
     evaluation_work = output_dir / "evaluation"
+    model_id = manifest["model"]["id"]
+    evaluator = {
+        "cnn_ctc_v1": "evaluate-cnn-ctc-v1.sh",
+        "cnn_ctc_v2": "evaluate-cnn-ctc-v2.sh",
+    }.get(model_id)
+    if evaluator is None:
+        raise WorkerError(
+            f"unsupported Phase 11 model evaluator: {model_id!r}",
+            "request_config",
+            EXIT_PREFLIGHT,
+        )
     command = [
-        str(ROOT / "scripts" / "evaluate-cnn-ctc-v1.sh"),
+        str(ROOT / "scripts" / evaluator),
         "--platform",
         "arm64",
         "--manifest",
