@@ -111,22 +111,43 @@ def relocate(
     return relocated
 
 
+def manifest_text(records: list[dict[str, Any]]) -> str:
+    return "".join(
+        json.dumps(
+            record,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+        for record in records
+    )
+
+
 def write_manifest(
     path: pathlib.Path,
     records: list[dict[str, Any]],
 ) -> str:
-    with path.open("w", encoding="utf-8", newline="\n") as handle:
-        for record in records:
-            handle.write(
-                json.dumps(
-                    record,
-                    ensure_ascii=False,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                )
-                + "\n"
+    payload = manifest_text(records)
+    if path.exists():
+        if path.read_text(encoding="utf-8") != payload:
+            raise ValueError(
+                f"held-out manifest is immutable once written: {path}"
             )
+    else:
+        path.write_text(payload, encoding="utf-8", newline="\n")
     return sha256_path(path)
+
+
+def write_json_immutable(path: pathlib.Path, document: dict[str, Any]) -> None:
+    payload = json.dumps(document, sort_keys=True, indent=2) + "\n"
+    if path.exists():
+        if path.read_text(encoding="utf-8") != payload:
+            raise ValueError(
+                f"held-out qualification is immutable once written: {path}"
+            )
+    else:
+        path.write_text(payload, encoding="utf-8")
 
 
 def record_ids(records: list[dict[str, Any]]) -> set[str]:
@@ -285,11 +306,102 @@ def qualify(
             "stats": stats(test),
         },
     }
-    (output_dir / "qualification.json").write_text(
-        json.dumps(result, sort_keys=True, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    write_json_immutable(output_dir / "qualification.json", result)
     return result
+
+
+def verify_existing(
+    *,
+    source_manifest: pathlib.Path,
+    train_manifest: pathlib.Path,
+    selection_manifest: pathlib.Path,
+    output_dir: pathlib.Path,
+    spec_path: pathlib.Path,
+    vocab_path: pathlib.Path,
+) -> dict[str, Any]:
+    manifest_path = output_dir / "manifest.jsonl"
+    qualification_path = output_dir / "qualification.json"
+    for path in (
+        source_manifest,
+        train_manifest,
+        selection_manifest,
+        spec_path,
+        vocab_path,
+        manifest_path,
+        qualification_path,
+    ):
+        if not path.is_file():
+            raise ValueError(
+                f"held-out verification input missing: {path}"
+            )
+
+    qualification = json.loads(
+        qualification_path.read_text(encoding="utf-8")
+    )
+    if qualification.get("schema") != "speech-asr/heldout-evaluation-manifest":
+        raise ValueError("held-out qualification schema mismatch")
+    if qualification.get("version") != 1:
+        raise ValueError("held-out qualification version mismatch")
+    if qualification.get("status") != "structurally_valid":
+        raise ValueError("held-out qualification is not structurally_valid")
+    if qualification.get("role") != "test_only":
+        raise ValueError("held-out qualification role must remain test_only")
+    partition = qualification.get("partition", {})
+    if partition.get("official_meetings") != list(OFFICIAL_MEETINGS):
+        raise ValueError("held-out official meeting identity changed")
+    if partition.get("training_allowed") is not False:
+        raise ValueError("held-out qualification permits training")
+    if partition.get("checkpoint_selection_allowed") is not False:
+        raise ValueError("held-out qualification permits checkpoint selection")
+    if qualification.get("overlap") != {
+        "training_records": 0,
+        "selection_records": 0,
+        "training_meetings": 0,
+        "selection_meetings": 0,
+    }:
+        raise ValueError("held-out qualification overlap is not zero")
+
+    source_refs = (
+        ("evaluation", source_manifest),
+        ("training_reference", train_manifest),
+        ("selection_reference", selection_manifest),
+    )
+    for name, path in source_refs:
+        ref = qualification.get("sources", {}).get(name, {})
+        if ref.get("manifest_sha256") != sha256_path(path):
+            raise ValueError(
+                f"held-out {name} source hash differs from qualification"
+            )
+
+    spec = load_spec(spec_path)
+    vocab = load_vocab(vocab_path)
+    model = qualification.get("model", {})
+    if model.get("id") != "cnn_ctc_v3":
+        raise ValueError("held-out qualification model id changed")
+    if model.get("spec_sha256") != canonical_sha256(spec):
+        raise ValueError("held-out qualification model spec hash changed")
+    if model.get("vocab_sha256") != canonical_sha256(vocab):
+        raise ValueError("held-out qualification vocabulary hash changed")
+
+    test_records = load_records(manifest_path)
+    if meetings(test_records) != set(OFFICIAL_MEETINGS):
+        raise ValueError("held-out qualified manifest meetings changed")
+    test_ref = qualification.get("test", {})
+    if test_ref.get("manifest_sha256") != sha256_path(manifest_path):
+        raise ValueError("held-out qualified manifest hash changed")
+    if test_ref.get("stats") != stats(test_records):
+        raise ValueError("held-out qualified manifest statistics changed")
+
+    train = load_records(train_manifest)
+    selection = load_records(selection_manifest)
+    ids = record_ids(test_records)
+    if ids & record_ids(train) or ids & record_ids(selection):
+        raise ValueError("held-out record overlap appeared after qualification")
+    if meetings(test_records) & meetings(train):
+        raise ValueError("held-out training meeting overlap appeared")
+    if meetings(test_records) & meetings(selection):
+        raise ValueError("held-out selection meeting overlap appeared")
+    return qualification
 
 
 def main() -> int:
@@ -310,12 +422,18 @@ def main() -> int:
         default=DEFAULT_SELECTION,
     )
     parser.add_argument("--output-dir", type=pathlib.Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--verify-only",
+        action="store_true",
+        help="verify the sealed held-out manifest without rewriting it",
+    )
     parser.add_argument("--spec", type=pathlib.Path, default=DEFAULT_SPEC)
     parser.add_argument("--vocab", type=pathlib.Path, default=DEFAULT_VOCAB)
     args = parser.parse_args()
 
     try:
-        result = qualify(
+        function = verify_existing if args.verify_only else qualify
+        result = function(
             source_manifest=args.source_manifest,
             train_manifest=args.train_manifest,
             selection_manifest=args.selection_manifest,
