@@ -44,6 +44,7 @@ from speech_asr.orchestration import (  # noqa: E402
     ssh_command,
     training_command,
     validate_model_executor_request,
+    validate_training_device_evidence,
 )
 
 MANAGER = ROOT / "examples" / "speech-asr" / "tools" / "manage_experiment.py"
@@ -539,6 +540,36 @@ def execute_local(
             failure_class="controller_execution",
         )
 
+    training_result_path = build_dir / "training" / "training-result.json"
+    if not training_result_path.is_file():
+        raise ExecutionFailure(
+            f"local executor did not produce training result: {training_result_path}",
+            outcome="failed",
+            failure_class="controller_execution",
+        )
+    try:
+        training_result_doc = load_json(training_result_path)
+        device_evidence = validate_training_device_evidence(
+            train_config=train_config,
+            training_result=training_result_doc,
+        )
+    except Exception as exc:
+        raise ExecutionFailure(
+            f"training device evidence invalid: {exc}",
+            outcome="failed",
+            failure_class="controller_execution",
+        ) from exc
+    print(
+        json.dumps(
+            {
+                "event": "training_device_evidence",
+                **device_evidence,
+            },
+            sort_keys=True,
+        ),
+        flush=True,
+    )
+
     compatibility = load_compatibility_result(build_dir)
     probe_evidence = (
         attempt_dir
@@ -551,7 +582,7 @@ def execute_local(
     compatibility_path = attempt_dir / "generated" / "compatibility.json"
     write_json(compatibility_path, compatibility)
 
-    training_result = build_dir / "training" / "training-result.json"
+    training_result = training_result_path
     manager(
         "record-stage",
         "--experiment",
