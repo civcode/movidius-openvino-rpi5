@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "speech-asr/train-config-v1.schema.json",
+  "title": "Speech ASR training configuration v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema","version","seed","device","epochs","batch_size","optimizer","training_manifest","validation_manifest"],
+  "properties": {
+    "schema":{"const":"speech-asr/train-config"},
+    "version":{"const":1},
+    "seed":{"type":"integer","minimum":0},
+    "device":{"enum":["cuda","cpu"]},
+    "epochs":{"type":"integer","minimum":0},
+    "batch_size":{"type":"integer","minimum":1},
+    "max_samples":{"type":["integer","null"],"minimum":1},
+    "optimizer":{
+      "type":"object","additionalProperties":true,
+      "required":["kind","learning_rate"],
+      "properties":{
+        "kind":{"type":"string","minLength":1},
+        "learning_rate":{"type":"number","exclusiveMinimum":0}
+      }
+    },
+    "training_manifest":{"$ref":"#/$defs/manifest"},
+    "validation_manifest":{"$ref":"#/$defs/manifest"}
+  },
+  "$defs":{
+    "sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "manifest":{
+      "type":"object","additionalProperties":false,
+      "required":["id","path","sha256"],
+      "properties":{
+        "id":{"type":"string","minLength":1},
+        "path":{"type":"string","minLength":1},
+        "sha256":{"$ref":"#/$defs/sha256"}
+      }
+    }
+  }
+}
