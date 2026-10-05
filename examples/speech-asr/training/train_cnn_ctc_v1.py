@@ -121,42 +121,48 @@ def main() -> int:
         set_deterministic(seed)
         device = choose_device(args.device)
 
-        train_dataset = ManifestCtcDataset(
-            args.manifest,
-            spec,
-            vocab,
-            max_samples=args.max_samples,
-        )
-        validation_manifest = args.validation_manifest or args.manifest
-        validation_dataset = ManifestCtcDataset(
-            validation_manifest,
-            spec,
-            vocab,
-            max_samples=args.max_samples,
-        )
-
         batch_size = args.batch_size or int(spec["training"]["batch_size"])
         epochs = args.epochs if args.epochs is not None else int(spec["training"]["epochs"])
         if epochs < 0 or batch_size < 1:
             raise ValueError("epochs must be >= 0 and batch size must be >= 1")
 
-        generator = torch.Generator()
-        generator.manual_seed(seed)
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            shuffle=True,
-            generator=generator,
-            num_workers=0,
-            collate_fn=collate_ctc,
-        )
-        validation_loader = DataLoader(
-            validation_dataset,
-            batch_size=batch_size,
-            shuffle=False,
-            num_workers=0,
-            collate_fn=collate_ctc,
-        )
+        train_dataset = None
+        validation_dataset = None
+        train_loader = None
+        validation_loader = None
+        validation_manifest = None
+        if not args.init_only:
+            train_dataset = ManifestCtcDataset(
+                args.manifest,
+                spec,
+                vocab,
+                max_samples=args.max_samples,
+            )
+            validation_manifest = args.validation_manifest or args.manifest
+            validation_dataset = ManifestCtcDataset(
+                validation_manifest,
+                spec,
+                vocab,
+                max_samples=args.max_samples,
+            )
+
+            generator = torch.Generator()
+            generator.manual_seed(seed)
+            train_loader = DataLoader(
+                train_dataset,
+                batch_size=batch_size,
+                shuffle=True,
+                generator=generator,
+                num_workers=0,
+                collate_fn=collate_ctc,
+            )
+            validation_loader = DataLoader(
+                validation_dataset,
+                batch_size=batch_size,
+                shuffle=False,
+                num_workers=0,
+                collate_fn=collate_ctc,
+            )
 
         model = CnnCtcV1(spec, len(vocab["tokens"])).to(device)
         loss_fn = nn.CTCLoss(
@@ -171,6 +177,8 @@ def main() -> int:
         history = []
         start = time.monotonic()
         if not args.init_only:
+            assert train_loader is not None
+            assert validation_loader is not None
             for epoch in range(epochs):
                 model.train()
                 batch_losses = []
@@ -237,13 +245,23 @@ def main() -> int:
             "seed": seed,
             "epochs": 0 if args.init_only else epochs,
             "batch_size": batch_size,
-            "train_samples": len(train_dataset),
-            "validation_samples": len(validation_dataset),
+            "train_samples": 0 if train_dataset is None else len(train_dataset),
+            "validation_samples": (
+                0 if validation_dataset is None else len(validation_dataset)
+            ),
             "skipped": {
-                "train_too_long": list(train_dataset.skipped_long),
-                "train_target_too_long": list(train_dataset.skipped_target),
-                "validation_too_long": list(validation_dataset.skipped_long),
-                "validation_target_too_long": list(validation_dataset.skipped_target),
+                "train_too_long": (
+                    [] if train_dataset is None else list(train_dataset.skipped_long)
+                ),
+                "train_target_too_long": (
+                    [] if train_dataset is None else list(train_dataset.skipped_target)
+                ),
+                "validation_too_long": (
+                    [] if validation_dataset is None else list(validation_dataset.skipped_long)
+                ),
+                "validation_target_too_long": (
+                    [] if validation_dataset is None else list(validation_dataset.skipped_target)
+                ),
             },
             "history": history,
             "duration_seconds": time.monotonic() - start,
@@ -255,8 +273,10 @@ def main() -> int:
             },
             "provenance": {
                 "repo_commit": git_head(),
-                "manifest": str(args.manifest),
-                "validation_manifest": str(validation_manifest),
+                "manifest": None if args.init_only else str(args.manifest),
+                "validation_manifest": (
+                    None if validation_manifest is None else str(validation_manifest)
+                ),
             },
         }
         (args.output_dir / "training-result.json").write_text(
