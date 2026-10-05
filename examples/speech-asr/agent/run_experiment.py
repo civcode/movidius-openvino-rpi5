@@ -240,7 +240,11 @@ def worker_paths(
     base = base_repo or f"{home}/workspace/movidius-openvino-rpi5"
     worker = worker_repo or f"{home}/workspace/movidius-openvino-rpi5-worker"
     for value in (base, worker):
-        if not value.startswith("/") or any(ch in value for ch in "\r\n"):
+        if (
+            not value.startswith("/")
+            or any(ch in value for ch in "\r\n")
+            or any(ch.isspace() for ch in value)
+        ):
             raise ExecutionFailure(
                 f"edge repository path must be absolute and newline-free: {value!r}",
                 outcome="failed",
@@ -614,6 +618,7 @@ def main() -> int:
         request, model_spec, train_config, acceptance = read_request_bundle(
             experiment_dir
         )
+        manager("validate", "--experiment", str(experiment_dir))
         start = manager("start-attempt", "--experiment", str(experiment_dir))
         attempt_id = start["attempt_id"]
         attempt_dir = experiment_dir / "attempts" / attempt_id
