@@ -247,6 +247,16 @@ class FrozenHeldoutControllerSourceTests(unittest.TestCase):
         self.assertIn("qualify-speech-heldout-eval.sh", source)
         self.assertIn('"--verify-only"', source)
 
+    def test_reference_failure_reports_agreement_diagnostics(self):
+        source = (
+            SPEECH / "evaluation" / "evaluate_frozen_cnn_ctc_v3_reference.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('"frame_argmax_mismatches"', source)
+        self.assertIn('"max_mismatched_reference_top2_margin"', source)
+        self.assertIn('"mean_mismatched_reference_top2_margin"', source)
+        self.assertIn('"mismatch_sample_examples"', source)
+        self.assertIn("json.dumps(agreement, sort_keys=True)", source)
+
     def test_reference_runtime_dependencies_are_declared(self):
         requirements = (
             ROOT / "requirements" / "training.txt"
