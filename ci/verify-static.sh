@@ -310,6 +310,41 @@ fi
 grep -q 'rsync -a --delete --checksum' scripts/provision-speech-model-data-edge.sh || fail 'edge dataset provisioning does not use reviewed rsync path'
 grep -q 'edge-speech-bootstrap.sh' scripts/provision-speech-model-data-edge.sh || fail 'edge dataset provisioning does not pin worker revision'
 
+# Frontend-correction generation: same v3 graph, padding-independent CMVN.
+for f in \
+    examples/speech-asr/models/cnn_ctc_v4/model_spec.json \
+    examples/speech-asr/models/cnn_ctc_v4/vocab.json \
+    examples/speech-asr/training/export_cnn_ctc_v4.py \
+    examples/speech-asr/evaluation/compare_cnn_ctc_v4_onnx.py \
+    examples/speech-asr/evaluation/evaluate_cnn_ctc_v4.py \
+    examples/speech-asr/agent/init_cnn_ctc_v4_valid_cmvn.py; do
+    test -f "$f" || fail "cnn_ctc_v4 file missing: $f"
+done
+for f in \
+    scripts/init-cnn-ctc-v4-valid-cmvn.sh \
+    scripts/train-cnn-ctc-v4.sh \
+    scripts/probe-cnn-ctc-v4.sh \
+    scripts/prepare-cnn-ctc-v4.sh \
+    scripts/evaluate-cnn-ctc-v4.sh; do
+    test -x "$f" || fail "cnn_ctc_v4 shell entry point is not executable: $f"
+done
+grep -q '"kind": "logmel-v2"' examples/speech-asr/models/cnn_ctc_v4/model_spec.json || fail 'cnn_ctc_v4 frontend kind changed'
+grep -q '"normalization": "per_mel_bin_mean_valid_zero_pad"' examples/speech-asr/models/cnn_ctc_v4/model_spec.json || fail 'cnn_ctc_v4 valid-frame CMVN policy changed'
+grep -q 'logged\[:, :valid_frames\]\.mean' examples/speech-asr/python/speech_asr/cnn_ctc_frontend.py || fail 'logmel-v2 does not normalize over valid frames'
+grep -q 'logged\[:, valid_frames:\] = 0.0' examples/speech-asr/python/speech_asr/cnn_ctc_frontend.py || fail 'logmel-v2 does not zero normalized padding'
+grep -q 'V4_ARCHITECTURE = dict(V3_ARCHITECTURE)' examples/speech-asr/python/speech_asr/orchestration.py || fail 'cnn_ctc_v4 graph is no longer frozen to v3'
+grep -q '"cnn_ctc_v4": "train-cnn-ctc-v4.sh"' examples/speech-asr/python/speech_asr/orchestration.py || fail 'controller lacks cnn_ctc_v4 training executor'
+grep -q '"cnn_ctc_v4": "evaluate-cnn-ctc-v4.sh"' examples/speech-asr/agent/edge_worker.py || fail 'edge lacks cnn_ctc_v4 evaluator'
+grep -q 'cnn_ctc_v4' examples/speech-asr/tools/validate_cnn_ctc_ir.py || fail 'IR validator lacks cnn_ctc_v4'
+grep -q 'prepare-cnn-ctc-v4.sh' scripts/train-cnn-ctc-v4.sh || fail 'cnn_ctc_v4 training uses wrong conversion wrapper'
+grep -q 'prepare-cnn-ctc-v4.sh' scripts/probe-cnn-ctc-v4.sh || fail 'cnn_ctc_v4 probe uses wrong conversion wrapper'
+if grep -q 'prepare-cnn-ctc-v3.sh' scripts/train-cnn-ctc-v4.sh scripts/probe-cnn-ctc-v4.sh; then
+    fail 'cnn_ctc_v4 must not invoke v3 conversion'
+fi
+grep -q 'DEFAULT_PARENT = "exp-3c7727ca3f37ba2c"' examples/speech-asr/agent/init_cnn_ctc_v4_valid_cmvn.py || fail 'cnn_ctc_v4 parent changed'
+grep -q '"frontend": {"kind": "logmel-v2"}' examples/speech-asr/agent/init_cnn_ctc_v4_valid_cmvn.py || fail 'cnn_ctc_v4 experiment frontend changed'
+grep -q '"checkpoint_selection": "validation_cer"' examples/speech-asr/agent/init_cnn_ctc_v4_valid_cmvn.py || fail 'cnn_ctc_v4 must retain CER checkpoint selection'
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
 for name in [
@@ -330,6 +365,7 @@ for name in [
     "examples/speech-asr/agent/init_cnn_ctc_v3_quality_baseline.py",
     "examples/speech-asr/agent/init_cnn_ctc_v3_cer_selection.py",
     "examples/speech-asr/agent/init_cnn_ctc_v3_specaugment.py",
+    "examples/speech-asr/agent/init_cnn_ctc_v4_valid_cmvn.py",
     "examples/speech-asr/agent/review_experiment.py",
     "examples/speech-asr/agent/run_experiment.py",
     "examples/speech-asr/agent/edge_worker.py",
@@ -352,6 +388,9 @@ for name in [
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v2.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v3_onnx.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v3.py",
+    "examples/speech-asr/training/export_cnn_ctc_v4.py",
+    "examples/speech-asr/evaluation/compare_cnn_ctc_v4_onnx.py",
+    "examples/speech-asr/evaluation/evaluate_cnn_ctc_v4.py",
 ]:
     src = Path(name).read_text()
     compile(src, name, "exec")
