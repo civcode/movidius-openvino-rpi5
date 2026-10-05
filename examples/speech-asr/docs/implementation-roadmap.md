@@ -962,20 +962,40 @@ Phase 11 and Milestone C are **complete**.
 Do not create `cnn_ctc_v4` from the smoke-set result. The next research
 boundary is data/evaluation quality rather than architecture.
 
-The next implementation work should:
+The first part of that boundary is implemented. On oberon:
 
-1. define deterministic, disjoint AMI train and validation manifests suitable
-   for model-quality work rather than lifecycle smoke testing;
-2. ensure the selected records are eligible for the fixed
-   `[1,64,512] -> [1,128,39]` CTC contract, or explicitly review a new input
-   geometry before changing it;
-3. freeze source/manifests/hashes and speaker/session separation;
-4. add decoder diagnostics to evaluation results: blank-frame fraction,
-   emitted-token count, hypothesis/reference lengths, per-sample hypotheses and
-   edit counts;
-5. express training budget in optimizer steps or processed audio duration in
-   addition to epochs;
-6. rerun a frozen baseline before proposing a third architecture generation.
+```bash
+git pull --ff-only
+./ci/verify-static.sh
+./scripts/test-speech-asr.sh
+
+./scripts/python.sh examples/speech-asr/datasets/ami/prepare_ami.py \
+  --subset benchmark
+
+./scripts/qualify-speech-model-data.sh
+```
+
+The qualification command derives an interim speaker-disjoint split from the
+frozen 277-record ES2002a benchmark source:
+
+- train: speakers A/B/C;
+- validation: speaker D;
+- both sides filtered through the exact `cnn_ctc_v3` fixed-shape eligibility
+  contract;
+- no audio duplication;
+- deterministic manifest and corpus-statistics hashes.
+
+Because all records still come from ES2002a, this is not meeting/session
+disjoint and must not be presented as final generalization evidence.
+
+The custom-model evaluators now also record decoder-collapse diagnostics:
+blank-frame fraction, nonblank frames, collapsed-token count, emitted
+word/character lengths, and full per-sample word/character S/D/I counts.
+
+REVIEW `work/speech-asr/ami/model-quality-v1/qualification.json` before
+creating any new training experiment. Freeze whether its eligible population
+and duration are sufficient first; only then add a baseline experiment using
+those exact train/validation hashes.
 
 The Phase 9/10 orchestration and Phase 11 v2/v3 hardware envelopes remain the
-qualified execution platform for that work.
+qualified execution platform.
