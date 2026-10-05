@@ -68,11 +68,16 @@ class CnnCtcIrValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "output shape mismatch"):
             self.tool.validate(SPEC, value)
 
-    def test_rejects_output_name_change(self):
+    def test_accepts_generated_output_name_and_records_provenance(self):
         value = contract()
-        value["outputs"][0]["name"] = "other"
-        with self.assertRaisesRegex(ValueError, "output name mismatch"):
-            self.tool.validate(SPEC, value)
+        value["outputs"][0]["name"] = "/Transpose"
+        value["outputs"][0]["result_name"] = "/Transpose/sink_port_0"
+        result = self.tool.validate(SPEC, value)
+        self.assertEqual(result["status"], "valid")
+        self.assertEqual(result["output"]["declared_name"], "logits")
+        self.assertEqual(result["output"]["ir_name"], "/Transpose")
+        self.assertEqual(result["output"]["result_name"], "/Transpose/sink_port_0")
+        self.assertFalse(result["output"]["name_preserved"])
 
 
 if __name__ == "__main__":
