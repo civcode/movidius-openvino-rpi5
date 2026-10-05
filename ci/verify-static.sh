@@ -140,6 +140,7 @@ test -f examples/speech-asr/python/speech_asr/orchestration.py || fail 'Phase 10
 test -f examples/speech-asr/agent/run_experiment.py || fail 'Phase 10 controller missing'
 test -f examples/speech-asr/agent/edge_worker.py || fail 'Phase 10 edge worker missing'
 test -f examples/speech-asr/agent/init_cnn_ctc_v1_experiment.py || fail 'Phase 10 baseline initializer missing'
+test -f examples/speech-asr/contracts/edge-worker-result-v1.schema.json || fail 'Phase 10 edge worker result contract missing'
 test -f scripts/run-speech-experiment.sh || fail 'Phase 10 controller wrapper missing'
 test -f scripts/edge-speech-bootstrap.sh || fail 'Phase 10 edge bootstrap missing'
 test -f scripts/edge-speech-preflight.sh || fail 'Phase 10 edge preflight missing'
