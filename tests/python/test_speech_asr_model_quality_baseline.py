@@ -55,6 +55,7 @@ class ModelQualityBaselineSourceTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn('manifest["benchmark"]["id"]', source)
+        self.assertIn("benchmark id mismatch", source)
         self.assertIn("benchmark manifest hash mismatch", source)
 
     def test_v3_training_records_processed_audio_budget(self):
