@@ -18,29 +18,53 @@ RSYNC_RSH = "ssh -o BatchMode=yes -o ConnectTimeout=10"
 _WORKER_RE = re.compile(r"^[A-Za-z0-9_.@-]+$")
 
 
-def validate_cnn_ctc_v1_executor_request(
+V2_ARCHITECTURE = {
+    "kind": "residual-temporal-v1",
+    "stem_channels": [64, 96],
+    "stem_kernels": [5, 5],
+    "stem_strides": [2, 2],
+    "residual_channels": 96,
+    "residual_kernels": [11, 19, 27, 35, 43],
+    "normalization": "batchnorm",
+    "activation": "relu",
+    "dropout": 0.1,
+}
+
+
+def executor_model_basename(model_id: str) -> str:
+    if model_id in {"cnn_ctc_v1", "cnn_ctc_v2"}:
+        return model_id
+    raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
+
+
+def validate_model_executor_request(
     model_spec: Mapping[str, Any],
     train_config: Mapping[str, Any],
 ) -> None:
-    if model_spec.get("model_id") != "cnn_ctc_v1":
-        raise ValueError(
-            f"unsupported Phase 10 model executor: {model_spec.get('model_id')!r}"
-        )
+    model_id = str(model_spec.get("model_id"))
+    if model_id not in {"cnn_ctc_v1", "cnn_ctc_v2"}:
+        raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
     if model_spec.get("family") != "cnn_ctc":
-        raise ValueError("cnn_ctc_v1 executor requires family 'cnn_ctc'")
+        raise ValueError(f"{model_id} executor requires family 'cnn_ctc'")
     if model_spec.get("frontend") != {"kind": "logmel-v1"}:
         raise ValueError(
-            "cnn_ctc_v1 executor requires exact frontend declaration "
+            f"{model_id} executor requires exact frontend declaration "
             "{'kind': 'logmel-v1'}"
         )
-    if model_spec.get("architecture") != {"kind": "cnn_ctc_v1"}:
+
+    expected_architecture = (
+        {"kind": "cnn_ctc_v1"}
+        if model_id == "cnn_ctc_v1"
+        else V2_ARCHITECTURE
+    )
+    if model_spec.get("architecture") != expected_architecture:
         raise ValueError(
-            "cnn_ctc_v1 executor requires exact architecture declaration "
-            "{'kind': 'cnn_ctc_v1'}; Phase 10 must not ignore architecture fields"
+            f"{model_id} executor requires its exact frozen architecture; "
+            "Phase 11 must not ignore architecture fields"
         )
     export = model_spec.get("export")
     if export != {"format": "onnx", "onnx_opset": 11, "fixed_shapes": True}:
-        raise ValueError("cnn_ctc_v1 executor requires frozen ONNX opset-11 export")
+        raise ValueError(f"{model_id} executor requires frozen ONNX opset-11 export")
 
     optimizer = train_config.get("optimizer")
     if not isinstance(optimizer, Mapping):
@@ -50,10 +74,35 @@ def validate_cnn_ctc_v1_executor_request(
         "learning_rate": optimizer.get("learning_rate"),
     }:
         raise ValueError(
-            "cnn_ctc_v1 executor supports only optimizer kind + learning_rate"
+            f"{model_id} executor supports only optimizer kind + learning_rate"
         )
     if optimizer.get("kind") != "adam":
-        raise ValueError("cnn_ctc_v1 executor supports only Adam")
+        raise ValueError(f"{model_id} executor supports only Adam")
+
+
+def validate_cnn_ctc_v1_executor_request(
+    model_spec: Mapping[str, Any],
+    train_config: Mapping[str, Any],
+) -> None:
+    validate_model_executor_request(model_spec, train_config)
+
+
+def compatibility_probe_command(
+    *,
+    root: pathlib.Path,
+    build_dir: pathlib.Path,
+    model_spec: Mapping[str, Any],
+) -> list[str] | None:
+    model_id = str(model_spec["model_id"])
+    if model_id == "cnn_ctc_v1":
+        return None
+    if model_id == "cnn_ctc_v2":
+        return [
+            str(root / "scripts" / "probe-cnn-ctc-v2.sh"),
+            "--work-dir",
+            str(build_dir.parent / "compatibility-probe"),
+        ]
+    raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
 
 
 def training_command(
@@ -61,9 +110,21 @@ def training_command(
     root: pathlib.Path,
     build_dir: pathlib.Path,
     train_config: Mapping[str, Any],
+    model_spec: Mapping[str, Any] | None = None,
 ) -> list[str]:
+    model_id = (
+        "cnn_ctc_v1"
+        if model_spec is None
+        else str(model_spec["model_id"])
+    )
+    executable = {
+        "cnn_ctc_v1": "train-cnn-ctc-v1.sh",
+        "cnn_ctc_v2": "train-cnn-ctc-v2.sh",
+    }.get(model_id)
+    if executable is None:
+        raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
     command = [
-        str(root / "scripts" / "train-cnn-ctc-v1.sh"),
+        str(root / "scripts" / executable),
         "--manifest",
         str(root / train_config["training_manifest"]["path"]),
         "--validation-manifest",
