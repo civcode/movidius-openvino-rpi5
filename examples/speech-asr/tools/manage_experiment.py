@@ -158,6 +158,26 @@ def command_init(args: argparse.Namespace) -> None:
     if not args.manifest.is_file():
         raise ValueError(f"benchmark manifest missing: {args.manifest}")
     manifest_sha = sha256_path(args.manifest)
+
+    for field in ("training_manifest", "validation_manifest"):
+        declared = train_config[field]
+        declared_path = pathlib.Path(declared["path"])
+        if not declared_path.is_absolute():
+            declared_path = ROOT / declared_path
+        if not declared_path.is_file():
+            raise ValueError(f"{field} file missing: {declared_path}")
+        actual = sha256_path(declared_path)
+        if actual != declared["sha256"]:
+            raise ValueError(
+                f"{field} hash mismatch: declared={declared['sha256']} actual={actual}"
+            )
+
+    if args.parent is not None:
+        parent_dir = args.root / args.parent
+        parent_request, _parent_documents = load_experiment(parent_dir)
+        if parent_request["experiment_id"] != args.parent:
+            raise ValueError("parent experiment identity mismatch")
+
     commit = args.repo_commit or git_head()
     request = make_experiment_request(
         proposal=proposal,
