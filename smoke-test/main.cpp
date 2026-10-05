@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -28,6 +29,9 @@
 #include <vector>
 
 #include <ov203/half.hpp>  // shared IEEE-754 f16<->f32 conversion (unit-tested in examples/webcam/test_half.cpp)
+#include <ov203/device_probe.hpp>
+#include <ov203/device_spec.hpp>
+#include <ov203/wire.hpp>
 
 using namespace InferenceEngine;
 
@@ -102,6 +106,162 @@ void writeF32(const std::string& path, const std::vector<float>& values) {
         reinterpret_cast<const char*>(values.data()),
         static_cast<std::streamsize>(values.size() * sizeof(float)));
     if (!out) throw std::runtime_error("cannot write output tensor: " + path);
+}
+
+
+int runStreamInference(const std::string& modelXml, const std::string& modelBin,
+                       const std::string& device, int warmupIterations) {
+    Core ie;
+    const ov203::DeviceSpec deviceSpec = ov203::parseDeviceSpec(device);
+    std::vector<std::string> devices;
+    if (!waitPhysicalDevices(ie, deviceSpec.physicalDevices, devices)) {
+        std::fprintf(stderr, "tensor_server: device %s not available (have:", device.c_str());
+        for (const auto& item : devices) std::fprintf(stderr, " %s", item.c_str());
+        std::fprintf(stderr, ")\n");
+        return 2;
+    }
+
+    CNNNetwork network = ie.ReadNetwork(modelXml, modelBin);
+    InputsDataMap inputs = network.getInputsInfo();
+    OutputsDataMap outputs = network.getOutputsInfo();
+    if (inputs.size() != 1 || outputs.size() != 1) {
+        std::fprintf(stderr, "tensor_server: expected exactly one input and one output\n");
+        return 3;
+    }
+
+    const std::string inputName = inputs.begin()->first;
+    const SizeVector inputDims = inputs.begin()->second->getInputData()->getDims();
+    if (deviceSpec.usesMyriad) inputs.begin()->second->setPrecision(Precision::FP16);
+    inputs.begin()->second->setLayout(TensorDesc::getLayoutByDims(inputDims));
+
+    size_t inElems = 1;
+    for (size_t value : inputDims) inElems *= value;
+
+    const std::string outputName = outputs.begin()->first;
+    const SizeVector outputDims = outputs.begin()->second->getDims();
+    size_t outElems = 1;
+    for (size_t value : outputDims) outElems *= value;
+    if (inElems == 0 || outElems == 0) {
+        std::fprintf(stderr, "tensor_server: zero-sized model tensor\n");
+        return 3;
+    }
+
+    const auto loadStart = std::chrono::steady_clock::now();
+    ExecutableNetwork executable = ie.LoadNetwork(network, device);
+    const auto loadEnd = std::chrono::steady_clock::now();
+    const double loadMs =
+        std::chrono::duration<double, std::milli>(loadEnd - loadStart).count();
+    InferRequest request = executable.CreateInferRequest();
+
+    Blob::Ptr inBlob = request.GetBlob(inputName);
+    const size_t inElemBytes = inBlob->byteSize() / inElems;
+    if (inElemBytes != 2 && inElemBytes != 4) {
+        std::fprintf(stderr,
+                     "tensor_server: unsupported input width %zu B/element\n",
+                     inElemBytes);
+        return 3;
+    }
+    uint16_t* inHalf = inBlob->buffer().as<uint16_t*>();
+    float* inFloat = inBlob->buffer().as<float*>();
+
+    // Warm the compiled graph once per server session. This is deliberately
+    // outside the measured request stream so every recorded latency is
+    // steady-state Infer() time.
+    std::memset(inBlob->buffer().as<uint8_t*>(), 0, inBlob->byteSize());
+    for (int i = 0; i < warmupIterations; ++i) request.Infer();
+
+    const size_t inBytes = inElems * sizeof(float);
+    const size_t outBytes = outElems * sizeof(float);
+    std::fprintf(
+        stderr,
+        "READY input_elements=%zu output_elements=%zu load_ms=%.6f warmup=%d\n",
+        inElems, outElems, loadMs, warmupIterations);
+    std::fflush(stderr);
+
+    std::vector<float> inputValues(inElems);
+    std::vector<float> outputValues(outElems);
+    std::vector<unsigned char> outputWire(outBytes);
+    size_t requestIndex = 0;
+
+    while (true) {
+        size_t got = 0;
+        auto* inputBytes = reinterpret_cast<unsigned char*>(inputValues.data());
+        while (got < inBytes) {
+            const size_t count = std::fread(inputBytes + got, 1, inBytes - got, stdin);
+            if (count == 0) {
+                if (got == 0 && std::feof(stdin)) {
+                    std::fprintf(stderr,
+                                 "tensor_server: stdin EOF after %zu request(s)\n",
+                                 requestIndex);
+                    std::fflush(stderr);
+                    return 0;
+                }
+                std::fprintf(stderr,
+                             "tensor_server: truncated request (%zu of %zu bytes)\n",
+                             got, inBytes);
+                return 3;
+            }
+            got += count;
+        }
+
+        ov203::littleEndianFloat32ToNativeInPlace(inputValues.data(), inElems);
+        if (inElemBytes == 2) {
+            for (size_t i = 0; i < inElems; ++i) {
+                inHalf[i] = floatToHalf(inputValues[i]);
+            }
+        } else {
+            std::memcpy(inFloat, inputValues.data(), inBytes);
+        }
+
+        const auto inferStart = std::chrono::steady_clock::now();
+        request.Infer();
+        const auto inferEnd = std::chrono::steady_clock::now();
+        const double inferMs =
+            std::chrono::duration<double, std::milli>(inferEnd - inferStart).count();
+
+        Blob::Ptr outBlob = request.GetBlob(outputName);
+        if (outBlob->size() != outElems) {
+            std::fprintf(stderr,
+                         "tensor_server: output has %zu values, expected %zu\n",
+                         outBlob->size(), outElems);
+            return 3;
+        }
+        const uint8_t* raw = outBlob->cbuffer().as<uint8_t*>();
+        const size_t outElemBytes = outBlob->byteSize() / outElems;
+        if (outElemBytes == 2) {
+            for (size_t i = 0; i < outElems; ++i) {
+                uint16_t value;
+                std::memcpy(&value, raw + 2 * i, sizeof(value));
+                outputValues[i] = halfToFloat(value);
+            }
+        } else if (outElemBytes == 4) {
+            std::memcpy(outputValues.data(), raw, outBytes);
+        } else {
+            std::fprintf(stderr,
+                         "tensor_server: unsupported output width %zu B/element\n",
+                         outElemBytes);
+            return 3;
+        }
+
+        ov203::nativeFloat32ToLittleEndianBytes(
+            outputValues.data(), outputWire.data(), outElems);
+        size_t sent = 0;
+        while (sent < outBytes) {
+            const size_t count =
+                std::fwrite(outputWire.data() + sent, 1, outBytes - sent, stdout);
+            if (count == 0) {
+                std::fprintf(stderr, "tensor_server: client output pipe closed\n");
+                return 3;
+            }
+            sent += count;
+        }
+        std::fflush(stdout);
+
+        ++requestIndex;
+        std::fprintf(stderr, "TIMING request=%zu inference_ms=%.6f\n",
+                     requestIndex, inferMs);
+        std::fflush(stderr);
+    }
 }
 
 int runInference(Core& ie, const std::string& modelXml, const std::string& modelBin,
@@ -247,7 +407,9 @@ int runInference(Core& ie, const std::string& modelXml, const std::string& model
 int main(int argc, char** argv) {
     std::string modelXml, modelBin, device = "MYRIAD", tensorPath, outputPath;
     int iterations = 1;
+    int warmupIterations = 1;
     bool listOnly = false;
+    bool streamMode = false;
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -272,20 +434,41 @@ int main(int argc, char** argv) {
             outputPath = next("--output");
         } else if (arg == "--list-only") {
             listOnly = true;
+        } else if (arg == "--stdin") {
+            streamMode = true;
+        } else if (arg == "--warmup") {
+            warmupIterations = std::max(0, std::stoi(next("--warmup")));
         } else if (arg == "-h" || arg == "--help") {
             std::cout << "usage: hello_myriad [--model <IR.xml>] [--weights <IR.bin>]"
                       << " [--device MYRIAD] [--iterations N] [--tensor input.f32]"
-                      << " [--output output.f32] [--list-only]\n";
+                      << " [--output output.f32] [--list-only]\n"
+                      << "       hello_myriad --model <IR.xml> [--weights <IR.bin>]"
+                      << " [--device MYRIAD] --stdin [--warmup N]\n"
+                      << "stream protocol: repeated little-endian float32 input tensors"
+                      << " on stdin; one float32 output tensor per request on stdout\n";
             return 0;
         } else {
             std::cerr << "usage: hello_myriad [--model <IR.xml>] [--weights <IR.bin>]"
                       << " [--device MYRIAD] [--iterations N] [--tensor input.f32]"
-                      << " [--output output.f32] [--list-only]\n";
+                      << " [--output output.f32] [--list-only|--stdin]\n";
             return 4;
         }
     }
 
     try {
+        if (streamMode) {
+            if (modelXml.empty()) {
+                std::cerr << "--stdin requires --model\n";
+                return 4;
+            }
+            if (!tensorPath.empty() || !outputPath.empty()) {
+                std::cerr << "--stdin cannot be combined with --tensor/--output\n";
+                return 4;
+            }
+            return runStreamInference(
+                modelXml, modelBin, device, warmupIterations);
+        }
+
         Core ie;
         std::cout << "OpenVINO InferenceEngine smoke test\n";
         printDevices(ie);
