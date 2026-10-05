@@ -129,22 +129,34 @@
       "$ref": "#/$defs/manifest"
     },
     "ctc_objective": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "kind",
-        "blank_logit_penalty"
-      ],
-      "properties": {
-        "kind": {
-          "const": "blank-logit-penalty-v1"
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "blank_logit_penalty"],
+          "properties": {
+            "kind": {"const": "blank-logit-penalty-v1"},
+            "blank_logit_penalty": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1
+            }
+          }
         },
-        "blank_logit_penalty": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "maximum": 1
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "intermediate_ctc_weight"],
+          "properties": {
+            "kind": {"const": "intermediate-ctc-v1"},
+            "intermediate_ctc_weight": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "exclusiveMaximum": 1
+            }
+          }
         }
-      }
+      ]
     }
   },
   "$defs": {

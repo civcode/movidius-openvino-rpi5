@@ -1,0 +1,88 @@
+{
+  "schema": "speech-asr/custom-model-spec",
+  "version": 1,
+  "id": "cnn_ctc_v5",
+  "family": "cnn_ctc",
+  "purpose": "compact local-context residual encoder with intermediate CTC supervision",
+  "frontend": {
+    "kind": "logmel-v1",
+    "sample_rate_hz": 16000,
+    "window_samples": 400,
+    "hop_samples": 160,
+    "fft_size": 512,
+    "mel_bins": 64,
+    "fmin_hz": 20,
+    "fmax_hz": 7600,
+    "log_floor": 0.00001,
+    "normalization": "per_mel_bin_mean",
+    "fixed_frames": 512,
+    "fixed_audio_samples": 82160
+  },
+  "input_contract": {
+    "name": "features",
+    "layout": "NCT",
+    "dtype": "float32",
+    "shape": [1, 64, 512]
+  },
+  "network": {
+    "kind": "residual-temporal-v3",
+    "stem": [
+      {"channels": 48, "kernel": 5, "stride": 2, "padding": 2},
+      {"channels": 64, "kernel": 5, "stride": 2, "padding": 2}
+    ],
+    "residual_blocks": [
+      {"channels": 64, "kernel": 9, "padding": 4, "projection_kernel": 1},
+      {"channels": 64, "kernel": 9, "padding": 4, "projection_kernel": 1},
+      {"channels": 64, "kernel": 13, "padding": 6, "projection_kernel": 1},
+      {"channels": 64, "kernel": 13, "padding": 6, "projection_kernel": 1},
+      {"channels": 64, "kernel": 17, "padding": 8, "projection_kernel": 1}
+    ],
+    "normalization": "none",
+    "activation": "relu",
+    "dropout": 0.1,
+    "residual_projection_init": "kaiming_scaled_0.01",
+    "intermediate_ctc_after_block": 3,
+    "projection_kernel": 1,
+    "estimated_deployed_parameters": 304343,
+    "estimated_training_parameters": 306878,
+    "estimated_macs_fixed_input": 40820736,
+    "receptive_field_feature_frames": 237
+  },
+  "output_contract": {
+    "name": "logits",
+    "layout": "NTV",
+    "dtype": "float32",
+    "shape": [1, 128, 39],
+    "semantics": "unnormalized CTC logits"
+  },
+  "decoder": {
+    "kind": "ctc-greedy-v1",
+    "blank_index": 0,
+    "vocab": "vocab.json"
+  },
+  "training": {
+    "seed": 1337,
+    "batch_size": 1,
+    "learning_rate": 0.0003,
+    "epochs": 32,
+    "optimizer": "adam",
+    "loss": "intermediate-ctc-v1",
+    "intermediate_ctc_weight": 0.3,
+    "zero_infinity": true,
+    "gradient_clip_norm": 5.0,
+    "lr_schedule": "cosine",
+    "min_learning_rate": 0.00003,
+    "checkpoint_selection": "best_validation_cer"
+  },
+  "export": {
+    "framework": "pytorch",
+    "onnx_opset": 11,
+    "fixed_shapes": true,
+    "precision": "FP32 source -> FP16 OpenVINO IR"
+  },
+  "deployment": {
+    "target": "MYRIAD",
+    "openvino_version": "2020.3.2",
+    "precision": "FP16"
+  }
+}

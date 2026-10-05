@@ -957,25 +957,24 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-The valid-frame-CMVN experiment
-`exp-92ee80e9dfdfcc79/attempt-0001` is complete. It passed compatibility and
-hardware gates but is a negative quality sibling of the accepted v3 reference.
+The training-only blank-logit experiment
+`exp-1fabf702c0aa324d/attempt-0001` is complete. It passed compatibility and
+hardware gates but failed the quality decision against the accepted v3
+reference `exp-3c7727ca3f37ba2c`:
 
-Same-manifest comparison against `exp-3c7727ca3f37ba2c`:
+- CER: 0.866935 -> 0.877016 (worse);
+- WER: 1.161417 -> 1.086614 (better, but secondary);
+- blank-frame fraction: 61.33% -> 70.74% (worse);
+- empty hypotheses: 19/95 -> 22/95 (worse);
+- emitted/reference characters: 47.98% -> 39.31% (worse);
+- p95 MA2450 latency: 16.64 -> 16.63 ms (flat).
 
-- CER: 0.866935 -> 0.884073 (worse);
-- WER: 1.161417 -> 1.106299 (better);
-- blank-frame fraction: 61.33% -> 68.58% (worse);
-- empty hypotheses: 19/95 -> 26/95 (worse);
-- emitted/reference characters: 47.98% -> 48.89% (essentially flat);
-- p95 MA2450 latency: 16.64 -> 16.65 ms (flat).
-
-Do not continue from v4. Retain the accepted CER-selected v3 experiment as the
-reference parent.
-
-The next reviewed diagnostic changes only the training CTC objective. It keeps
-the exact v3 graph/frontend/data/optimizer/decoder/hardware path and applies a
-0.25 blank-logit penalty during training CTC loss only.
+Stop CTC-local blank-bias tuning. The next reviewed generation is `cnn_ctc_v5`,
+defined by [`adr/phase11-cnn-ctc-v5.md`](adr/phase11-cnn-ctc-v5.md). It combines
+a compact 304,343-parameter local-context residual encoder with a training-only
+middle-layer InterCTC objective at weight 0.3. The fixed tensor contracts,
+logmel-v1 frontend, vocabulary and qualified Conv/ReLU/Add inference operator
+set remain unchanged.
 
 Run:
 
@@ -985,11 +984,9 @@ git pull --ff-only
 ./scripts/test-speech-asr.sh
 
 EXP="$(
-  ./scripts/init-cnn-ctc-v3-blank-penalty.sh |
+  ./scripts/init-cnn-ctc-v5-interctc.sh |
   python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
 )"
-
-echo "$EXP"
 
 ./scripts/run-speech-experiment.sh \
   --experiment "$EXP" \
@@ -1000,10 +997,8 @@ echo "$EXP"
 ```
 
 No dataset reprovisioning is required while the reviewed
-`model-quality-v1` manifest hashes remain unchanged.
-
-REVIEW CER first, then blank-frame fraction, empty hypotheses,
-emitted/reference-character ratio, selected epoch, validation loss, ONNX
-agreement and MA2450 latency. If a mild training-only blank penalty does not
-materially improve CER/emission, stop tuning CTC-local heuristics and move to a
-reviewed objective/encoder redesign.
+`model-quality-v1` manifest hashes remain unchanged. Review CER first, then
+blank-frame fraction, empty hypotheses, emitted/reference-character ratio,
+WER, ONNX agreement and MA2450 latency. This validation set is used for
+checkpoint selection, so the result is model-selection evidence rather than an
+unbiased final test estimate.

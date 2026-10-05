@@ -28,7 +28,13 @@ def load_spec(path: Path) -> dict:
     if value.get("version") != 1:
         raise ValueError("model spec version must be 1")
     model_id = value.get("id")
-    if model_id not in {"cnn_ctc_v1", "cnn_ctc_v2", "cnn_ctc_v3", "cnn_ctc_v4"}:
+    if model_id not in {
+        "cnn_ctc_v1",
+        "cnn_ctc_v2",
+        "cnn_ctc_v3",
+        "cnn_ctc_v4",
+        "cnn_ctc_v5",
+    }:
         raise ValueError("unsupported cnn_ctc model spec id")
 
     frontend = value.get("frontend")
@@ -82,11 +88,12 @@ def load_spec(path: Path) -> dict:
             if not isinstance(values, list) or len(values) != 3:
                 raise ValueError(f"cnn_ctc_v1 network.{key} must contain three values")
     else:
-        expected_kind = (
-            "residual-temporal-v1"
-            if model_id == "cnn_ctc_v2"
-            else "residual-temporal-v2"
-        )
+        expected_kind = {
+            "cnn_ctc_v2": "residual-temporal-v1",
+            "cnn_ctc_v3": "residual-temporal-v2",
+            "cnn_ctc_v4": "residual-temporal-v2",
+            "cnn_ctc_v5": "residual-temporal-v3",
+        }[model_id]
         if network.get("kind") != expected_kind:
             raise ValueError(f"{model_id} network.kind must be {expected_kind}")
         stem = network.get("stem")
@@ -100,17 +107,32 @@ def load_spec(path: Path) -> dict:
             raise ValueError(f"{model_id} normalization must be {expected_norm}")
         if network.get("activation") != "relu":
             raise ValueError(f"{model_id} activation must be relu")
-        if [int(block.get("kernel", 0)) for block in blocks] != [11, 19, 27, 35, 43]:
+        expected_kernels = (
+            [9, 9, 13, 13, 17]
+            if model_id == "cnn_ctc_v5"
+            else [11, 19, 27, 35, 43]
+        )
+        if [int(block.get("kernel", 0)) for block in blocks] != expected_kernels:
             raise ValueError(f"{model_id} residual kernel schedule is frozen")
-        if any(int(block.get("channels", 0)) != 96 for block in blocks):
-            raise ValueError(f"{model_id} residual channels must remain 96")
+        expected_channels = 64 if model_id == "cnn_ctc_v5" else 96
+        if any(
+            int(block.get("channels", 0)) != expected_channels for block in blocks
+        ):
+            raise ValueError(
+                f"{model_id} residual channels must remain {expected_channels}"
+            )
         if (
-            model_id in {"cnn_ctc_v3", "cnn_ctc_v4"}
+            model_id in {"cnn_ctc_v3", "cnn_ctc_v4", "cnn_ctc_v5"}
             and network.get("residual_projection_init") != "kaiming_scaled_0.01"
         ):
             raise ValueError(
                 f"{model_id} residual projection init must be kaiming_scaled_0.01"
             )
+        if (
+            model_id == "cnn_ctc_v5"
+            and network.get("intermediate_ctc_after_block") != 3
+        ):
+            raise ValueError("cnn_ctc_v5 intermediate CTC block must remain 3")
     return value
 
 
@@ -268,7 +290,12 @@ def conv1d_output_length(
 def acoustic_output_length(feature_frames: int, spec: dict) -> int:
     length = int(feature_frames)
     network = spec["network"]
-    if spec.get("id") in {"cnn_ctc_v2", "cnn_ctc_v3", "cnn_ctc_v4"}:
+    if spec.get("id") in {
+        "cnn_ctc_v2",
+        "cnn_ctc_v3",
+        "cnn_ctc_v4",
+        "cnn_ctc_v5",
+    }:
         layers = network["stem"]
         for layer in layers:
             length = conv1d_output_length(
@@ -295,8 +322,13 @@ def acoustic_output_length(feature_frames: int, spec: dict) -> int:
 
 def model_resource_estimate(spec: dict, vocab_size: int = 39) -> dict:
     """Return deterministic parameter/MAC/receptive-field estimates for fixed input."""
-    if spec.get("id") not in {"cnn_ctc_v2", "cnn_ctc_v3", "cnn_ctc_v4"}:
-        raise ValueError("resource estimator targets cnn_ctc_v2/v3/v4")
+    if spec.get("id") not in {
+        "cnn_ctc_v2",
+        "cnn_ctc_v3",
+        "cnn_ctc_v4",
+        "cnn_ctc_v5",
+    }:
+        raise ValueError("resource estimator targets cnn_ctc_v2/v3/v4/v5")
 
     network = spec["network"]
     input_frames = int(spec["input_contract"]["shape"][2])

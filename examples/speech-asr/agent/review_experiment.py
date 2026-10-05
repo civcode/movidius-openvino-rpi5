@@ -75,6 +75,8 @@ def attempt_summary(experiment: pathlib.Path, attempt: pathlib.Path) -> dict[str
         history = training.get("history", [])
         review["training"] = {
             "parameter_count": training.get("parameter_count"),
+            "deployed_parameter_count": training.get("deployed_parameter_count"),
+            "ctc_objective": training.get("ctc_objective"),
             "epochs": training.get("epochs"),
             "optimizer_steps": training.get("optimizer_steps"),
             "best_epoch": training.get("best_epoch"),

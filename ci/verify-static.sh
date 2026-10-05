@@ -363,6 +363,36 @@ if grep -q '"augmentation": {' examples/speech-asr/agent/init_cnn_ctc_v3_blank_p
     fail 'blank-penalty experiment must not add augmentation'
 fi
 
+# Reviewed objective/encoder redesign: compact v5 plus training-only InterCTC.
+for f in \
+    examples/speech-asr/models/cnn_ctc_v5/model_spec.json \
+    examples/speech-asr/models/cnn_ctc_v5/vocab.json \
+    examples/speech-asr/training/cnn_ctc_v5.py \
+    examples/speech-asr/training/train_cnn_ctc_v5.py \
+    examples/speech-asr/training/export_cnn_ctc_v5.py \
+    examples/speech-asr/evaluation/compare_cnn_ctc_v5_onnx.py \
+    examples/speech-asr/evaluation/evaluate_cnn_ctc_v5.py \
+    examples/speech-asr/agent/init_cnn_ctc_v5_interctc.py; do
+    test -f "$f" || fail "cnn_ctc_v5 file missing: $f"
+done
+for f in \
+    scripts/init-cnn-ctc-v5-interctc.sh \
+    scripts/train-cnn-ctc-v5.sh \
+    scripts/probe-cnn-ctc-v5.sh \
+    scripts/prepare-cnn-ctc-v5.sh \
+    scripts/evaluate-cnn-ctc-v5.sh; do
+    test -x "$f" || fail "cnn_ctc_v5 shell entry point is not executable: $f"
+done
+grep -q 'intermediate-ctc-v1' examples/speech-asr/contracts/train-config-v1.schema.json || fail 'train config lacks InterCTC objective contract'
+grep -q 'V5_ARCHITECTURE' examples/speech-asr/python/speech_asr/orchestration.py || fail 'controller lacks frozen v5 architecture'
+grep -q '"cnn_ctc_v5": "train-cnn-ctc-v5.sh"' examples/speech-asr/python/speech_asr/orchestration.py || fail 'controller lacks v5 training executor'
+grep -q '"cnn_ctc_v5": "evaluate-cnn-ctc-v5.sh"' examples/speech-asr/agent/edge_worker.py || fail 'edge lacks v5 evaluator'
+grep -q 'forward_with_intermediate' examples/speech-asr/training/train_cnn_ctc_v5.py || fail 'v5 trainer lacks intermediate supervision'
+grep -q 'intermediate_ctc_weight \* intermediate_loss' examples/speech-asr/training/train_cnn_ctc_v5.py || fail 'v5 trainer does not combine intermediate CTC'
+grep -q 'return self.projection(encoded)' examples/speech-asr/training/cnn_ctc_v5.py || fail 'v5 export forward changed'
+grep -q '"intermediate_ctc_weight": 0.3' examples/speech-asr/agent/init_cnn_ctc_v5_interctc.py || fail 'v5 InterCTC weight changed'
+grep -q 'DEFAULT_PARENT = "exp-3c7727ca3f37ba2c"' examples/speech-asr/agent/init_cnn_ctc_v5_interctc.py || fail 'v5 parent changed'
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
 for name in [
@@ -385,6 +415,7 @@ for name in [
     "examples/speech-asr/agent/init_cnn_ctc_v3_specaugment.py",
     "examples/speech-asr/agent/init_cnn_ctc_v4_valid_cmvn.py",
     "examples/speech-asr/agent/init_cnn_ctc_v3_blank_penalty.py",
+    "examples/speech-asr/agent/init_cnn_ctc_v5_interctc.py",
     "examples/speech-asr/agent/review_experiment.py",
     "examples/speech-asr/agent/run_experiment.py",
     "examples/speech-asr/agent/edge_worker.py",
@@ -400,6 +431,9 @@ for name in [
     "examples/speech-asr/training/cnn_ctc_v3.py",
     "examples/speech-asr/training/train_cnn_ctc_v3.py",
     "examples/speech-asr/training/export_cnn_ctc_v3.py",
+    "examples/speech-asr/training/cnn_ctc_v5.py",
+    "examples/speech-asr/training/train_cnn_ctc_v5.py",
+    "examples/speech-asr/training/export_cnn_ctc_v5.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v1_onnx.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v1_tensor.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v1.py",
@@ -410,6 +444,8 @@ for name in [
     "examples/speech-asr/training/export_cnn_ctc_v4.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v4_onnx.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v4.py",
+    "examples/speech-asr/evaluation/compare_cnn_ctc_v5_onnx.py",
+    "examples/speech-asr/evaluation/evaluate_cnn_ctc_v5.py",
 ]:
     src = Path(name).read_text()
     compile(src, name, "exec")

@@ -48,9 +48,29 @@ V3_ARCHITECTURE = {
 
 V4_ARCHITECTURE = dict(V3_ARCHITECTURE)
 
+V5_ARCHITECTURE = {
+    "kind": "residual-temporal-v3",
+    "stem_channels": [48, 64],
+    "stem_kernels": [5, 5],
+    "stem_strides": [2, 2],
+    "residual_channels": 64,
+    "residual_kernels": [9, 9, 13, 13, 17],
+    "normalization": "none",
+    "activation": "relu",
+    "dropout": 0.1,
+    "residual_projection_init": "kaiming_scaled_0.01",
+    "intermediate_ctc_after_block": 3,
+}
+
 
 def executor_model_basename(model_id: str) -> str:
-    if model_id in {"cnn_ctc_v1", "cnn_ctc_v2", "cnn_ctc_v3", "cnn_ctc_v4"}:
+    if model_id in {
+        "cnn_ctc_v1",
+        "cnn_ctc_v2",
+        "cnn_ctc_v3",
+        "cnn_ctc_v4",
+        "cnn_ctc_v5",
+    }:
         return model_id
     raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
 
@@ -60,7 +80,13 @@ def validate_model_executor_request(
     train_config: Mapping[str, Any],
 ) -> None:
     model_id = str(model_spec.get("model_id"))
-    if model_id not in {"cnn_ctc_v1", "cnn_ctc_v2", "cnn_ctc_v3", "cnn_ctc_v4"}:
+    if model_id not in {
+        "cnn_ctc_v1",
+        "cnn_ctc_v2",
+        "cnn_ctc_v3",
+        "cnn_ctc_v4",
+        "cnn_ctc_v5",
+    }:
         raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
     if model_spec.get("family") != "cnn_ctc":
         raise ValueError(f"{model_id} executor requires family 'cnn_ctc'")
@@ -78,6 +104,7 @@ def validate_model_executor_request(
         "cnn_ctc_v2": V2_ARCHITECTURE,
         "cnn_ctc_v3": V3_ARCHITECTURE,
         "cnn_ctc_v4": V4_ARCHITECTURE,
+        "cnn_ctc_v5": V5_ARCHITECTURE,
     }[model_id]
     if model_spec.get("architecture") != expected_architecture:
         raise ValueError(
@@ -103,26 +130,45 @@ def validate_model_executor_request(
 
     ctc_objective = train_config.get("ctc_objective")
     if ctc_objective is not None:
-        if model_id != "cnn_ctc_v3":
-            raise ValueError(
-                "blank-logit CTC objective is supported only by cnn_ctc_v3"
-            )
         if not isinstance(ctc_objective, Mapping):
             raise ValueError("ctc_objective must be an object")
-        expected_keys = {"kind", "blank_logit_penalty"}
-        if set(ctc_objective) != expected_keys:
-            raise ValueError(
-                "ctc_objective supports only kind + blank_logit_penalty"
-            )
-        if ctc_objective.get("kind") != "blank-logit-penalty-v1":
+        kind = ctc_objective.get("kind")
+        if kind == "blank-logit-penalty-v1":
+            if model_id != "cnn_ctc_v3":
+                raise ValueError(
+                    "blank-logit CTC objective is supported only by cnn_ctc_v3"
+                )
+            if set(ctc_objective) != {"kind", "blank_logit_penalty"}:
+                raise ValueError(
+                    "blank-logit objective supports only kind + blank_logit_penalty"
+                )
+            penalty = ctc_objective.get("blank_logit_penalty")
+            if (
+                not isinstance(penalty, (int, float))
+                or isinstance(penalty, bool)
+                or not (0 < float(penalty) <= 1.0)
+            ):
+                raise ValueError("blank_logit_penalty must be > 0 and <= 1")
+        elif kind == "intermediate-ctc-v1":
+            if model_id != "cnn_ctc_v5":
+                raise ValueError(
+                    "intermediate CTC objective is supported only by cnn_ctc_v5"
+                )
+            if set(ctc_objective) != {"kind", "intermediate_ctc_weight"}:
+                raise ValueError(
+                    "intermediate CTC objective supports only kind + weight"
+                )
+            weight = ctc_objective.get("intermediate_ctc_weight")
+            if (
+                not isinstance(weight, (int, float))
+                or isinstance(weight, bool)
+                or not (0 < float(weight) < 1.0)
+            ):
+                raise ValueError("intermediate_ctc_weight must be between 0 and 1")
+        else:
             raise ValueError("unsupported ctc_objective kind")
-        penalty = ctc_objective.get("blank_logit_penalty")
-        if (
-            not isinstance(penalty, (int, float))
-            or isinstance(penalty, bool)
-            or not (0 < float(penalty) <= 1.0)
-        ):
-            raise ValueError("blank_logit_penalty must be > 0 and <= 1")
+    elif model_id == "cnn_ctc_v5":
+        raise ValueError("cnn_ctc_v5 requires intermediate-ctc-v1")
 
 
 def validate_cnn_ctc_v1_executor_request(
@@ -141,7 +187,12 @@ def compatibility_probe_command(
     model_id = str(model_spec["model_id"])
     if model_id == "cnn_ctc_v1":
         return None
-    if model_id in {"cnn_ctc_v2", "cnn_ctc_v3", "cnn_ctc_v4"}:
+    if model_id in {
+        "cnn_ctc_v2",
+        "cnn_ctc_v3",
+        "cnn_ctc_v4",
+        "cnn_ctc_v5",
+    }:
         return [
             str(root / "scripts" / f"probe-{model_id.replace('_', '-')}.sh"),
             "--work-dir",
@@ -167,6 +218,7 @@ def training_command(
         "cnn_ctc_v2": "train-cnn-ctc-v2.sh",
         "cnn_ctc_v3": "train-cnn-ctc-v3.sh",
         "cnn_ctc_v4": "train-cnn-ctc-v4.sh",
+        "cnn_ctc_v5": "train-cnn-ctc-v5.sh",
     }.get(model_id)
     if executable is None:
         raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
@@ -200,16 +252,19 @@ def training_command(
         ])
     ctc_objective = train_config.get("ctc_objective")
     if ctc_objective is not None:
-        if model_id != "cnn_ctc_v3":
-            raise ValueError(
-                "blank-logit CTC objective is supported only by cnn_ctc_v3"
-            )
-        command.extend([
-            "--ctc-objective-kind",
-            str(ctc_objective["kind"]),
-            "--blank-logit-penalty",
-            str(ctc_objective["blank_logit_penalty"]),
-        ])
+        command.extend(["--ctc-objective-kind", str(ctc_objective["kind"])])
+        if model_id == "cnn_ctc_v3":
+            command.extend([
+                "--blank-logit-penalty",
+                str(ctc_objective["blank_logit_penalty"]),
+            ])
+        elif model_id == "cnn_ctc_v5":
+            command.extend([
+                "--intermediate-ctc-weight",
+                str(ctc_objective["intermediate_ctc_weight"]),
+            ])
+        else:
+            raise ValueError(f"{model_id} does not support a CTC objective")
     augmentation = train_config.get("augmentation")
     if augmentation is not None:
         if model_id != "cnn_ctc_v3":

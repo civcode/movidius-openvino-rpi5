@@ -499,23 +499,38 @@ def validate_train_config(document: Any) -> Dict[str, Any]:
             "$.ctc_objective",
             errors,
         )
-        if ctc_objective.get("kind") != "blank-logit-penalty-v1":
-            errors.append(
-                "$.ctc_objective.kind: expected 'blank-logit-penalty-v1'"
+        objective_kind = ctc_objective.get("kind")
+        if objective_kind == "blank-logit-penalty-v1":
+            blank_logit_penalty = ctc_objective.get("blank_logit_penalty")
+            _number(
+                blank_logit_penalty,
+                "$.ctc_objective.blank_logit_penalty",
+                errors,
             )
-        blank_logit_penalty = ctc_objective.get("blank_logit_penalty")
-        _number(
-            blank_logit_penalty,
-            "$.ctc_objective.blank_logit_penalty",
-            errors,
-        )
-        if (
-            isinstance(blank_logit_penalty, (int, float))
-            and not isinstance(blank_logit_penalty, bool)
-            and not (0 < blank_logit_penalty <= 1.0)
-        ):
+            if (
+                isinstance(blank_logit_penalty, (int, float))
+                and not isinstance(blank_logit_penalty, bool)
+                and not (0 < blank_logit_penalty <= 1.0)
+            ):
+                errors.append(
+                    "$.ctc_objective.blank_logit_penalty: must be > 0 and <= 1"
+                )
+        elif objective_kind == "intermediate-ctc-v1":
+            weight = ctc_objective.get("intermediate_ctc_weight")
+            _number(weight, "$.ctc_objective.intermediate_ctc_weight", errors)
+            if (
+                isinstance(weight, (int, float))
+                and not isinstance(weight, bool)
+                and not (0 < weight < 1.0)
+            ):
+                errors.append(
+                    "$.ctc_objective.intermediate_ctc_weight: "
+                    "must be between 0 and 1"
+                )
+        else:
             errors.append(
-                "$.ctc_objective.blank_logit_penalty: must be > 0 and <= 1"
+                "$.ctc_objective.kind: expected blank-logit-penalty-v1 "
+                "or intermediate-ctc-v1"
             )
     augmentation_value = root.get("augmentation")
     if augmentation_value is not None:

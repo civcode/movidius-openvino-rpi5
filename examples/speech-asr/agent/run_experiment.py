@@ -343,7 +343,12 @@ def physical_compatibility_probe(
     logs_dir: pathlib.Path,
 ) -> pathlib.Path | None:
     model_id = str(model_spec["model_id"])
-    if model_id not in {"cnn_ctc_v2", "cnn_ctc_v3", "cnn_ctc_v4"}:
+    if model_id not in {
+        "cnn_ctc_v2",
+        "cnn_ctc_v3",
+        "cnn_ctc_v4",
+        "cnn_ctc_v5",
+    }:
         return None
 
     attempt_dir = experiment_dir / "attempts" / attempt_id
