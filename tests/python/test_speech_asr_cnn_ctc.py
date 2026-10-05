@@ -14,6 +14,7 @@ from speech_asr.cnn_ctc import (
     greedy_decode_logits,
     load_spec,
     load_vocab,
+    manifest_record_eligibility,
 )
 
 
@@ -50,6 +51,34 @@ class CnnCtcContractTests(unittest.TestCase):
             row[index[token]] = 10.0
             frames.append(row)
         self.assertEqual(greedy_decode_logits(frames, self.vocab), "ab")
+
+    def test_manifest_eligibility_rejects_fixed_shape_overflow(self):
+        record = {
+            "audio": {"start_sample": 0, "end_sample": 82161},
+            "transcript": {"text": "hi"},
+        }
+        decision = manifest_record_eligibility(record, self.spec, self.vocab)
+        self.assertFalse(decision["eligible"])
+        self.assertEqual(decision["reason"], "too_long")
+
+    def test_manifest_eligibility_rejects_target_longer_than_ctc_time(self):
+        record = {
+            "audio": {"start_sample": 0, "end_sample": 400},
+            "transcript": {"text": "ab"},
+        }
+        decision = manifest_record_eligibility(record, self.spec, self.vocab)
+        self.assertFalse(decision["eligible"])
+        self.assertEqual(decision["reason"], "target_too_long")
+
+    def test_manifest_eligibility_accepts_normal_record(self):
+        record = {
+            "audio": {"start_sample": 0, "end_sample": 16000},
+            "transcript": {"text": "hello"},
+        }
+        decision = manifest_record_eligibility(record, self.spec, self.vocab)
+        self.assertTrue(decision["eligible"])
+        self.assertIsNone(decision["reason"])
+        self.assertGreater(decision["valid_output_frames"], 0)
 
     def test_model_spec_is_json_and_opset_11(self):
         raw = json.loads(
