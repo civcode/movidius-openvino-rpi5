@@ -156,6 +156,8 @@ def evaluate(
     mismatch_margin_weighted_sum = 0.0
     mismatched_samples = 0
     mismatch_sample_examples: list[str] = []
+    decoded_hypothesis_mismatches = 0
+    decoded_hypothesis_mismatch_examples: list[dict[str, str]] = []
 
     for record in load_records(manifest_path):
         manifest_samples += 1
@@ -244,6 +246,16 @@ def evaluate(
             valid_onnx,
             vocab,
         )
+        if pytorch_decoder["hypothesis"] != onnx_decoder["hypothesis"]:
+            decoded_hypothesis_mismatches += 1
+            if len(decoded_hypothesis_mismatch_examples) < 10:
+                decoded_hypothesis_mismatch_examples.append(
+                    {
+                        "id": str(record["id"]),
+                        "pytorch": str(pytorch_decoder["hypothesis"]),
+                        "onnx": str(onnx_decoder["hypothesis"]),
+                    }
+                )
         reference = record["transcript"]["text"]
         pytorch_word = word_error_counts(
             reference,
@@ -294,6 +306,10 @@ def evaluate(
         raise ValueError("held-out manifest has no eligible samples")
 
     frame_argmax_agreement = matching_frames / max(1, compared_frames)
+    pytorch_wer = sum_rate(pytorch_words)
+    pytorch_cer = sum_rate(pytorch_chars)
+    onnx_wer = sum_rate(onnx_words)
+    onnx_cer = sum_rate(onnx_chars)
     mean_mismatched_reference_top2_margin = (
         mismatch_margin_weighted_sum / frame_argmax_mismatches
         if frame_argmax_mismatches
@@ -318,6 +334,16 @@ def evaluate(
         ),
         "mismatched_samples": mismatched_samples,
         "mismatch_sample_examples": mismatch_sample_examples,
+        "decoded_hypothesis_mismatches": decoded_hypothesis_mismatches,
+        "decoded_hypothesis_mismatch_examples": (
+            decoded_hypothesis_mismatch_examples
+        ),
+        "pytorch_wer": pytorch_wer,
+        "onnx_wer": onnx_wer,
+        "wer_delta": onnx_wer - pytorch_wer,
+        "pytorch_cer": pytorch_cer,
+        "onnx_cer": onnx_cer,
+        "cer_delta": onnx_cer - pytorch_cer,
     }
     if frame_argmax_agreement != 1.0:
         raise ValueError(
@@ -377,13 +403,13 @@ def evaluate(
         },
         "metrics": {
             "pytorch": {
-                "wer": sum_rate(pytorch_words),
-                "cer": sum_rate(pytorch_chars),
+                "wer": pytorch_wer,
+                "cer": pytorch_cer,
                 "decoder": decoder_summary,
             },
             "onnx": {
-                "wer": sum_rate(onnx_words),
-                "cer": sum_rate(onnx_chars),
+                "wer": onnx_wer,
+                "cer": onnx_cer,
             },
         },
         "per_sample": per_sample,
