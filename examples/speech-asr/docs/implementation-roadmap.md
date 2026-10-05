@@ -23,7 +23,8 @@ The central rule is:
 | 6 — benchmark harness | **complete** — Pi 1+5 worker accepted: 5/5 measured runs, zero failures, 0.0196% weighted-latency relative range |
 | 7 — streaming layer | **complete** — real prepared AMI replay accepted: byte-identical repeated results, contract-valid, WER/CER 0 |
 | 8 — custom PyTorch training skeleton | **complete** — deterministic CUDA training, ONNX/OpenVINO export, physical Pi 5/arm64 + MA2450 execution, and contract-valid AMI smoke evaluation accepted |
-| 9+ | not started |
+| 9 — experiment lifecycle | **implemented; acceptance pending** — immutable content-derived requests, attempt state machine, artifact/result provenance, deployment manifests and history index are implemented; local static/unit acceptance pending |
+| 10+ | not started |
 
 Phase 0 was re-reviewed after later implementation work. The root audio,
 benchmark, model and text contracts now have executable semantic validators,
@@ -567,11 +568,35 @@ DESIGN
  -> DESIGN
 ```
 
+### Implemented Phase 9 contract
+
+The lifecycle implementation uses JSON-native reviewed request documents and
+the standard-library manager at
+`examples/speech-asr/tools/manage_experiment.py`.
+
+Experiment IDs are derived from the immutable request identity. Exact retries
+are represented as numbered attempt IDs under the same experiment. The manager
+enforces legal state transitions, retry policy, parent lineage, source revision,
+dataset hashes, immutable artifact/stage-result references, compact
+`AWAIT_REVIEW` summaries and a deterministic history index.
+
+The accepted oberon -> edge architecture is represented by the hash-bound
+`deployment-manifest-v1` contract. Actual SSH/rsync execution remains Phase 10.
+
 ### Exit criteria
 
 A human can create an approved model spec, hand it to the execution system, and
 receive a complete result bundle without additional design decisions during the
 run.
+
+Phase 9 acceptance additionally requires:
+
+```bash
+./ci/verify-static.sh
+./scripts/test-speech-asr.sh
+```
+
+to pass from a current checkout.
 
 ---
 
@@ -732,34 +757,29 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-Milestone B is **complete**. On 2026-10-05 the `cnn_ctc_v1` lifecycle satisfied
-the full Phase 8 exit criteria:
+Phase 9 is **implemented**. The remaining acceptance step is to run the
+hardware-free repository checks on oberon:
 
-1. deterministic one-epoch training completed on CUDA;
-2. the trained checkpoint exported to fixed-shape ONNX opset 11;
-3. ONNX Runtime matched the PyTorch golden output at 128/128 frame argmaxes;
-4. OpenVINO 2020.3 Model Optimizer produced valid FP16 IR v10;
-5. the exact trained IR executed on the physical Pi 5/arm64 + MA2450 target;
-6. the AMI smoke evaluator completed and emitted the standard
-   `speech-asr/experiment-result` contract.
+```bash
+git pull --ff-only
+./ci/verify-static.sh
+./scripts/test-speech-asr.sh
+```
 
-Final trained-model smoke evidence:
+Once those pass, mark Phase 9 complete.
 
-- 2 eligible samples evaluated from the 4-record manifest;
-- 2 records skipped by the declared fixed-audio limit and 0 by CTC target length;
-- WER 1.000000 and CER 0.913043;
-- inference-only RTF 0.001209;
-- MYRIAD latency p50/p95 4.380/4.407 ms;
-- zero evaluator failures.
+The next implementation boundary is **Phase 10 — local execution agent and
+frontier handoff**. Its first slice should implement the already accepted
+oberon -> edge worker protocol using the Phase 9 deployment manifest:
 
-Accuracy is intentionally not an acceptance criterion for this lifecycle proof.
-The next implementation boundary is **Phase 9 — experiment lifecycle**:
-formalize experiment IDs, lineage, proposal/training/acceptance records, artifact
-hash references, and a compact result handoff before automating local execution
-or architecture mutation.
+1. dedicated automation checkout on edge pinned to the experiment commit;
+2. non-interactive SSH preflight with normal host-key verification;
+3. worker/runtime/dataset hash verification;
+4. exclusive MYRIAD device lock with immediate `worker_busy` result;
+5. minimal XML/BIN deployment bundle with post-transfer hash verification;
+6. repository-owned evaluator invocation on edge;
+7. result/log collection back to the owning attempt on oberon;
+8. Phase 9 bundle validation and transition to `AWAIT_REVIEW`.
 
-
-The multi-host execution architecture for oberon -> edge orchestration is
-specified separately in
-[`remote-experiment-orchestration.md`](remote-experiment-orchestration.md).
-
+Architecture design, benchmark changes and runtime-image rebuilds remain outside
+ordinary experiment execution.
