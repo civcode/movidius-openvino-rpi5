@@ -240,3 +240,27 @@ Initialize only through:
 
 The initializer refuses modified manifest hashes, record counts, speaker
 partition, model-spec hash or vocabulary hash.
+
+
+## Metric-aligned checkpoint selection
+
+The first model-quality-v1 baseline completed all 4,000 optimizer steps and
+showed strong overfit plus held-out-speaker blank collapse. Its best CTC
+validation loss occurred at epoch 11, but the exported checkpoint still emitted
+empty hypotheses for 84 of 95 validation utterances.
+
+The v3 trainer now records validation WER, CER, blank-frame fraction,
+empty-hypothesis fraction and emitted/reference character ratio at every epoch.
+Experiment requests may choose `checkpoint_selection: validation_loss` or
+`validation_cer`.
+
+The first diagnostic using this capability is initialized with:
+
+```bash
+./scripts/init-cnn-ctc-v3-cer-selection.sh
+```
+
+It does not change the model graph, data, seed, optimizer, learning-rate
+schedule or number of training epochs. Only the selected checkpoint changes.
+This isolates whether the observed blank collapse is primarily a surrogate
+checkpoint-selection problem before introducing augmentation or regularization.
