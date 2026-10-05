@@ -482,12 +482,32 @@ def physical_compatibility_probe(
         )
 
     comparison_doc = load_json(comparison_path)
-    agreement = comparison_doc.get("comparison", {}).get(
-        "frame_argmax_agreement"
+    comparison_metrics = comparison_doc.get("comparison", {})
+    max_abs_error = comparison_metrics.get("max_abs_error")
+    unexplained = comparison_metrics.get(
+        "frame_argmax_unexplained_mismatches"
     )
-    if not isinstance(agreement, (int, float)) or agreement < 0.99:
+    if (
+        not isinstance(max_abs_error, (int, float))
+        or isinstance(max_abs_error, bool)
+        or max_abs_error > 0.01
+    ):
         raise ExecutionFailure(
-            f"pretraining MYRIAD argmax agreement too low: {agreement!r}",
+            "pretraining MYRIAD numerical error exceeds compatibility "
+            f"limit: max_abs_error={max_abs_error!r} > 0.01",
+            outcome="failed",
+            failure_class="hardware_execution",
+        )
+    if not isinstance(unexplained, int) or isinstance(unexplained, bool):
+        raise ExecutionFailure(
+            "pretraining MYRIAD comparison lacks argmax explainability evidence",
+            outcome="failed",
+            failure_class="result_contract",
+        )
+    if unexplained != 0:
+        raise ExecutionFailure(
+            "pretraining MYRIAD has argmax flips not explained by measured "
+            f"FP16 error: {unexplained}",
             outcome="failed",
             failure_class="hardware_execution",
         )
