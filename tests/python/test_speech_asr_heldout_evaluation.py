@@ -247,6 +247,21 @@ class FrozenHeldoutControllerSourceTests(unittest.TestCase):
         self.assertIn("qualify-speech-heldout-eval.sh", source)
         self.assertIn('"--verify-only"', source)
 
+    def test_reference_runtime_dependencies_are_declared(self):
+        requirements = (
+            ROOT / "requirements" / "training.txt"
+        ).read_text(encoding="utf-8")
+        prepare_env = (
+            ROOT / "scripts" / "prepare-python-env.sh"
+        ).read_text(encoding="utf-8")
+        evaluator = (
+            SPEECH / "evaluation" / "evaluate_frozen_cnn_ctc_v3_reference.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("import onnxruntime as ort", evaluator)
+        self.assertIn("onnxruntime", requirements)
+        self.assertIn("import numpy, torch, onnx, onnxruntime", prepare_env)
+
     def test_edge_provisioning_keeps_dataset_out_of_band(self):
         source = (
             ROOT / "scripts" / "provision-speech-heldout-eval-edge.sh"
