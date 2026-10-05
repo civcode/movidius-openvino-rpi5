@@ -323,3 +323,25 @@ The baseline has no numeric WER/CER acceptance threshold; its purpose is to
 establish those metrics on the reviewed validation population. Review tooling
 does not compute accuracy/RTF deltas against the smoke parent because benchmark
 manifest identities differ.
+
+
+## CER-aligned checkpoint diagnostic
+
+`exp-3c7727ca3f37ba2c/attempt-0001` completed and was accepted. Relative to
+the same-manifest validation-loss-selected parent, minimum-CER checkpoint
+selection changed the exported epoch from 11 to 21 and improved CER from
+0.980847 to 0.866935.
+
+Decoder collapse improved substantially:
+
+- blank frames: 95.93% -> 61.33%;
+- empty hypotheses: 84/95 -> 19/95;
+- emitted/reference character ratio: 2.52% -> 47.98%.
+
+The inference graph and MA2450 latency were unchanged. WER remained poor at
+1.1614, so the next child retains CER-aligned selection and tests deterministic
+training-only SpecAugment:
+
+```bash
+./scripts/init-cnn-ctc-v3-specaugment.sh
+```
