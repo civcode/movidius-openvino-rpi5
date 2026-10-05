@@ -104,6 +104,28 @@ def sum_rate(counts) -> float:
     return errors / max(1, refs)
 
 
+def require_persistent_runtime(platform: str) -> None:
+    proc = subprocess.run(
+        [
+            str(ROOT / "run.sh"),
+            "--platform",
+            platform,
+            "bench",
+            "--help",
+        ],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    if proc.returncode != 0 or "--stdin" not in proc.stdout:
+        raise ValueError(
+            "runtime image lacks persistent tensor-stream support; "
+            f"rebuild it from this checkout with: ./build.sh --platform {platform}"
+        )
+
+
 class PersistentMyriadServer:
     def __init__(
         self,
@@ -444,6 +466,7 @@ def main() -> int:
 
         work = args.work_dir
         work.mkdir(parents=True, exist_ok=True)
+        require_persistent_runtime(args.platform)
         word_counts = []
         char_counts = []
         latencies = []
