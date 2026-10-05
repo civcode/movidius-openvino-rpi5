@@ -178,7 +178,12 @@ def command_init(args: argparse.Namespace) -> None:
         if parent_request["experiment_id"] != args.parent:
             raise ValueError("parent experiment identity mismatch")
 
-    commit = args.repo_commit or git_head()
+    actual_commit = git_head()
+    if args.repo_commit is not None and args.repo_commit != actual_commit:
+        raise ValueError(
+            f"--repo-commit {args.repo_commit} does not match checkout HEAD {actual_commit}"
+        )
+    commit = actual_commit
     request = make_experiment_request(
         proposal=proposal,
         model_spec=model_spec,
