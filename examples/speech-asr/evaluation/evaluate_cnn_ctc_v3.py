@@ -7,9 +7,11 @@ import argparse
 import atexit
 import hashlib
 import json
+import os
 import pathlib
 import queue
 import re
+import select
 import subprocess
 import sys
 import threading
@@ -205,12 +207,26 @@ class PersistentMyriadServer:
         assert self.proc.stdout is not None
         chunks: list[bytes] = []
         remaining = count
+        fd = self.proc.stdout.fileno()
+        deadline = time.monotonic() + self.request_timeout
         while remaining:
-            chunk = self.proc.stdout.read(remaining)
+            timeout = max(0.0, deadline - time.monotonic())
+            if timeout == 0.0:
+                raise RuntimeError(
+                    "persistent MYRIAD server response timed out:\n"
+                    + "\n".join(self._stderr_tail[-30:])
+                )
+            ready, _, _ = select.select([fd], [], [], timeout)
+            if not ready:
+                raise RuntimeError(
+                    "persistent MYRIAD server response timed out:\n"
+                    + "\n".join(self._stderr_tail[-30:])
+                )
+            chunk = os.read(fd, remaining)
             if not chunk:
                 raise RuntimeError(
-                    "persistent MYRIAD server closed its output pipe:\\n"
-                    + "\\n".join(self._stderr_tail[-30:])
+                    "persistent MYRIAD server closed its output pipe:\n"
+                    + "\n".join(self._stderr_tail[-30:])
                 )
             chunks.append(chunk)
             remaining -= len(chunk)
