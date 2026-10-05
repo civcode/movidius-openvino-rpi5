@@ -335,6 +335,11 @@ def command_deployment(args: argparse.Namespace) -> None:
     _path, attempt = load_attempt(args.experiment, args.attempt)
     if attempt["state"] != "EVALUATE":
         raise ValueError("deployment manifest requires EVALUATE state")
+    artifact_names = args.artifact or ["openvino_xml", "openvino_bin"]
+    missing = [name for name in artifact_names if name not in attempt["artifacts"]]
+    if missing:
+        raise ValueError(f"deployment artifacts not recorded: {missing}")
+    artifacts = {name: attempt["artifacts"][name] for name in artifact_names}
     manifest = make_deployment_manifest(
         request=request,
         attempt=attempt,
@@ -343,7 +348,7 @@ def command_deployment(args: argparse.Namespace) -> None:
         model_spec_sha256=request["documents"]["model_spec"]["sha256"],
         evaluator_id=args.evaluator,
         result_path=args.result_path,
-        artifacts=attempt["artifacts"],
+        artifacts=artifacts,
     )
     destination = (
         args.experiment
@@ -455,6 +460,11 @@ def build_parser() -> argparse.ArgumentParser:
     deployment.add_argument("--worker-commit", required=True)
     deployment.add_argument("--evaluator", required=True)
     deployment.add_argument("--result-path", required=True)
+    deployment.add_argument(
+        "--artifact",
+        action="append",
+        help="recorded artifact name to include; defaults to openvino_xml/openvino_bin",
+    )
     deployment.set_defaults(func=command_deployment)
 
     validate = sub.add_parser("validate")
