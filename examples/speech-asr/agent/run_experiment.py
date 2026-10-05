@@ -537,6 +537,14 @@ def execute_local(
         )
 
     compatibility = load_compatibility_result(build_dir)
+    probe_evidence = (
+        attempt_dir
+        / "generated"
+        / "pretraining-probe"
+        / "probe.json"
+    )
+    if probe_evidence.is_file():
+        compatibility["pretraining_myriad_probe"] = load_json(probe_evidence)
     compatibility_path = attempt_dir / "generated" / "compatibility.json"
     write_json(compatibility_path, compatibility)
 
