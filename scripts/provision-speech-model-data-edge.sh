@@ -97,7 +97,10 @@ VALIDATION_SHA="$4"
 worker_ami="$WORKER_REPO/work/speech-asr/ami"
 base_ami="$BASE_REPO/work/speech-asr/ami"
 if [[ -L "$worker_ami" ]]; then
-    :
+    [[ "$(readlink -f "$worker_ami")" == "$(readlink -f "$base_ami")" ]] || {
+        echo "automation worktree AMI symlink points at unexpected dataset tree" >&2
+        exit 2
+    }
 elif [[ ! -e "$worker_ami" ]]; then
     mkdir -p "$(dirname "$worker_ami")"
     ln -s "$base_ami" "$worker_ami"
