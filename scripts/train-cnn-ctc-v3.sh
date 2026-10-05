@@ -11,6 +11,14 @@ SEED=""
 LEARNING_RATE=""
 MAX_SAMPLES=""
 CHECKPOINT_SELECTION=""
+AUGMENTATION_KIND=""
+FREQUENCY_MASKS=""
+FREQUENCY_MAX_WIDTH=""
+TIME_MASKS=""
+TIME_MAX_WIDTH=""
+TIME_MAX_FRACTION=""
+AUGMENTATION_MASK_VALUE=""
+AUGMENTATION_SEED_OFFSET=""
 WORK_DIR="$ROOT/work/speech-asr/cnn_ctc_v3"
 TRAIN="$WORK_DIR/training"
 EXPORT="$WORK_DIR/export"
@@ -27,9 +35,17 @@ while [[ $# -gt 0 ]]; do
         --learning-rate) [[ $# -ge 2 ]] || { echo "--learning-rate needs a number" >&2; exit 2; }; LEARNING_RATE="$2"; shift 2 ;;
         --max-samples) [[ $# -ge 2 ]] || { echo "--max-samples needs an integer" >&2; exit 2; }; MAX_SAMPLES="$2"; shift 2 ;;
         --checkpoint-selection) [[ $# -ge 2 ]] || { echo "--checkpoint-selection needs validation_loss|validation_cer" >&2; exit 2; }; CHECKPOINT_SELECTION="$2"; shift 2 ;;
+        --augmentation-kind) [[ $# -ge 2 ]] || { echo "--augmentation-kind needs a value" >&2; exit 2; }; AUGMENTATION_KIND="$2"; shift 2 ;;
+        --frequency-masks) [[ $# -ge 2 ]] || { echo "--frequency-masks needs an integer" >&2; exit 2; }; FREQUENCY_MASKS="$2"; shift 2 ;;
+        --frequency-max-width) [[ $# -ge 2 ]] || { echo "--frequency-max-width needs an integer" >&2; exit 2; }; FREQUENCY_MAX_WIDTH="$2"; shift 2 ;;
+        --time-masks) [[ $# -ge 2 ]] || { echo "--time-masks needs an integer" >&2; exit 2; }; TIME_MASKS="$2"; shift 2 ;;
+        --time-max-width) [[ $# -ge 2 ]] || { echo "--time-max-width needs an integer" >&2; exit 2; }; TIME_MAX_WIDTH="$2"; shift 2 ;;
+        --time-max-fraction) [[ $# -ge 2 ]] || { echo "--time-max-fraction needs a number" >&2; exit 2; }; TIME_MAX_FRACTION="$2"; shift 2 ;;
+        --augmentation-mask-value) [[ $# -ge 2 ]] || { echo "--augmentation-mask-value needs a number" >&2; exit 2; }; AUGMENTATION_MASK_VALUE="$2"; shift 2 ;;
+        --augmentation-seed-offset) [[ $# -ge 2 ]] || { echo "--augmentation-seed-offset needs an integer" >&2; exit 2; }; AUGMENTATION_SEED_OFFSET="$2"; shift 2 ;;
         --work-dir) [[ $# -ge 2 ]] || { echo "--work-dir needs a path" >&2; exit 2; }; WORK_DIR="$2"; TRAIN="$WORK_DIR/training"; EXPORT="$WORK_DIR/export"; IR="$WORK_DIR/openvino/fp16"; shift 2 ;;
         -h|--help)
-            echo "usage: $0 [--manifest path] [--validation-manifest path] [--device cuda|cpu|auto] [--epochs N] [--batch-size N] [--seed N] [--learning-rate RATE] [--max-samples N] [--checkpoint-selection validation_loss|validation_cer] [--work-dir path]"
+            echo "usage: $0 [--manifest path] [--validation-manifest path] [--device cuda|cpu|auto] [--epochs N] [--batch-size N] [--seed N] [--learning-rate RATE] [--max-samples N] [--checkpoint-selection validation_loss|validation_cer] [--augmentation-kind specaugment-v1 ...] [--work-dir path]"
             exit 0
             ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
@@ -51,6 +67,18 @@ args=(--manifest "$MANIFEST" --output-dir "$TRAIN" --device "$DEVICE")
 [[ -n "$LEARNING_RATE" ]] && args+=(--learning-rate "$LEARNING_RATE")
 [[ -n "$MAX_SAMPLES" ]] && args+=(--max-samples "$MAX_SAMPLES")
 [[ -n "$CHECKPOINT_SELECTION" ]] && args+=(--checkpoint-selection "$CHECKPOINT_SELECTION")
+if [[ -n "$AUGMENTATION_KIND" ]]; then
+    args+=(
+        --augmentation-kind "$AUGMENTATION_KIND"
+        --frequency-masks "$FREQUENCY_MASKS"
+        --frequency-max-width "$FREQUENCY_MAX_WIDTH"
+        --time-masks "$TIME_MASKS"
+        --time-max-width "$TIME_MAX_WIDTH"
+        --time-max-fraction "$TIME_MAX_FRACTION"
+        --augmentation-mask-value "$AUGMENTATION_MASK_VALUE"
+        --augmentation-seed-offset "$AUGMENTATION_SEED_OFFSET"
+    )
+fi
 
 echo "== train cnn_ctc_v3 =="
 "$ROOT/scripts/python-training.sh"     "$ROOT/examples/speech-asr/training/train_cnn_ctc_v3.py"     "${args[@]}"
