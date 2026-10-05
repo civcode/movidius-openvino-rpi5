@@ -77,6 +77,23 @@ class ModelQualityBaselineSourceTests(unittest.TestCase):
             source,
         )
 
+    def test_specaugment_experiment_keeps_graph_and_data_fixed(self):
+        source = (
+            SPEECH / "agent" / "init_cnn_ctc_v3_specaugment.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('DEFAULT_PARENT = "exp-3c7727ca3f37ba2c"', source)
+        self.assertIn('"checkpoint_selection": "validation_cer"', source)
+        self.assertIn('"kind": "specaugment-v1"', source)
+        self.assertIn('"frequency_masks": 2', source)
+        self.assertIn('"frequency_max_width": 8', source)
+        self.assertIn('"time_masks": 2', source)
+        self.assertIn('"time_max_width": 20', source)
+        self.assertIn('"time_max_fraction": 0.1', source)
+        self.assertIn('"mask_value": 0', source)
+        self.assertIn('"seed_offset": 1', source)
+        self.assertIn('"model_id": "cnn_ctc_v3"', source)
+        self.assertIn('"max_realtime_factor": None', source)
+
     def test_v3_training_records_processed_audio_budget(self):
         source = (
             SPEECH / "training" / "train_cnn_ctc_v3.py"
