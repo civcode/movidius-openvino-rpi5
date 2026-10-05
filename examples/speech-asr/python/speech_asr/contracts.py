@@ -17,6 +17,9 @@ from typing import Any, Dict, Iterable, Mapping, MutableSequence, Sequence
 _CANONICAL_SAMPLE_RATE = 16000
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _GIT_SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
+_EXPERIMENT_ID_RE = re.compile(r"^exp-[0-9a-f]{16}$")
+_ATTEMPT_ID_RE = re.compile(r"^attempt-[0-9]{4}$")
+_MODEL_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 
 
 class ContractValidationError(ValueError):
@@ -398,6 +401,385 @@ def validate_speech_sample(document: Any) -> Dict[str, Any]:
     if metadata is not None and not isinstance(metadata, Mapping):
         errors.append("$.metadata: expected object when present")
 
+    _raise_if_errors(errors)
+    return dict(root)
+
+
+
+def _artifact_ref(value: Any, path: str, errors: MutableSequence[str]) -> Mapping[str, Any]:
+    ref = _mapping(value, path, errors)
+    _nonempty_string(ref.get("path"), path + ".path", errors)
+    _sha256(ref.get("sha256"), path + ".sha256", errors)
+    return ref
+
+
+def _manifest_ref(value: Any, path: str, errors: MutableSequence[str]) -> Mapping[str, Any]:
+    ref = _mapping(value, path, errors)
+    _nonempty_string(ref.get("id"), path + ".id", errors)
+    _nonempty_string(ref.get("path"), path + ".path", errors)
+    _sha256(ref.get("sha256"), path + ".sha256", errors)
+    return ref
+
+
+def validate_experiment_proposal(document: Any) -> Dict[str, Any]:
+    errors: list[str] = []
+    root = _mapping(document, "$", errors)
+    if root.get("schema") != "speech-asr/experiment-proposal":
+        errors.append("$.schema: expected 'speech-asr/experiment-proposal'")
+    if root.get("version") != 1:
+        errors.append("$.version: expected 1")
+    for key in ("title", "hypothesis", "rationale"):
+        _nonempty_string(root.get(key), f"$.{key}", errors)
+    changes = _sequence(root.get("changes"), "$.changes", errors)
+    if not changes:
+        errors.append("$.changes: at least one declared change is required")
+    seen: set[str] = set()
+    for index, value in enumerate(changes):
+        _nonempty_string(value, f"$.changes[{index}]", errors)
+        if isinstance(value, str):
+            if value in seen:
+                errors.append(f"$.changes[{index}]: duplicate declared change")
+            seen.add(value)
+    _raise_if_errors(errors)
+    return dict(root)
+
+
+def validate_experiment_model_spec(document: Any) -> Dict[str, Any]:
+    errors: list[str] = []
+    root = _mapping(document, "$", errors)
+    if root.get("schema") != "speech-asr/experiment-model-spec":
+        errors.append("$.schema: expected 'speech-asr/experiment-model-spec'")
+    if root.get("version") != 1:
+        errors.append("$.version: expected 1")
+    model_id = root.get("model_id")
+    if not isinstance(model_id, str) or _MODEL_ID_RE.fullmatch(model_id) is None:
+        errors.append("$.model_id: expected lowercase model identifier")
+    _nonempty_string(root.get("family"), "$.family", errors)
+    for key in ("frontend", "architecture"):
+        value = _mapping(root.get(key), f"$.{key}", errors)
+        _nonempty_string(value.get("kind"), f"$.{key}.kind", errors)
+    export = _mapping(root.get("export"), "$.export", errors)
+    if export.get("format") != "onnx":
+        errors.append("$.export.format: expected 'onnx'")
+    if export.get("onnx_opset") != 11:
+        errors.append("$.export.onnx_opset: expected 11")
+    if export.get("fixed_shapes") is not True:
+        errors.append("$.export.fixed_shapes: expected true")
+    _raise_if_errors(errors)
+    return dict(root)
+
+
+def validate_train_config(document: Any) -> Dict[str, Any]:
+    errors: list[str] = []
+    root = _mapping(document, "$", errors)
+    if root.get("schema") != "speech-asr/train-config":
+        errors.append("$.schema: expected 'speech-asr/train-config'")
+    if root.get("version") != 1:
+        errors.append("$.version: expected 1")
+    _integer(root.get("seed"), "$.seed", errors)
+    if root.get("device") not in {"cuda", "cpu"}:
+        errors.append("$.device: expected one of cuda, cpu")
+    _integer(root.get("epochs"), "$.epochs", errors)
+    _integer(root.get("batch_size"), "$.batch_size", errors, minimum=1)
+    max_samples = root.get("max_samples")
+    if max_samples is not None:
+        _integer(max_samples, "$.max_samples", errors, minimum=1)
+    optimizer = _mapping(root.get("optimizer"), "$.optimizer", errors)
+    _nonempty_string(optimizer.get("kind"), "$.optimizer.kind", errors)
+    learning_rate = optimizer.get("learning_rate")
+    _number(learning_rate, "$.optimizer.learning_rate", errors)
+    if isinstance(learning_rate, (int, float)) and not isinstance(learning_rate, bool) and learning_rate <= 0:
+        errors.append("$.optimizer.learning_rate: must be > 0")
+    _manifest_ref(root.get("training_manifest"), "$.training_manifest", errors)
+    _manifest_ref(root.get("validation_manifest"), "$.validation_manifest", errors)
+    _raise_if_errors(errors)
+    return dict(root)
+
+
+def validate_acceptance_policy(document: Any) -> Dict[str, Any]:
+    errors: list[str] = []
+    root = _mapping(document, "$", errors)
+    if root.get("schema") != "speech-asr/acceptance-policy":
+        errors.append("$.schema: expected 'speech-asr/acceptance-policy'")
+    if root.get("version") != 1:
+        errors.append("$.version: expected 1")
+    allowed_gates = {
+        "training",
+        "onnx_export",
+        "openvino_conversion",
+        "myriad_execution",
+        "accuracy_evaluation",
+    }
+    gates = _sequence(root.get("required_gates"), "$.required_gates", errors)
+    if not gates:
+        errors.append("$.required_gates: at least one gate is required")
+    seen: set[str] = set()
+    for index, gate in enumerate(gates):
+        if gate not in allowed_gates:
+            errors.append(f"$.required_gates[{index}]: unknown gate {gate!r}")
+        elif gate in seen:
+            errors.append(f"$.required_gates[{index}]: duplicate gate")
+        else:
+            seen.add(gate)
+
+    thresholds = _mapping(root.get("thresholds"), "$.thresholds", errors)
+    for key in ("max_wer", "max_cer", "max_realtime_factor", "max_latency_p95_ms"):
+        value = thresholds.get(key)
+        if value is not None:
+            _number(value, f"$.thresholds.{key}", errors)
+    agreement = thresholds.get("min_frame_argmax_agreement")
+    if agreement is not None:
+        _number(agreement, "$.thresholds.min_frame_argmax_agreement", errors)
+        if isinstance(agreement, (int, float)) and not isinstance(agreement, bool) and agreement > 1:
+            errors.append("$.thresholds.min_frame_argmax_agreement: must be <= 1")
+
+    retry = _mapping(root.get("retry_policy"), "$.retry_policy", errors)
+    _integer(retry.get("max_attempts"), "$.retry_policy.max_attempts", errors, minimum=1)
+    retryable = _sequence(
+        retry.get("retryable_failure_classes"),
+        "$.retry_policy.retryable_failure_classes",
+        errors,
+    )
+    allowed_retry = {"transport_preflight", "worker_busy", "hardware_transient"}
+    for index, value in enumerate(retryable):
+        if value not in allowed_retry:
+            errors.append(
+                f"$.retry_policy.retryable_failure_classes[{index}]: "
+                f"unknown retryable class {value!r}"
+            )
+    _raise_if_errors(errors)
+    return dict(root)
+
+
+def validate_experiment_request(document: Any) -> Dict[str, Any]:
+    errors: list[str] = []
+    root = _mapping(document, "$", errors)
+    if root.get("schema") != "speech-asr/experiment-request":
+        errors.append("$.schema: expected 'speech-asr/experiment-request'")
+    if root.get("version") != 1:
+        errors.append("$.version: expected 1")
+    experiment_id = root.get("experiment_id")
+    if not isinstance(experiment_id, str) or _EXPERIMENT_ID_RE.fullmatch(experiment_id) is None:
+        errors.append("$.experiment_id: expected exp- followed by 16 lowercase hex digits")
+    parent_id = root.get("parent_experiment_id")
+    if parent_id is not None and (
+        not isinstance(parent_id, str) or _EXPERIMENT_ID_RE.fullmatch(parent_id) is None
+    ):
+        errors.append("$.parent_experiment_id: expected null or experiment id")
+    if parent_id is not None and parent_id == experiment_id:
+        errors.append("$.parent_experiment_id: experiment cannot be its own parent")
+    _sha256(root.get("identity_sha256"), "$.identity_sha256", errors)
+    if root.get("state") != "APPROVED":
+        errors.append("$.state: immutable request must start at APPROVED")
+
+    source = _mapping(root.get("source"), "$.source", errors)
+    commit = source.get("repo_commit")
+    if not isinstance(commit, str) or len(commit) != 40 or _GIT_SHA_RE.fullmatch(commit) is None:
+        errors.append("$.source.repo_commit: expected full 40-character Git commit id")
+
+    benchmark = _mapping(root.get("benchmark"), "$.benchmark", errors)
+    _nonempty_string(benchmark.get("id"), "$.benchmark.id", errors)
+    _nonempty_string(benchmark.get("manifest_path"), "$.benchmark.manifest_path", errors)
+    _sha256(benchmark.get("manifest_sha256"), "$.benchmark.manifest_sha256", errors)
+
+    documents = _mapping(root.get("documents"), "$.documents", errors)
+    for name in ("proposal", "model_spec", "train_config", "acceptance"):
+        _artifact_ref(documents.get(name), f"$.documents.{name}", errors)
+
+    _raise_if_errors(errors)
+    return dict(root)
+
+
+def validate_experiment_attempt(document: Any) -> Dict[str, Any]:
+    errors: list[str] = []
+    root = _mapping(document, "$", errors)
+    if root.get("schema") != "speech-asr/experiment-attempt":
+        errors.append("$.schema: expected 'speech-asr/experiment-attempt'")
+    if root.get("version") != 1:
+        errors.append("$.version: expected 1")
+    experiment_id = root.get("experiment_id")
+    if not isinstance(experiment_id, str) or _EXPERIMENT_ID_RE.fullmatch(experiment_id) is None:
+        errors.append("$.experiment_id: invalid experiment id")
+    attempt_id = root.get("attempt_id")
+    if not isinstance(attempt_id, str) or _ATTEMPT_ID_RE.fullmatch(attempt_id) is None:
+        errors.append("$.attempt_id: expected attempt-NNNN")
+    attempt_index = root.get("attempt_index")
+    _integer(attempt_index, "$.attempt_index", errors, minimum=1)
+    if isinstance(attempt_index, int) and 1 <= attempt_index <= 9999:
+        expected = f"attempt-{attempt_index:04d}"
+        if attempt_id != expected:
+            errors.append(f"$.attempt_id: expected {expected!r} for attempt_index")
+    _sha256(root.get("request_sha256"), "$.request_sha256", errors)
+
+    allowed_states = ("APPROVED", "EXECUTE", "EVALUATE", "AWAIT_REVIEW")
+    state = root.get("state")
+    if state not in allowed_states:
+        errors.append("$.state: unknown lifecycle state")
+    outcome = root.get("outcome")
+    if outcome not in {"pending", "completed", "failed", "blocked"}:
+        errors.append("$.outcome: expected pending, completed, failed or blocked")
+    failure_class = root.get("failure_class")
+    allowed_failures = {
+        None,
+        "request_config",
+        "controller_execution",
+        "transport_preflight",
+        "worker_busy",
+        "hardware_execution",
+        "hardware_transient",
+        "result_contract",
+    }
+    if failure_class not in allowed_failures:
+        errors.append("$.failure_class: unknown failure class")
+    if outcome in {"pending", "completed"} and failure_class is not None:
+        errors.append("$.failure_class: must be null for pending/completed attempts")
+    if outcome in {"failed", "blocked"} and failure_class is None:
+        errors.append("$.failure_class: failed/blocked attempts require a failure class")
+    if state == "AWAIT_REVIEW" and outcome == "pending":
+        errors.append("$.outcome: AWAIT_REVIEW cannot remain pending")
+    if state != "AWAIT_REVIEW" and outcome != "pending":
+        errors.append("$.outcome: terminal outcome requires AWAIT_REVIEW state")
+
+    events = _sequence(root.get("events"), "$.events", errors)
+    if not events:
+        errors.append("$.events: at least the APPROVED event is required")
+    event_states: list[str] = []
+    for index, value in enumerate(events):
+        event = _mapping(value, f"$.events[{index}]", errors)
+        event_state = event.get("state")
+        if event_state not in allowed_states:
+            errors.append(f"$.events[{index}].state: unknown lifecycle state")
+        else:
+            event_states.append(event_state)
+        _nonempty_string(event.get("at_utc"), f"$.events[{index}].at_utc", errors)
+    if event_states:
+        if event_states[0] != "APPROVED":
+            errors.append("$.events[0].state: first event must be APPROVED")
+        if state in allowed_states and event_states[-1] != state:
+            errors.append("$.events: final event state must equal $.state")
+        positions = {name: index for index, name in enumerate(allowed_states)}
+        for previous, current in zip(event_states, event_states[1:]):
+            if current == "AWAIT_REVIEW":
+                if previous not in {"APPROVED", "EXECUTE", "EVALUATE"}:
+                    errors.append("$.events: invalid transition to AWAIT_REVIEW")
+            elif positions.get(current, -1) != positions.get(previous, -1) + 1:
+                errors.append(f"$.events: invalid transition {previous} -> {current}")
+
+    stage_results = _mapping(root.get("stage_results"), "$.stage_results", errors)
+    allowed_stages = {"training", "compatibility", "hardware", "accuracy", "result"}
+    for name, ref in stage_results.items():
+        if name not in allowed_stages:
+            errors.append(f"$.stage_results.{name}: unknown stage")
+        else:
+            _artifact_ref(ref, f"$.stage_results.{name}", errors)
+
+    _raise_if_errors(errors)
+    return dict(root)
+
+
+def validate_experiment_summary(document: Any) -> Dict[str, Any]:
+    errors: list[str] = []
+    root = _mapping(document, "$", errors)
+    if root.get("schema") != "speech-asr/experiment-summary":
+        errors.append("$.schema: expected 'speech-asr/experiment-summary'")
+    if root.get("version") != 1:
+        errors.append("$.version: expected 1")
+    experiment_id = root.get("experiment_id")
+    if not isinstance(experiment_id, str) or _EXPERIMENT_ID_RE.fullmatch(experiment_id) is None:
+        errors.append("$.experiment_id: invalid experiment id")
+    attempt_id = root.get("attempt_id")
+    if not isinstance(attempt_id, str) or _ATTEMPT_ID_RE.fullmatch(attempt_id) is None:
+        errors.append("$.attempt_id: invalid attempt id")
+    _sha256(root.get("request_sha256"), "$.request_sha256", errors)
+    if root.get("outcome") not in {"completed", "failed", "blocked"}:
+        errors.append("$.outcome: expected completed, failed or blocked")
+    if root.get("review_state") != "AWAIT_REVIEW":
+        errors.append("$.review_state: expected AWAIT_REVIEW")
+    for field in ("stage_results", "artifacts"):
+        refs = _mapping(root.get(field), f"$.{field}", errors)
+        for name, ref in refs.items():
+            _artifact_ref(ref, f"$.{field}.{name}", errors)
+    _raise_if_errors(errors)
+    return dict(root)
+
+
+def validate_experiment_history(document: Any) -> Dict[str, Any]:
+    errors: list[str] = []
+    root = _mapping(document, "$", errors)
+    if root.get("schema") != "speech-asr/experiment-history":
+        errors.append("$.schema: expected 'speech-asr/experiment-history'")
+    if root.get("version") != 1:
+        errors.append("$.version: expected 1")
+    experiments = _sequence(root.get("experiments"), "$.experiments", errors)
+    ids: list[str] = []
+    for index, value in enumerate(experiments):
+        path = f"$.experiments[{index}]"
+        item = _mapping(value, path, errors)
+        experiment_id = item.get("experiment_id")
+        if not isinstance(experiment_id, str) or _EXPERIMENT_ID_RE.fullmatch(experiment_id) is None:
+            errors.append(path + ".experiment_id: invalid experiment id")
+        else:
+            ids.append(experiment_id)
+        parent = item.get("parent_experiment_id")
+        if parent is not None and (
+            not isinstance(parent, str) or _EXPERIMENT_ID_RE.fullmatch(parent) is None
+        ):
+            errors.append(path + ".parent_experiment_id: invalid parent experiment id")
+        _sha256(item.get("request_sha256"), path + ".request_sha256", errors)
+        _nonempty_string(item.get("path"), path + ".path", errors)
+        latest_attempt = item.get("latest_attempt_id")
+        if latest_attempt is not None and (
+            not isinstance(latest_attempt, str) or _ATTEMPT_ID_RE.fullmatch(latest_attempt) is None
+        ):
+            errors.append(path + ".latest_attempt_id: invalid attempt id")
+        if item.get("latest_outcome") not in {None, "pending", "completed", "failed", "blocked"}:
+            errors.append(path + ".latest_outcome: invalid outcome")
+    if ids != sorted(ids):
+        errors.append("$.experiments: entries must be sorted by experiment_id")
+    if len(ids) != len(set(ids)):
+        errors.append("$.experiments: duplicate experiment_id")
+    _raise_if_errors(errors)
+    return dict(root)
+
+
+def validate_deployment_manifest(document: Any) -> Dict[str, Any]:
+    errors: list[str] = []
+    root = _mapping(document, "$", errors)
+    if root.get("schema") != "speech-asr/deployment-manifest":
+        errors.append("$.schema: expected 'speech-asr/deployment-manifest'")
+    if root.get("version") != 1:
+        errors.append("$.version: expected 1")
+    experiment_id = root.get("experiment_id")
+    if not isinstance(experiment_id, str) or _EXPERIMENT_ID_RE.fullmatch(experiment_id) is None:
+        errors.append("$.experiment_id: invalid experiment id")
+    attempt_id = root.get("attempt_id")
+    if not isinstance(attempt_id, str) or _ATTEMPT_ID_RE.fullmatch(attempt_id) is None:
+        errors.append("$.attempt_id: invalid attempt id")
+    for key in ("controller_commit", "worker_commit"):
+        commit = root.get(key)
+        if not isinstance(commit, str) or len(commit) != 40 or _GIT_SHA_RE.fullmatch(commit) is None:
+            errors.append(f"$.{key}: expected full 40-character Git commit id")
+    model = _mapping(root.get("model"), "$.model", errors)
+    _nonempty_string(model.get("id"), "$.model.id", errors)
+    _sha256(model.get("spec_sha256"), "$.model.spec_sha256", errors)
+    benchmark = _mapping(root.get("benchmark"), "$.benchmark", errors)
+    _nonempty_string(benchmark.get("id"), "$.benchmark.id", errors)
+    _nonempty_string(benchmark.get("manifest_path"), "$.benchmark.manifest_path", errors)
+    _sha256(benchmark.get("manifest_sha256"), "$.benchmark.manifest_sha256", errors)
+    runtime = _mapping(root.get("runtime"), "$.runtime", errors)
+    if runtime.get("target") != "arm64":
+        errors.append("$.runtime.target: expected 'arm64'")
+    if runtime.get("openvino_version") != "2020.3.2":
+        errors.append("$.runtime.openvino_version: expected '2020.3.2'")
+    evaluator = _mapping(root.get("evaluator"), "$.evaluator", errors)
+    _nonempty_string(evaluator.get("id"), "$.evaluator.id", errors)
+    _nonempty_string(evaluator.get("result_path"), "$.evaluator.result_path", errors)
+    artifacts = _mapping(root.get("artifacts"), "$.artifacts", errors)
+    if len(artifacts) < 2:
+        errors.append("$.artifacts: at least two deployment artifacts are required")
+    for name, ref in artifacts.items():
+        _nonempty_string(name, "$.artifacts key", errors)
+        _artifact_ref(ref, f"$.artifacts.{name}", errors)
     _raise_if_errors(errors)
     return dict(root)
 
