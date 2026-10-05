@@ -370,7 +370,11 @@ def evaluate(
             "pytorch_device": str(device),
             "onnx_provider": "CPUExecutionProvider",
         },
-        "agreement": agreement,
+        "agreement": {
+            "frame_argmax_agreement": frame_argmax_agreement,
+            "compared_frames": compared_frames,
+            "max_abs_error": max_abs_error,
+        },
         "metrics": {
             "pytorch": {
                 "wer": sum_rate(pytorch_words),
