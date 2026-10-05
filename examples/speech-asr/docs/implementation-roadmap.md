@@ -957,33 +957,33 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-The first model-quality baseline and its checkpoint-selection diagnostic are
-complete.
+The deterministic SpecAugment diagnostic
+`exp-2de4643d351299ec/attempt-0001` is complete and is a negative sibling of
+the accepted CER-selected reference.
 
-`exp-3c7727ca3f37ba2c/attempt-0001` established that metric-aligned checkpoint
-selection is necessary:
+Compared with `exp-3c7727ca3f37ba2c` on the exact same validation manifest:
 
-- validation-loss optimum: epoch 11;
-- validation-CER optimum / exported checkpoint: epoch 21;
-- CER improved from 0.980847 to 0.866935;
-- blank-frame fraction improved from 95.93% to 61.33%;
-- empty hypotheses fell from 84/95 to 19/95;
-- emitted/reference character ratio rose from 2.52% to 47.98%;
-- MA2450 p95 latency remained 16.64 ms;
-- PyTorch/ONNX argmax agreement remained 1.0.
+- CER regressed 0.866935 -> 0.903226;
+- WER improved 1.161417 -> 1.027559;
+- blank-frame fraction regressed 61.33% -> 83.24%;
+- empty hypotheses regressed 19/95 -> 36/95;
+- emitted/reference character ratio regressed 47.98% -> 20.77%;
+- p95 MA2450 latency remained 16.65 ms.
 
-WER is still 1.1614 and the model still under-emits, so architecture work
-remains premature.
+Do not add stronger augmentation or weight decay to this branch.
 
-The next isolated intervention is deterministic training-only SpecAugment. It
-retains the exact `cnn_ctc_v3` inference graph, manifests, optimizer schedule
-and CER-aligned checkpoint selection. Its reviewed policy is:
+The next reviewed generation is `cnn_ctc_v4`, a host-frontend correction. It
+keeps the exact v3 residual temporal inference graph and all OpenVINO/MYRIAD
+tensor contracts, but replaces `logmel-v1` padding-inclusive CMVN with
+`logmel-v2`:
 
-- frequency masks: 2, maximum width 8/64 mel bins;
-- time masks: 2, maximum width 20 frontend frames;
-- time-mask cap: 10% of each sample's valid frontend frames;
-- mask value: 0;
-- augmentation seed offset: +1 from the frozen training seed.
+- determine valid feature frames from real audio;
+- compute per-mel-bin mean from valid frames only;
+- subtract that mean;
+- force padded feature frames to zero.
+
+This isolates a structural preprocessing issue: fixed-shape padding must not
+affect utterance normalization statistics.
 
 Run:
 
@@ -993,7 +993,7 @@ git pull --ff-only
 ./scripts/test-speech-asr.sh
 
 EXP="$(
-  ./scripts/init-cnn-ctc-v3-specaugment.sh |
+  ./scripts/init-cnn-ctc-v4-valid-cmvn.sh |
   python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
 )"
 
@@ -1007,9 +1007,9 @@ echo "$EXP"
   --experiment "$EXP"
 ```
 
-No edge dataset reprovisioning is required while the reviewed
-`model-quality-v1` data remains hash-valid.
+No dataset reprovisioning is required while the reviewed
+`model-quality-v1` manifests remain hash-valid.
 
-REVIEW CER, WER, blank fraction, empty-hypothesis fraction, emitted/reference
-character ratio and augmentation evidence before considering weight decay,
-stronger augmentation or a new inference architecture.
+REVIEW CER, WER, blank fraction, empty-hypothesis fraction,
+emitted/reference-character ratio, selected epoch, ONNX agreement and MA2450
+latency before changing the inference graph again.
