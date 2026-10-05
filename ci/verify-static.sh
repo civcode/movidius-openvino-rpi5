@@ -232,6 +232,13 @@ grep -q 'clip_grad_norm_' examples/speech-asr/training/train_cnn_ctc_v3.py || fa
 grep -q 'CosineAnnealingLR' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'cnn_ctc_v3 cosine schedule missing'
 grep -q 'best_validation_loss' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'cnn_ctc_v3 best-checkpoint selection missing'
 grep -q 'optimizer_steps' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'cnn_ctc_v3 optimizer-step evidence missing'
+grep -q '"event": "training_device"' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'cnn_ctc_v3 does not report training device'
+grep -q 'cuda_peak_memory_allocated_bytes' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'cnn_ctc_v3 does not report CUDA memory evidence'
+grep -q 'prepare-cnn-ctc-v3.sh' scripts/train-cnn-ctc-v3.sh || fail 'cnn_ctc_v3 full pipeline uses wrong conversion wrapper'
+if grep -q 'prepare-cnn-ctc-v2.sh' scripts/train-cnn-ctc-v3.sh; then
+    fail 'cnn_ctc_v3 full pipeline must not invoke v2 conversion'
+fi
+grep -q 'cnn_ctc_v3.xml' scripts/train-cnn-ctc-v3.sh || fail 'cnn_ctc_v3 full pipeline does not assert v3 XML output'
 grep -q 'PRETRAINING_MYRIAD_MAX_ABS_ERROR = 0.01' examples/speech-asr/python/speech_asr/orchestration.py || fail 'pretraining MYRIAD numerical tolerance changed'
 grep -q 'pretraining_myriad_compatibility' examples/speech-asr/agent/run_experiment.py || fail 'controller lacks numerical pretraining MYRIAD gate'
 if grep -q 'agreement < 0.99' examples/speech-asr/agent/run_experiment.py; then
