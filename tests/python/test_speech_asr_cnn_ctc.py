@@ -12,6 +12,7 @@ from speech_asr.cnn_ctc import (
     encode_text,
     greedy_decode,
     greedy_decode_logits,
+    greedy_decode_logits_diagnostics,
     load_spec,
     load_vocab,
     manifest_record_eligibility,
@@ -51,6 +52,23 @@ class CnnCtcContractTests(unittest.TestCase):
             row[index[token]] = 10.0
             frames.append(row)
         self.assertEqual(greedy_decode_logits(frames, self.vocab), "ab")
+
+    def test_greedy_diagnostics_expose_blank_collapse(self):
+        width = len(self.vocab["tokens"])
+        index = {token: i for i, token in enumerate(self.vocab["tokens"])}
+        frames = []
+        for token in ("<blank>", "<blank>", "a", "a", "<blank>"):
+            row = [-10.0] * width
+            row[index[token]] = 10.0
+            frames.append(row)
+        result = greedy_decode_logits_diagnostics(frames, self.vocab)
+        self.assertEqual(result["hypothesis"], "a")
+        self.assertEqual(result["frame_count"], 5)
+        self.assertEqual(result["blank_argmax_frames"], 3)
+        self.assertEqual(result["nonblank_argmax_frames"], 2)
+        self.assertAlmostEqual(result["blank_frame_fraction"], 0.6)
+        self.assertEqual(result["collapsed_token_count"], 1)
+        self.assertEqual(result["emitted_characters_no_spaces"], 1)
 
     def test_manifest_eligibility_rejects_fixed_shape_overflow(self):
         record = {
