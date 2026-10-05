@@ -420,6 +420,23 @@ grep -q 'self.projection = nn.Conv1d' examples/speech-asr/training/cnn_ctc_v6.py
 grep -q '"intermediate_ctc_weight": 0.3' examples/speech-asr/agent/init_cnn_ctc_v6_interctc.py || fail 'v6 InterCTC weight changed'
 grep -q 'DEFAULT_PARENT = "exp-3c7727ca3f37ba2c"' examples/speech-asr/agent/init_cnn_ctc_v6_interctc.py || fail 'v6 reference parent changed'
 
+# Expanded meeting-disjoint AMI training boundary.
+test -f examples/speech-asr/datasets/ami/splits/train-es2005-v1.json || fail 'expanded AMI split missing'
+test -f examples/speech-asr/tools/qualify_expanded_model_quality_manifests.py || fail 'expanded AMI qualifier missing'
+test -f examples/speech-asr/agent/init_cnn_ctc_v3_expanded_data.py || fail 'expanded-data initializer missing'
+test -x scripts/qualify-speech-model-data-v2.sh || fail 'expanded qualifier wrapper is not executable'
+test -x scripts/init-cnn-ctc-v3-expanded-data.sh || fail 'expanded-data initializer wrapper is not executable'
+grep -q '"meeting": "ES2005a"' examples/speech-asr/datasets/ami/splits/train-es2005-v1.json || fail 'expanded AMI split lacks ES2005a'
+grep -q '"meeting": "ES2005d"' examples/speech-asr/datasets/ami/splits/train-es2005-v1.json || fail 'expanded AMI split lacks ES2005d'
+grep -q '"records": 1865' examples/speech-asr/datasets/ami/splits/train-es2005-v1.json || fail 'expanded AMI source count changed'
+grep -q 'meeting_overlap' examples/speech-asr/tools/qualify_expanded_model_quality_manifests.py || fail 'expanded qualifier lacks meeting isolation'
+grep -q '1487' examples/speech-asr/agent/init_cnn_ctc_v3_expanded_data.py || fail 'expanded eligible count changed'
+grep -q '2393.989' examples/speech-asr/agent/init_cnn_ctc_v3_expanded_data.py || fail 'expanded training duration changed'
+grep -q 'DEFAULT_PARENT = "exp-3c7727ca3f37ba2c"' examples/speech-asr/agent/init_cnn_ctc_v3_expanded_data.py || fail 'expanded-data parent changed'
+if grep -q '"ctc_objective": {' examples/speech-asr/agent/init_cnn_ctc_v3_expanded_data.py; then
+    fail 'expanded-data experiment must use standard CTC'
+fi
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
 for name in [
@@ -444,12 +461,14 @@ for name in [
     "examples/speech-asr/agent/init_cnn_ctc_v3_blank_penalty.py",
     "examples/speech-asr/agent/init_cnn_ctc_v5_interctc.py",
     "examples/speech-asr/agent/init_cnn_ctc_v6_interctc.py",
+    "examples/speech-asr/agent/init_cnn_ctc_v3_expanded_data.py",
     "examples/speech-asr/agent/review_experiment.py",
     "examples/speech-asr/agent/run_experiment.py",
     "examples/speech-asr/agent/edge_worker.py",
     "examples/speech-asr/tools/manage_experiment.py",
     "examples/speech-asr/tools/validate_contract.py",
     "examples/speech-asr/tools/qualify_model_quality_manifests.py",
+    "examples/speech-asr/tools/qualify_expanded_model_quality_manifests.py",
     "examples/speech-asr/training/cnn_ctc_v1.py",
     "examples/speech-asr/training/train_cnn_ctc_v1.py",
     "examples/speech-asr/training/export_cnn_ctc_v1.py",

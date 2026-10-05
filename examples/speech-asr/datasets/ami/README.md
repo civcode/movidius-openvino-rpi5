@@ -194,3 +194,23 @@ exclusions were 19 `too_long` and 1 `target_too_long`. Record and speaker
 overlap are both zero.
 
 These exact identities are frozen by the model-quality baseline initializer.
+
+## Expanded model-quality-v2 training
+
+After objective and encoder redesigns failed to improve v3 on 220 seconds of
+training speech, `splits/train-es2005-v1.json` adds the four official ES2005
+scenario sessions as a bounded training-only expansion. The source contract
+pins AMI manual annotations v1.6.2 and each Mix-Headset WAV hash.
+
+```bash
+./scripts/python.sh examples/speech-asr/datasets/ami/prepare_ami.py \
+  --spec examples/speech-asr/datasets/ami/splits/train-es2005-v1.json
+
+./scripts/qualify-speech-model-data-v2.sh
+```
+
+The qualified boundary contains 1,487 eligible ES2005a-d training utterances
+(2,393.989 seconds) and reuses the byte-identical 95-utterance ES2002a
+validation manifest from model-quality-v1. Record overlap and meeting overlap
+are both zero. See
+[`../../docs/adr/model-quality-v2-expanded-ami.md`](../../docs/adr/model-quality-v2-expanded-ami.md).

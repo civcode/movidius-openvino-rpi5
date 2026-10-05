@@ -1,6 +1,6 @@
 # ADR: cnn_ctc_v6 v3-capacity InterCTC ablation
 
-Status: accepted design for implementation
+Status: executed and rejected as a quality candidate
 Date: 2026-10-05
 Reference parent: exp-3c7727ca3f37ba2c (`cnn_ctc_v3`)
 Preceding evidence: exp-fc2f3424d95c843e (`cnn_ctc_v5`)
@@ -49,3 +49,11 @@ weight. Preserve v5 only as a latency/size Pareto point.
 
 - J. Lee and S. Watanabe, “Intermediate Loss Regularization for CTC-based
   Speech Recognition,” ICASSP 2021, https://arxiv.org/abs/2102.03216
+
+## Result
+
+`exp-1d4836d8b6639c0d/attempt-0001` passed all compatibility and hardware gates
+but did not beat v3. CER was 0.89819, blank-frame fraction 71.53%, empty
+hypotheses 25/95 and emitted/reference characters 35.28%. P95 latency remained
+16.64 ms. This rejects InterCTC at weight 0.3 for the current data/model
+boundary; do not tune the weight.

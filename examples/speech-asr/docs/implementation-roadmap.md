@@ -957,35 +957,33 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-The compact `cnn_ctc_v5` objective/encoder redesign completed as
-`exp-fc2f3424d95c843e/attempt-0001`. It passed compatibility and hardware gates
-and established an efficient device point, but failed the primary quality rule
-against `exp-3c7727ca3f37ba2c`:
+The v3-capacity InterCTC ablation completed as
+`exp-1d4836d8b6639c0d/attempt-0001`. It passed every compatibility/hardware gate
+but failed against `exp-3c7727ca3f37ba2c`:
 
-- CER: 0.866935 -> 0.917339 (worse);
-- WER: 1.161417 -> 1.047244 (better, but secondary);
-- blank-frame fraction: 61.33% -> 79.50% (worse);
-- empty hypotheses: 19/95 -> 39/95 (worse);
-- emitted/reference characters: 47.98% -> 23.59% (worse);
-- deployed parameters: 1,346,343 -> 304,343;
-- p95 MA2450 latency: 16.64 -> 8.11 ms.
+- CER: 0.866935 -> 0.898185 (worse);
+- WER: 1.161417 -> 1.098425 (better, but secondary);
+- blank-frame fraction: 61.33% -> 71.53% (worse);
+- empty hypotheses: 19/95 -> 25/95 (worse);
+- emitted/reference characters: 47.98% -> 35.28% (worse);
+- p95 MA2450 latency: 16.64 -> 16.64 ms.
 
-The compact model selected epoch 31 while both training heads were still
-improving, so encoder downsizing confounded the InterCTC test. Preserve v5 as a
-latency/size Pareto point but do not promote it as the quality reference.
+Reject InterCTC for this boundary and do not tune its weight. V5 remains only a
+size/latency Pareto point. The accepted quality reference remains v3.
 
-The next controlled experiment is `cnn_ctc_v6`, defined by
-[`adr/phase11-cnn-ctc-v6.md`](adr/phase11-cnn-ctc-v6.md). It restores the exact
-v3 deployed capacity, context and initialization while retaining only the
-training-only middle-layer InterCTC objective.
+The next controlled change is the reviewed
+[`model-quality-v2`](adr/model-quality-v2-expanded-ami.md) data boundary. It
+keeps v3 and the byte-identical ES2002a validation benchmark but expands
+training from 125 utterances / 219.998 seconds to 1,487 utterances / 2,393.989
+seconds from meeting-disjoint ES2005a-d.
 
 ```bash
-git pull --ff-only
-./ci/verify-static.sh
-./scripts/test-speech-asr.sh
+./scripts/python.sh examples/speech-asr/datasets/ami/prepare_ami.py \
+  --spec examples/speech-asr/datasets/ami/splits/train-es2005-v1.json
+./scripts/qualify-speech-model-data-v2.sh
 
 EXP="$(
-  ./scripts/init-cnn-ctc-v6-interctc.sh |
+  ./scripts/init-cnn-ctc-v3-expanded-data.sh |
   python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
 )"
 
@@ -997,7 +995,7 @@ EXP="$(
   --experiment "$EXP"
 ```
 
-No dataset reprovisioning is required. Review CER and emission against v3. If
-v6 does not beat v3, reject InterCTC for this data/model boundary rather than
-tuning its weight. The validation set is used for checkpoint selection, so all
-results remain model-selection evidence rather than an unbiased final test.
+Edge dataset reprovisioning is unnecessary because validation is unchanged;
+expanded training audio remains on the controller. Review CER and emission
+against v3. The validation set is used for checkpoint selection, so results
+remain model-selection evidence rather than an unbiased final test.

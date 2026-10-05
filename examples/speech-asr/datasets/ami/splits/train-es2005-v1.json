@@ -1,0 +1,79 @@
+{
+  "schema": "speech-asr/ami-split",
+  "version": 1,
+  "id": "ami-train-es2005-v1",
+  "license": "CC-BY-4.0",
+  "annotations": {
+    "version": "1.6.2",
+    "filename": "ami_public_manual_1.6.2.zip",
+    "url": "https://groups.inf.ed.ac.uk/ami/AMICorpusAnnotations/ami_public_manual_1.6.2.zip",
+    "sha256": "b56e5babb2496b8795deeeda7e71178d7fbc9963f94276cf2a3f4b56ebbc9f9d"
+  },
+  "sources": [
+    {
+      "meeting": "ES2005a",
+      "audio": {
+        "stream": "Mix-Headset",
+        "filename": "ES2005a.Mix-Headset.wav",
+        "url": "https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2005a/audio/ES2005a.Mix-Headset.wav",
+        "sha256": "ac33e7b18ae72931e65dc279af4b129370ad62ca6ed64299b9e35f356e3f8ed8"
+      },
+      "selections": [
+        {"speaker": "A", "all_segments": true},
+        {"speaker": "B", "all_segments": true},
+        {"speaker": "C", "all_segments": true},
+        {"speaker": "D", "all_segments": true}
+      ]
+    },
+    {
+      "meeting": "ES2005b",
+      "audio": {
+        "stream": "Mix-Headset",
+        "filename": "ES2005b.Mix-Headset.wav",
+        "url": "https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2005b/audio/ES2005b.Mix-Headset.wav",
+        "sha256": "c96d83f955852773353861c880f0898d95d916d22e1caf4dd9df2ac572f1a281"
+      },
+      "selections": [
+        {"speaker": "A", "all_segments": true},
+        {"speaker": "B", "all_segments": true},
+        {"speaker": "C", "all_segments": true},
+        {"speaker": "D", "all_segments": true}
+      ]
+    },
+    {
+      "meeting": "ES2005c",
+      "audio": {
+        "stream": "Mix-Headset",
+        "filename": "ES2005c.Mix-Headset.wav",
+        "url": "https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2005c/audio/ES2005c.Mix-Headset.wav",
+        "sha256": "f70fc24dcd7fa67a5a5aabedc546af5bfc0d2df34632eb3266abf26c98cdae26"
+      },
+      "selections": [
+        {"speaker": "A", "all_segments": true},
+        {"speaker": "B", "all_segments": true},
+        {"speaker": "C", "all_segments": true},
+        {"speaker": "D", "all_segments": true}
+      ]
+    },
+    {
+      "meeting": "ES2005d",
+      "audio": {
+        "stream": "Mix-Headset",
+        "filename": "ES2005d.Mix-Headset.wav",
+        "url": "https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2005d/audio/ES2005d.Mix-Headset.wav",
+        "sha256": "6a3d4dae9540e7f4847c33124dbfc51ad3916bb5dfae9ee3cde9c280e717a4da"
+      },
+      "selections": [
+        {"speaker": "A", "all_segments": true},
+        {"speaker": "B", "all_segments": true},
+        {"speaker": "C", "all_segments": true},
+        {"speaker": "D", "all_segments": true}
+      ]
+    }
+  ],
+  "expected": {
+    "records": 1865,
+    "manifest_sha256": "4e4ba1b8df2e3041b9dbbf654b761777abd256c4a272f8103a24575e49114c6b",
+    "logical_tree_sha256": "74ee9c46a7b5c68a5313b0c7c7f8e7f5262209cd991a05ebfbb60efce58269bd"
+  }
+}
