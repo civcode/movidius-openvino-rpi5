@@ -23,7 +23,7 @@ The central rule is:
 | 6 — benchmark harness | **complete** — Pi 1+5 worker accepted: 5/5 measured runs, zero failures, 0.0196% weighted-latency relative range |
 | 7 — streaming layer | **complete** — real prepared AMI replay accepted: byte-identical repeated results, contract-valid, WER/CER 0 |
 | 8 — custom PyTorch training skeleton | **complete** — deterministic CUDA training, ONNX/OpenVINO export, physical Pi 5/arm64 + MA2450 execution, and contract-valid AMI smoke evaluation accepted |
-| 9 — experiment lifecycle | **implemented; acceptance pending** — immutable content-derived requests, attempt state machine, artifact/result provenance, deployment manifests and history index are implemented; local static/unit acceptance pending |
+| 9 — experiment lifecycle | **complete** — immutable content-derived requests, attempt state machine, artifact/result provenance, deployment manifests and history index accepted by static checks and the full speech-ASR unit suite |
 | 10+ | not started |
 
 Phase 0 was re-reviewed after later implementation work. The root audio,
@@ -589,14 +589,12 @@ A human can create an approved model spec, hand it to the execution system, and
 receive a complete result bundle without additional design decisions during the
 run.
 
-Phase 9 acceptance additionally requires:
+Phase 9 acceptance was completed on 2026-10-05 from a current oberon checkout:
 
-```bash
-./ci/verify-static.sh
-./scripts/test-speech-asr.sh
-```
-
-to pass from a current checkout.
+- `./ci/verify-static.sh`: PASS;
+- `./scripts/test-speech-asr.sh`: 143 tests PASS, 3 expected NumPy-environment skips;
+- all experiment identity, lifecycle, deployment-manifest, lineage and
+  immutability tests passed.
 
 ---
 
@@ -757,20 +755,11 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-Phase 9 is **implemented**. The remaining acceptance step is to run the
-hardware-free repository checks on oberon:
-
-```bash
-git pull --ff-only
-./ci/verify-static.sh
-./scripts/test-speech-asr.sh
-```
-
-Once those pass, mark Phase 9 complete.
+Phase 9 is **complete**.
 
 The next implementation boundary is **Phase 10 — local execution agent and
-frontier handoff**. Its first slice should implement the already accepted
-oberon -> edge worker protocol using the Phase 9 deployment manifest:
+frontier handoff**. Its first slice should implement the accepted oberon -> edge
+worker protocol using the Phase 9 deployment manifest:
 
 1. dedicated automation checkout on edge pinned to the experiment commit;
 2. non-interactive SSH preflight with normal host-key verification;
