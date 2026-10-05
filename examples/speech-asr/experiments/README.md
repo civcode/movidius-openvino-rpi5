@@ -175,3 +175,11 @@ silently change the reviewed request.
 The remote oberon -> edge execution implementation belongs to Phase 10 and
 consumes the deployment manifest defined here. See
 [`../docs/remote-experiment-orchestration.md`](../docs/remote-experiment-orchestration.md).
+
+
+## Phase 9 acceptance
+
+Accepted on 2026-10-05 from oberon. The repository static gate passed and the
+speech-ASR suite completed 143 tests successfully with 3 expected skips for
+NumPy-only frontend tests in the tools environment. The Phase 9 experiment
+identity, transition, deployment, lineage and immutability tests all passed.
