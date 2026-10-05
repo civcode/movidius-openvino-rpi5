@@ -160,6 +160,9 @@ fi
 grep -q 'worktree add --detach' scripts/edge-speech-bootstrap.sh || fail 'edge automation checkout is not a dedicated worktree'
 grep -q 'flock -n' scripts/edge-speech-worker.sh || fail 'MYRIAD worker lock is not non-blocking'
 grep -q 'worker_busy' scripts/edge-speech-worker.sh || fail 'MYRIAD busy state is not explicit'
+grep -q 'python_env_resolve_uv' scripts/lib/python-env.sh || fail 'host uv resolver missing'
+grep -q '\.local/bin/uv' scripts/lib/python-env.sh || fail 'host uv resolver lacks ~/.local/bin fallback'
+grep -q 'python_env_require_uv' scripts/edge-speech-preflight.sh || fail 'edge preflight does not validate uv availability'
 grep -q -- '--work-dir' scripts/train-cnn-ctc-v1.sh || fail 'training outputs are not experiment-isolatable'
 grep -q 'AWAIT_REVIEW' examples/speech-asr/agent/run_experiment.py || fail 'Phase 10 controller does not hand off to review'
 if grep -q 'build.sh --platform' examples/speech-asr/agent/run_experiment.py; then
