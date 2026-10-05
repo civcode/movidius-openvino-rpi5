@@ -32,7 +32,17 @@ from cnn_ctc_v3 import (  # noqa: E402
     collate_ctc,
     parameter_count,
 )
-from speech_asr.cnn_ctc import canonical_sha256, load_spec, load_vocab  # noqa: E402
+from speech_asr.cnn_ctc import (  # noqa: E402
+    aggregate_decoder_diagnostics,
+    canonical_sha256,
+    greedy_decode_logits_diagnostics,
+    load_spec,
+    load_vocab,
+)
+from speech_asr.evaluation import (  # noqa: E402
+    character_error_counts,
+    word_error_counts,
+)
 
 DEFAULT_SPEC = SPEECH_ROOT / "models" / "cnn_ctc_v3" / "model_spec.json"
 DEFAULT_VOCAB = SPEECH_ROOT / "models" / "cnn_ctc_v3" / "vocab.json"
@@ -107,16 +117,60 @@ def dataset_audio_samples(dataset: ManifestCtcDataset | None) -> int:
     )
 
 
-def evaluate_loss(model, loader, loss_fn, device) -> float:
+def _sum_rate(counts) -> float:
+    errors = sum(value.errors for value in counts)
+    references = sum(value.reference_units for value in counts)
+    return errors / max(1, references)
+
+
+def evaluate_validation(model, loader, loss_fn, device, vocab) -> dict:
     model.eval()
     losses = []
+    word_counts = []
+    char_counts = []
+    samples = []
     with torch.no_grad():
         for batch in loader:
             features = batch["features"].to(device)
             logits = model(features)
             loss = deterministic_ctc_loss(loss_fn, logits, batch)
             losses.append(float(loss.detach().cpu()))
-    return float(sum(losses) / max(1, len(losses)))
+
+            logits_cpu = logits.detach().cpu()
+            input_lengths = batch["input_lengths"].tolist()
+            for index, reference in enumerate(batch["texts"]):
+                output_frames = int(input_lengths[index])
+                decoder = greedy_decode_logits_diagnostics(
+                    logits_cpu[index, :output_frames, :].tolist(),
+                    vocab,
+                )
+                hypothesis = decoder["hypothesis"]
+                words = word_error_counts(reference, hypothesis)
+                chars = character_error_counts(reference, hypothesis)
+                word_counts.append(words)
+                char_counts.append(chars)
+                samples.append(
+                    {
+                        "hypothesis": hypothesis,
+                        "reference_words": len(reference.split()),
+                        "reference_characters_no_spaces": len(
+                            reference.replace(" ", "")
+                        ),
+                        "decoder": {
+                            key: value
+                            for key, value in decoder.items()
+                            if key != "hypothesis"
+                        },
+                    }
+                )
+
+    decoder_summary = aggregate_decoder_diagnostics(samples)
+    return {
+        "loss": float(sum(losses) / max(1, len(losses))),
+        "wer": _sum_rate(word_counts),
+        "cer": _sum_rate(char_counts),
+        "decoder": decoder_summary,
+    }
 
 
 def main() -> int:
@@ -136,6 +190,10 @@ def main() -> int:
     parser.add_argument("--seed", type=int)
     parser.add_argument("--learning-rate", type=float)
     parser.add_argument("--max-samples", type=int)
+    parser.add_argument(
+        "--checkpoint-selection",
+        choices=("validation_loss", "validation_cer"),
+    )
     parser.add_argument("--init-only", action="store_true")
     args = parser.parse_args()
 
@@ -201,8 +259,9 @@ def main() -> int:
             raise ValueError("cnn_ctc_v3 lr_schedule must be cosine")
         if spec["training"].get("checkpoint_selection") != "best_validation_loss":
             raise ValueError(
-                "cnn_ctc_v3 checkpoint_selection must be best_validation_loss"
+                "cnn_ctc_v3 package checkpoint_selection must remain best_validation_loss"
             )
+        checkpoint_selection = args.checkpoint_selection or "validation_loss"
 
         train_dataset = None
         validation_dataset = None
@@ -266,6 +325,10 @@ def main() -> int:
         observed_logits_device = None
         best_epoch = None
         best_validation_loss = None
+        best_validation_loss_epoch = None
+        best_validation_cer = None
+        best_validation_cer_epoch = None
+        selected_metric_value = None
         best_state_dict = copy.deepcopy(model.state_dict())
         best_optimizer_state = copy.deepcopy(optimizer.state_dict())
         start = time.monotonic()
@@ -295,12 +358,17 @@ def main() -> int:
                     batch_losses.append(float(loss.detach().cpu()))
                     gradient_norms.append(float(gradient_norm.detach().cpu()))
 
-                validation_loss = evaluate_loss(
+                validation = evaluate_validation(
                     model,
                     validation_loader,
                     loss_fn,
                     device,
+                    vocab,
                 )
+                validation_loss = float(validation["loss"])
+                validation_cer = float(validation["cer"])
+                validation_wer = float(validation["wer"])
+                decoder = validation["decoder"]
                 mean_train_loss = float(
                     sum(batch_losses) / max(1, len(batch_losses))
                 )
@@ -309,6 +377,17 @@ def main() -> int:
                         "epoch": epoch + 1,
                         "train_loss": mean_train_loss,
                         "validation_loss": validation_loss,
+                        "validation_cer": validation_cer,
+                        "validation_wer": validation_wer,
+                        "validation_blank_frame_fraction": decoder[
+                            "blank_frame_fraction"
+                        ],
+                        "validation_empty_hypothesis_fraction": decoder[
+                            "empty_hypothesis_fraction"
+                        ],
+                        "validation_emitted_to_reference_character_ratio": decoder[
+                            "emitted_to_reference_character_ratio"
+                        ],
                         "learning_rate": current_lr,
                         "optimizer_steps": optimizer_steps,
                         "max_gradient_norm_before_clip": (
@@ -322,6 +401,24 @@ def main() -> int:
                     or validation_loss < best_validation_loss
                 ):
                     best_validation_loss = validation_loss
+                    best_validation_loss_epoch = epoch + 1
+                if (
+                    best_validation_cer is None
+                    or validation_cer < best_validation_cer
+                ):
+                    best_validation_cer = validation_cer
+                    best_validation_cer_epoch = epoch + 1
+
+                candidate_value = (
+                    validation_loss
+                    if checkpoint_selection == "validation_loss"
+                    else validation_cer
+                )
+                if (
+                    selected_metric_value is None
+                    or candidate_value < selected_metric_value
+                ):
+                    selected_metric_value = candidate_value
                     best_epoch = epoch + 1
                     best_state_dict = copy.deepcopy(model.state_dict())
                     best_optimizer_state = copy.deepcopy(optimizer.state_dict())
@@ -342,7 +439,12 @@ def main() -> int:
                 "seed": seed,
                 "optimizer_steps": optimizer_steps,
                 "best_epoch": best_epoch,
+                "checkpoint_selection": checkpoint_selection,
+                "selected_metric_value": selected_metric_value,
                 "best_validation_loss": best_validation_loss,
+                "best_validation_loss_epoch": best_validation_loss_epoch,
+                "best_validation_cer": best_validation_cer,
+                "best_validation_cer_epoch": best_validation_cer_epoch,
                 "spec_sha256": canonical_sha256(spec),
                 "vocab_sha256": canonical_sha256(vocab),
             },
@@ -381,11 +483,15 @@ def main() -> int:
             "min_learning_rate": min_learning_rate,
             "lr_schedule": "cosine",
             "gradient_clip_norm": gradient_clip_norm,
-            "checkpoint_selection": "best_validation_loss",
+            "checkpoint_selection": checkpoint_selection,
+            "selected_metric_value": selected_metric_value,
             "parameter_count": parameter_count(model),
             "optimizer_steps": optimizer_steps,
             "best_epoch": best_epoch,
             "best_validation_loss": best_validation_loss,
+            "best_validation_loss_epoch": best_validation_loss_epoch,
+            "best_validation_cer": best_validation_cer,
+            "best_validation_cer_epoch": best_validation_cer_epoch,
             "train_samples": 0 if train_dataset is None else len(train_dataset),
             "validation_samples": (
                 0 if validation_dataset is None else len(validation_dataset)
