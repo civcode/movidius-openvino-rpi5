@@ -110,7 +110,7 @@ def main() -> int:
             ),
             "changes": [
                 "remove BatchNorm from stems and residual blocks",
-                "zero-initialize each residual block final 1x1 projection",
+                "initialize each residual block final 1x1 projection with 1%-scaled Kaiming weights",
                 "train 32 epochs with batch size 1 and Adam at 3e-4",
                 "cosine-decay learning rate to 3e-5",
                 "clip gradient norm at 5.0",
