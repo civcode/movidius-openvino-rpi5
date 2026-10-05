@@ -22,7 +22,7 @@ from speech_asr.audio import read_f32le  # noqa: E402
 from speech_asr.cnn_ctc import (  # noqa: E402
     acoustic_output_length,
     canonical_sha256,
-    greedy_decode_logits,
+    greedy_decode_logits_diagnostics,
     load_spec,
     load_vocab,
     manifest_record_eligibility,
@@ -217,7 +217,11 @@ def main() -> int:
                     f"{record['id']}: output frame count {output_frames} does not match "
                     f"eligibility output count {decision['valid_output_frames']}"
                 )
-            hypothesis = greedy_decode_logits(logits[0, :output_frames, :], vocab)
+            decoder = greedy_decode_logits_diagnostics(
+                logits[0, :output_frames, :],
+                vocab,
+            )
+            hypothesis = decoder["hypothesis"]
             reference = record["transcript"]["text"]
             words = word_error_counts(reference, hypothesis)
             chars = character_error_counts(reference, hypothesis)
@@ -235,6 +239,15 @@ def main() -> int:
                     "inference_ms": infer_ms,
                     "wer": words.rate,
                     "cer": chars.rate,
+                    "reference_words": len(reference.split()),
+                    "reference_characters_no_spaces": len(reference.replace(" ", "")),
+                    "word_edits": words.to_dict(),
+                    "character_edits": chars.to_dict(),
+                    "decoder": {
+                        key: value
+                        for key, value in decoder.items()
+                        if key != "hypothesis"
+                    },
                 }
             )
 
