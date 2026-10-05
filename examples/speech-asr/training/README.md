@@ -72,6 +72,12 @@ Full skeleton training/export/conversion on a CUDA workstation:
 ./scripts/train-cnn-ctc-v1.sh --device cuda
 ```
 
+The pinned PyTorch 2.2.x CUDA backend does not provide a deterministic
+`ctc_loss_backward_gpu`. The training loop therefore keeps the model forward
+pass and optimizer on CUDA but computes CTC loss on CPU from the small logits
+tensor. Autograd carries that gradient back to the CUDA model, preserving the
+strict deterministic-algorithm policy rather than weakening it to warnings.
+
 The default model spec is deliberately small and defaults to one epoch. This is
 a lifecycle proof, not an accuracy target. Unless `--validation-manifest` is
 provided, the smoke manifest is reused for validation; that is acceptable for
