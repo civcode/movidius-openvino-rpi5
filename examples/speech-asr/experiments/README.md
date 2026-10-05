@@ -345,3 +345,23 @@ training-only SpecAugment:
 ```bash
 ./scripts/init-cnn-ctc-v3-specaugment.sh
 ```
+
+
+## SpecAugment sibling and v4 frontend generation
+
+`exp-2de4643d351299ec/attempt-0001` completed successfully but is rejected as
+a model-quality direction. Relative to its accepted CER-selected parent, it
+regressed CER and decoder emission while leaving hardware cost unchanged.
+
+The next lineage therefore branches again from
+`exp-3c7727ca3f37ba2c`, not from the SpecAugment sibling.
+
+`cnn_ctc_v4` keeps the v3 graph and changes only the frontend contract from
+`logmel-v1` to `logmel-v2`, where padding is excluded from CMVN and padded
+normalized frames are zero.
+
+Initialize with:
+
+```bash
+./scripts/init-cnn-ctc-v4-valid-cmvn.sh
+```
