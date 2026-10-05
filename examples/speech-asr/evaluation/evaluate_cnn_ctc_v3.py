@@ -21,6 +21,7 @@ sys.path.insert(0, str(SPEECH_ROOT / "python"))
 from speech_asr.audio import read_f32le  # noqa: E402
 from speech_asr.cnn_ctc import (  # noqa: E402
     acoustic_output_length,
+    aggregate_decoder_diagnostics,
     canonical_sha256,
     greedy_decode_logits_diagnostics,
     load_spec,
@@ -259,6 +260,7 @@ def main() -> int:
             )
 
         latency = latency_summary_ms(latencies)
+        decoder_summary = aggregate_decoder_diagnostics(per_sample)
         manifest_sha = sha256_path(args.manifest)
         spec_sha = canonical_sha256(spec)
         result = {
@@ -303,6 +305,7 @@ def main() -> int:
                     "max": max(load_times),
                     "mean": sum(load_times) / len(load_times),
                 },
+                "decoder": decoder_summary,
                 "per_sample": per_sample,
             },
             "provenance": {
