@@ -506,6 +506,8 @@ def execute_remote(
             try:
                 worker_result = load_json(collected / "worker-result.json")
                 failure_class = worker_result.get("failure_class") or failure_class
+                if failure_class == "request_config":
+                    outcome = "failed"
                 details = worker_result.get("diagnostics", {}).get("summary", details)
             except Exception:
                 pass
@@ -728,7 +730,18 @@ def main() -> int:
         write_json(acceptance_path, acceptance_result)
 
         metrics_path = attempt_dir / "generated" / "summary-metrics.json"
-        write_json(metrics_path, hardware["metrics"])
+        headline_metrics = {
+            name: hardware["metrics"][name]
+            for name in (
+                "wer",
+                "cer",
+                "realtime_factor",
+                "inference_latency_p50_ms",
+                "inference_latency_p95_ms",
+                "failures",
+            )
+        }
+        write_json(metrics_path, headline_metrics)
         diagnostics = {
             "summary": (
                 "execution completed; acceptance policy "
