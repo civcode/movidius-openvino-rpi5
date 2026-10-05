@@ -59,7 +59,12 @@ echo "== compare ONNX Runtime vs PyTorch golden =="
 "$ROOT/scripts/python-apps.sh"     "$ROOT/examples/speech-asr/evaluation/compare_cnn_ctc_v3_onnx.py"     "$EXPORT"     --output "$EXPORT/onnx-comparison.json"
 
 echo "== convert OpenVINO 2020.3 FP16 IR =="
-"$ROOT/scripts/prepare-cnn-ctc-v2.sh"     --onnx "$EXPORT/cnn_ctc_v3.onnx"     --output-dir "$IR"
+"$ROOT/scripts/prepare-cnn-ctc-v3.sh"     --onnx "$EXPORT/cnn_ctc_v3.onnx"     --output-dir "$IR"
+
+test -s "$IR/cnn_ctc_v3.xml"
+test -s "$IR/cnn_ctc_v3.bin"
+test -s "$IR/ir-validation.json"
+test -s "$IR/artifacts.json"
 
 echo "training/export pipeline: PASS"
 echo "checkpoint: $TRAIN/checkpoint.pt"
