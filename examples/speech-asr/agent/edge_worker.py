@@ -244,15 +244,34 @@ def run_evaluator(
         "--output",
         str(result_path),
     ]
-    proc = subprocess.run(
+    log_path = output_dir / "evaluator.log"
+    output: list[str] = []
+    with log_path.open("w", encoding="utf-8") as log_handle:
+        proc_live = subprocess.Popen(
+            command,
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            bufsize=1,
+        )
+        if proc_live.stdout is None:
+            raise WorkerError(
+                "edge evaluator stdout is unavailable",
+                "hardware_execution",
+                EXIT_EXECUTION,
+            )
+        for line in proc_live.stdout:
+            print(line, end="", flush=True)
+            log_handle.write(line)
+            log_handle.flush()
+            output.append(line)
+        returncode = proc_live.wait()
+    proc = subprocess.CompletedProcess(
         command,
-        cwd=ROOT,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        check=False,
+        returncode,
+        "".join(output),
     )
-    (output_dir / "evaluator.log").write_text(proc.stdout, encoding="utf-8")
     if proc.returncode != 0:
         tail = "\n".join(proc.stdout.splitlines()[-30:])
         raise WorkerError(
