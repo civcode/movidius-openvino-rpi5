@@ -15,6 +15,11 @@ uv-managed virtual environments. System Python is never mutated.
 
 `uv` itself is an external executable, not a Python package dependency.
 
+Host wrappers resolve `uv` from the current `PATH` first, then from
+`UV_INSTALL_DIR`, `XDG_BIN_HOME`, `~/.local/bin`, and `~/.cargo/bin`.
+This matters for non-interactive SSH workers, whose PATH may be narrower than an
+interactive login shell.
+
 ## Named environments
 
 | Purpose | Environment | Python |
