@@ -46,10 +46,10 @@
           "type":"object","additionalProperties":false,
           "required":["proposal","model_spec","train_config","acceptance"],
           "properties":{
-            "proposal":{"$ref":"#/$defs/document_ref"},
-            "model_spec":{"$ref":"#/$defs/document_ref"},
-            "train_config":{"$ref":"#/$defs/document_ref"},
-            "acceptance":{"$ref":"#/$defs/document_ref"}
+            "proposal":{"allOf":[{"$ref":"#/$defs/document_ref"},{"properties":{"path":{"const":"request/proposal.json"}}}]},
+            "model_spec":{"allOf":[{"$ref":"#/$defs/document_ref"},{"properties":{"path":{"const":"request/model-spec.json"}}}]},
+            "train_config":{"allOf":[{"$ref":"#/$defs/document_ref"},{"properties":{"path":{"const":"request/train-config.json"}}}]},
+            "acceptance":{"allOf":[{"$ref":"#/$defs/document_ref"},{"properties":{"path":{"const":"request/acceptance.json"}}}]}
           }
         }
       }
