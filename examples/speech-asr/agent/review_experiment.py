@@ -78,7 +78,16 @@ def attempt_summary(experiment: pathlib.Path, attempt: pathlib.Path) -> dict[str
             "epochs": training.get("epochs"),
             "optimizer_steps": training.get("optimizer_steps"),
             "best_epoch": training.get("best_epoch"),
+            "checkpoint_selection": training.get("checkpoint_selection"),
+            "selected_metric_value": training.get("selected_metric_value"),
             "best_validation_loss": training.get("best_validation_loss"),
+            "best_validation_loss_epoch": training.get(
+                "best_validation_loss_epoch"
+            ),
+            "best_validation_cer": training.get("best_validation_cer"),
+            "best_validation_cer_epoch": training.get(
+                "best_validation_cer_epoch"
+            ),
             "gradient_clip_norm": training.get("gradient_clip_norm"),
             "lr_schedule": training.get("lr_schedule"),
             "duration_seconds": training.get("duration_seconds"),
