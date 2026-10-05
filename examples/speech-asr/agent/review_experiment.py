@@ -29,6 +29,7 @@ def latest_attempt(experiment: pathlib.Path) -> pathlib.Path:
 
 
 def attempt_summary(experiment: pathlib.Path, attempt: pathlib.Path) -> dict[str, Any]:
+    request = load_json(experiment / "request" / "experiment.json")
     attempt_doc = load_json(attempt / "attempt.json")
     result = load_json(attempt / "results" / "result.json")
     acceptance_path = attempt / "results" / "acceptance-evaluation.json"
@@ -51,6 +52,7 @@ def attempt_summary(experiment: pathlib.Path, attempt: pathlib.Path) -> dict[str
             if hardware is not None
             else None
         ),
+        "benchmark": request.get("benchmark"),
         "acceptance": (
             acceptance.get("status")
             if acceptance is not None
@@ -80,6 +82,15 @@ def attempt_summary(experiment: pathlib.Path, attempt: pathlib.Path) -> dict[str
             "gradient_clip_norm": training.get("gradient_clip_norm"),
             "lr_schedule": training.get("lr_schedule"),
             "duration_seconds": training.get("duration_seconds"),
+            "train_audio_seconds_per_epoch": training.get(
+                "train_audio_seconds_per_epoch"
+            ),
+            "processed_train_audio_seconds": training.get(
+                "processed_train_audio_seconds"
+            ),
+            "validation_audio_seconds": training.get(
+                "validation_audio_seconds"
+            ),
             "device_requested": training.get("device_requested"),
             "device_used": training.get("device_used"),
             "model_device": training.get("model_device"),
@@ -123,6 +134,9 @@ def attempt_summary(experiment: pathlib.Path, attempt: pathlib.Path) -> dict[str
             ),
         }
 
+    if hardware is not None:
+        review["decoder"] = hardware.get("metrics", {}).get("decoder")
+
     return review
 
 
@@ -141,16 +155,30 @@ def parent_summary(experiment: pathlib.Path) -> dict[str, Any] | None:
 def delta(candidate: dict[str, Any], parent: dict[str, Any] | None) -> dict[str, Any]:
     if parent is None or parent.get("status") == "missing-local-parent":
         return {}
-    out: dict[str, Any] = {}
+
+    candidate_benchmark = candidate.get("benchmark", {})
+    parent_benchmark = parent.get("benchmark", {})
+    same_benchmark = (
+        candidate_benchmark.get("manifest_sha256")
+        == parent_benchmark.get("manifest_sha256")
+    )
+    out: dict[str, Any] = {
+        "same_benchmark_manifest": same_benchmark,
+        "not_compared": [],
+    }
     candidate_metrics = candidate.get("metrics", {})
     parent_metrics = parent.get("metrics", {})
-    for key in (
-        "wer",
-        "cer",
-        "realtime_factor",
+
+    metric_keys = [
         "inference_latency_p50_ms",
         "inference_latency_p95_ms",
-    ):
+    ]
+    if same_benchmark:
+        metric_keys.extend(("wer", "cer", "realtime_factor"))
+    else:
+        out["not_compared"] = ["wer", "cer", "realtime_factor"]
+
+    for key in metric_keys:
         a = candidate_metrics.get(key)
         b = parent_metrics.get(key)
         if isinstance(a, (int, float)) and isinstance(b, (int, float)):
@@ -161,7 +189,6 @@ def delta(candidate: dict[str, Any], parent: dict[str, Any] | None) -> dict[str,
                 "ratio": (a / b) if b != 0 else None,
             }
     return out
-
 
 def main() -> int:
     parser = argparse.ArgumentParser()
