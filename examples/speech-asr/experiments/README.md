@@ -183,3 +183,29 @@ Accepted on 2026-10-05 from oberon. The repository static gate passed and the
 speech-ASR suite completed 143 tests successfully with 3 expected skips for
 NumPy-only frontend tests in the tools environment. The Phase 9 experiment
 identity, transition, deployment, lineage and immutability tests all passed.
+
+
+## Phase 10 execution
+
+An approved experiment is executed from the controller host with:
+
+```bash
+./scripts/run-speech-experiment.sh \
+  --experiment work/speech-asr/experiments/exp-... \
+  --worker edge
+```
+
+The controller creates a new attempt according to the frozen retry policy. It
+records controller/edge logs, attempt-local training artifacts, compatibility
+evidence, the deployment manifest, collected hardware/accuracy results,
+acceptance-policy evaluation and the final compact REVIEW handoff.
+
+The baseline acceptance request for the already-qualified model can be created
+without manually authoring JSON:
+
+```bash
+./scripts/init-cnn-ctc-v1-experiment.sh
+```
+
+That initializer does not propose a new architecture; it declares the frozen
+`cnn_ctc_v1` executor specifically to qualify Phase 10 orchestration.
