@@ -382,3 +382,42 @@ Initialize with:
 ```bash
 ./scripts/init-cnn-ctc-v3-blank-penalty.sh
 ```
+
+
+## Sealed held-out evaluation is not a training experiment
+
+The accepted scaled-data checkpoint
+`exp-87538823d2bf1562/attempt-0001` is evaluated on the official held-out AMI
+ASR boundary without creating a new trainable experiment.
+
+The evaluation controller is hard-bound to that source experiment and attempt.
+It verifies the source attempt is completed/accepted and verifies the recorded
+SHA-256 identities of:
+
+- checkpoint;
+- ONNX;
+- OpenVINO XML;
+- OpenVINO BIN.
+
+It then scores the frozen checkpoint/ONNX locally, requires exact valid-frame
+argmax agreement, and deploys the already-recorded XML/BIN to the normal locked
+MA2450 worker. No training command or checkpoint-selection path is reachable
+from the held-out controller.
+
+The completed result lives separately under:
+
+```text
+work/speech-asr/heldout-evaluations/
+  exp-87538823d2bf1562/
+    <heldout-manifest-sha-prefix>/
+      result.json
+```
+
+A completed result is sealed. Read it with:
+
+```bash
+./scripts/review-speech-heldout-eval.sh
+```
+
+Do not rerun the held-out corpus to choose among previously explored model or
+training variants.
