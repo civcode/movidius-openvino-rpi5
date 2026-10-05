@@ -18,6 +18,9 @@ class CnnCtcFrontendTests(unittest.TestCase):
         from speech_asr.cnn_ctc_frontend import logmel_features
 
         cls.spec = load_spec(SPEECH / "models" / "cnn_ctc_v1" / "model_spec.json")
+        cls.v4_spec = load_spec(
+            SPEECH / "models" / "cnn_ctc_v4" / "model_spec.json"
+        )
         cls.logmel_features = staticmethod(logmel_features)
 
     def test_fixed_shape_and_valid_length(self):
@@ -34,6 +37,39 @@ class CnnCtcFrontendTests(unittest.TestCase):
         second, second_valid = self.logmel_features(samples, self.spec)
         self.assertEqual(first_valid, second_valid)
         self.assertTrue((first == second).all())
+
+
+    def test_v4_valid_frame_cmvn_zeroes_padding(self):
+        import numpy as np
+
+        samples = [
+            0.1 if index % 3 else -0.2
+            for index in range(16000)
+        ]
+        features, valid = self.logmel_features(samples, self.v4_spec)
+        self.assertGreater(valid, 1)
+        self.assertLess(valid, 512)
+        valid_values = features[0, :, :valid]
+        padded_values = features[0, :, valid:]
+        self.assertTrue(
+            np.allclose(
+                valid_values.mean(axis=1),
+                0.0,
+                atol=2e-5,
+            )
+        )
+        self.assertTrue((padded_values == 0.0).all())
+
+    def test_v1_and_v4_differ_only_by_normalization_semantics(self):
+        samples = [
+            0.15 if index % 5 else -0.1
+            for index in range(14000)
+        ]
+        v1, v1_valid = self.logmel_features(samples, self.spec)
+        v4, v4_valid = self.logmel_features(samples, self.v4_spec)
+        self.assertEqual(v1_valid, v4_valid)
+        self.assertFalse((v1 == v4).all())
+        self.assertTrue((v4[0, :, v4_valid:] == 0.0).all())
 
 
 @unittest.skipUnless(HAS_NUMPY, "NumPy is installed in apps/training environments")
