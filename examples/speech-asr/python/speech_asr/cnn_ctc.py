@@ -139,7 +139,14 @@ def greedy_decode(indices: Iterable[int], vocab: dict) -> str:
 
 
 def greedy_decode_logits(logits: Sequence[Sequence[float]], vocab: dict) -> str:
-    indices = []
+    return greedy_decode_logits_diagnostics(logits, vocab)["hypothesis"]
+
+
+def greedy_decode_logits_diagnostics(
+    logits: Sequence[Sequence[float]],
+    vocab: dict,
+) -> dict:
+    indices: list[int] = []
     width = len(vocab["tokens"])
     for frame_index, frame in enumerate(logits):
         if len(frame) != width:
@@ -148,7 +155,34 @@ def greedy_decode_logits(logits: Sequence[Sequence[float]], vocab: dict) -> str:
             )
         best = max(range(width), key=lambda index: float(frame[index]))
         indices.append(best)
-    return greedy_decode(indices, vocab)
+
+    blank = int(vocab["blank_index"])
+    hypothesis = greedy_decode(indices, vocab)
+    blank_frames = sum(1 for value in indices if value == blank)
+    collapsed_tokens = 0
+    previous = None
+    argmax_runs = 0
+    for value in indices:
+        if previous is None or value != previous:
+            argmax_runs += 1
+        if value != blank and value != previous:
+            collapsed_tokens += 1
+        previous = value
+
+    frame_count = len(indices)
+    return {
+        "hypothesis": hypothesis,
+        "frame_count": frame_count,
+        "blank_argmax_frames": blank_frames,
+        "nonblank_argmax_frames": frame_count - blank_frames,
+        "blank_frame_fraction": (
+            blank_frames / frame_count if frame_count else 0.0
+        ),
+        "argmax_runs": argmax_runs,
+        "collapsed_token_count": collapsed_tokens,
+        "emitted_words": len(hypothesis.split()),
+        "emitted_characters_no_spaces": len(hypothesis.replace(" ", "")),
+    }
 
 
 def conv1d_output_length(
