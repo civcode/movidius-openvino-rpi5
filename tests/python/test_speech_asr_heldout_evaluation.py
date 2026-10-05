@@ -291,6 +291,28 @@ class FrozenHeldoutControllerSourceTests(unittest.TestCase):
         self.assertIn("[heldout-reference]", evaluator)
         self.assertIn("flush=True", evaluator)
 
+    def test_heldout_hardware_retry_resumes_completed_samples(self):
+        evaluator = (
+            SPEECH / "evaluation" / "evaluate_cnn_ctc_v3.py"
+        ).read_text(encoding="utf-8")
+        edge_worker = (
+            SPEECH / "agent" / "edge_worker.py"
+        ).read_text(encoding="utf-8")
+        controller = (
+            SPEECH / "agent" / "run_frozen_heldout_evaluation.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("def load_sample_cache(", evaluator)
+        self.assertIn('"sample-cache.json"', evaluator)
+        self.assertIn('"feature_sha256"', evaluator)
+        self.assertIn('"xml_sha256"', evaluator)
+        self.assertIn('"bin_sha256"', evaluator)
+        self.assertIn('"logits_sha256"', evaluator)
+        self.assertIn('"RESULT: PASS"', evaluator)
+        self.assertIn("[myriad-eval]", evaluator)
+        self.assertIn("subprocess.Popen(", edge_worker)
+        self.assertIn("worker_proc = run_streaming(", controller)
+
     def test_reference_runtime_dependencies_are_declared(self):
         requirements = (
             ROOT / "requirements" / "training.txt"
