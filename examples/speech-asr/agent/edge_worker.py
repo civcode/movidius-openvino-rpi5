@@ -165,7 +165,7 @@ def require_supported_request(
     artifacts: dict[str, pathlib.Path],
 ) -> tuple[pathlib.Path, pathlib.Path]:
     model_id = manifest["model"]["id"]
-    if model_id not in {"cnn_ctc_v1", "cnn_ctc_v2"}:
+    if model_id not in {"cnn_ctc_v1", "cnn_ctc_v2", "cnn_ctc_v3"}:
         raise WorkerError(
             f"unsupported Phase 11 model executor: {model_id!r}",
             "request_config",
@@ -209,6 +209,7 @@ def run_evaluator(
     evaluator = {
         "cnn_ctc_v1": "evaluate-cnn-ctc-v1.sh",
         "cnn_ctc_v2": "evaluate-cnn-ctc-v2.sh",
+        "cnn_ctc_v3": "evaluate-cnn-ctc-v3.sh",
     }.get(model_id)
     if evaluator is None:
         raise WorkerError(
