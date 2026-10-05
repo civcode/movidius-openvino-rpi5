@@ -34,6 +34,7 @@ from speech_asr.cnn_ctc import (  # noqa: E402
     load_vocab,
     manifest_record_eligibility,
 )
+from speech_asr.cnn_ctc_compare import compare_arrays  # noqa: E402
 from speech_asr.cnn_ctc_frontend import logmel_features  # noqa: E402
 from speech_asr.contracts import validate_speech_sample  # noqa: E402
 from speech_asr.evaluation import (  # noqa: E402
@@ -148,7 +149,13 @@ def evaluate(
     skipped = {"too_long": [], "target_too_long": []}
     compared_frames = 0
     matching_frames = 0
+    frame_argmax_mismatches = 0
     max_abs_error = 0.0
+    min_reference_top2_margin = float("inf")
+    max_mismatched_reference_top2_margin = 0.0
+    mismatch_margin_weighted_sum = 0.0
+    mismatched_samples = 0
+    mismatch_sample_examples: list[str] = []
 
     for record in load_records(manifest_path):
         manifest_samples += 1
@@ -191,14 +198,43 @@ def evaluate(
             )
         valid_pytorch = pytorch_logits[0, :output_frames, :]
         valid_onnx = onnx_logits[0, :output_frames, :]
-        difference = np.abs(valid_pytorch - valid_onnx)
-        if difference.size:
-            max_abs_error = max(max_abs_error, float(difference.max()))
-
-        pytorch_argmax = valid_pytorch.argmax(axis=-1)
-        onnx_argmax = valid_onnx.argmax(axis=-1)
-        compared_frames += int(output_frames)
-        matching_frames += int((pytorch_argmax == onnx_argmax).sum())
+        comparison = compare_arrays(
+            valid_pytorch[np.newaxis, :, :],
+            valid_onnx[np.newaxis, :, :],
+        )
+        frame_count = int(comparison["frame_count"])
+        mismatches = int(comparison["frame_argmax_mismatches"])
+        compared_frames += frame_count
+        matching_frames += int(comparison["frame_argmax_matches"])
+        frame_argmax_mismatches += mismatches
+        max_abs_error = max(
+            max_abs_error,
+            float(comparison["max_abs_error"]),
+        )
+        min_reference_top2_margin = min(
+            min_reference_top2_margin,
+            float(comparison["min_reference_top2_margin"]),
+        )
+        if mismatches:
+            mismatched_samples += 1
+            if len(mismatch_sample_examples) < 10:
+                mismatch_sample_examples.append(str(record["id"]))
+            max_mismatched_reference_top2_margin = max(
+                max_mismatched_reference_top2_margin,
+                float(
+                    comparison[
+                        "max_mismatched_reference_top2_margin"
+                    ]
+                ),
+            )
+            mismatch_margin_weighted_sum += (
+                float(
+                    comparison[
+                        "mean_mismatched_reference_top2_margin"
+                    ]
+                )
+                * mismatches
+            )
 
         pytorch_decoder = greedy_decode_logits_diagnostics(
             valid_pytorch,
@@ -258,10 +294,35 @@ def evaluate(
         raise ValueError("held-out manifest has no eligible samples")
 
     frame_argmax_agreement = matching_frames / max(1, compared_frames)
+    mean_mismatched_reference_top2_margin = (
+        mismatch_margin_weighted_sum / frame_argmax_mismatches
+        if frame_argmax_mismatches
+        else 0.0
+    )
+    agreement = {
+        "frame_argmax_agreement": frame_argmax_agreement,
+        "frame_argmax_matches": matching_frames,
+        "frame_argmax_mismatches": frame_argmax_mismatches,
+        "compared_frames": compared_frames,
+        "max_abs_error": max_abs_error,
+        "min_reference_top2_margin": (
+            min_reference_top2_margin
+            if min_reference_top2_margin != float("inf")
+            else 0.0
+        ),
+        "max_mismatched_reference_top2_margin": (
+            max_mismatched_reference_top2_margin
+        ),
+        "mean_mismatched_reference_top2_margin": (
+            mean_mismatched_reference_top2_margin
+        ),
+        "mismatched_samples": mismatched_samples,
+        "mismatch_sample_examples": mismatch_sample_examples,
+    }
     if frame_argmax_agreement != 1.0:
         raise ValueError(
             "frozen PyTorch/ONNX frame argmax agreement is not exact: "
-            f"{frame_argmax_agreement}"
+            + json.dumps(agreement, sort_keys=True)
         )
 
     decoder_summary = aggregate_decoder_diagnostics(
