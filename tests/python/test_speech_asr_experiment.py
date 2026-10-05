@@ -283,6 +283,36 @@ class DeploymentAndHistoryTests(unittest.TestCase):
         )
         self.assertEqual(validate_deployment_manifest(manifest)["runtime"]["target"], "arm64")
 
+    def test_deployment_rejects_worker_revision_drift(self):
+        req = request()
+        attempt = make_attempt(req, index=1, at_utc="2026-10-05T10:00:00Z")
+        attempt = transition_attempt(
+            attempt, "EXECUTE", at_utc="2026-10-05T10:01:00Z"
+        )
+        attempt = set_artifact(
+            attempt, "openvino_xml", path="work/model.xml", sha256=SHA_A
+        )
+        attempt = set_artifact(
+            attempt, "openvino_bin", path="work/model.bin", sha256=SHA_B
+        )
+        attempt = transition_attempt(
+            attempt, "EVALUATE", at_utc="2026-10-05T10:02:00Z"
+        )
+        with self.assertRaisesRegex(ContractValidationError, "must match"):
+            make_deployment_manifest(
+                request=req,
+                attempt=attempt,
+                worker_commit="d" * 40,
+                model_id=model_spec()["model_id"],
+                model_spec_sha256=req["documents"]["model_spec"]["sha256"],
+                evaluator_id="cnn-ctc-myriad-v1",
+                result_path="attempt/results/hardware.json",
+                artifacts={
+                    "openvino_xml": attempt["artifacts"]["openvino_xml"],
+                    "openvino_bin": attempt["artifacts"]["openvino_bin"],
+                },
+            )
+
     def test_history_is_sorted(self):
         entries = [
             {
@@ -307,6 +337,20 @@ class DeploymentAndHistoryTests(unittest.TestCase):
             [value["experiment_id"] for value in history["experiments"]],
             ["exp-0000000000000000", "exp-ffffffffffffffff"],
         )
+
+    def test_history_requires_parent_entry(self):
+        entries = [
+            {
+                "experiment_id": "exp-1111111111111111",
+                "parent_experiment_id": "exp-0000000000000000",
+                "request_sha256": SHA_A,
+                "path": "exp-1111111111111111",
+                "latest_attempt_id": None,
+                "latest_outcome": None,
+            }
+        ]
+        with self.assertRaisesRegex(ContractValidationError, "parent is not present"):
+            history_document(entries)
 
 
 if __name__ == "__main__":
