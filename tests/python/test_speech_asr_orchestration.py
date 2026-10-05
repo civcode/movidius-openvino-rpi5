@@ -294,6 +294,18 @@ class Phase10SourceInvariantTests(unittest.TestCase):
         self.assertIn("fetch --quiet origin", text)
         self.assertNotIn("git pull", text)
 
+    def test_noninteractive_edge_preflight_resolves_uv(self):
+        helper = (ROOT / "scripts" / "lib" / "python-env.sh").read_text(
+            encoding="utf-8"
+        )
+        preflight = (ROOT / "scripts" / "edge-speech-preflight.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("python_env_resolve_uv", helper)
+        self.assertIn('${HOME}/.local/bin/uv', helper)
+        self.assertIn('${HOME}/.cargo/bin/uv', helper)
+        self.assertIn("python_env_require_uv", preflight)
+
     def test_worker_lock_is_nonblocking(self):
         text = (ROOT / "scripts" / "edge-speech-worker.sh").read_text(
             encoding="utf-8"
