@@ -13,6 +13,7 @@
     "epochs":{"type":"integer","minimum":0},
     "batch_size":{"type":"integer","minimum":1},
     "max_samples":{"type":["integer","null"],"minimum":1},
+    "checkpoint_selection":{"enum":["validation_loss","validation_cer"]},
     "optimizer":{
       "type":"object","additionalProperties":true,
       "required":["kind","learning_rate"],
