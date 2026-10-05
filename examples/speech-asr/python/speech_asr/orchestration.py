@@ -167,6 +167,30 @@ def training_command(
             "--checkpoint-selection",
             str(checkpoint_selection),
         ])
+    augmentation = train_config.get("augmentation")
+    if augmentation is not None:
+        if model_id != "cnn_ctc_v3":
+            raise ValueError(
+                "training augmentation is supported only by cnn_ctc_v3"
+            )
+        command.extend([
+            "--augmentation-kind",
+            str(augmentation["kind"]),
+            "--frequency-masks",
+            str(augmentation["frequency_masks"]),
+            "--frequency-max-width",
+            str(augmentation["frequency_max_width"]),
+            "--time-masks",
+            str(augmentation["time_masks"]),
+            "--time-max-width",
+            str(augmentation["time_max_width"]),
+            "--time-max-fraction",
+            str(augmentation["time_max_fraction"]),
+            "--augmentation-mask-value",
+            str(augmentation["mask_value"]),
+            "--augmentation-seed-offset",
+            str(augmentation["seed_offset"]),
+        ])
     return command
 
 
