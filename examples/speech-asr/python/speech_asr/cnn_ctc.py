@@ -181,6 +181,66 @@ def acoustic_output_length(feature_frames: int, spec: dict) -> int:
     return length
 
 
+def model_resource_estimate(spec: dict, vocab_size: int = 39) -> dict:
+    """Return deterministic parameter/MAC/receptive-field estimates for fixed input."""
+    if spec.get("id") != "cnn_ctc_v2":
+        raise ValueError("resource estimator currently targets cnn_ctc_v2")
+
+    network = spec["network"]
+    input_frames = int(spec["input_contract"]["shape"][2])
+    in_channels = int(spec["input_contract"]["shape"][1])
+    length = input_frames
+    receptive_field = 1
+    jump = 1
+    parameters = 0
+    macs = 0
+
+    for layer in network["stem"]:
+        out_channels = int(layer["channels"])
+        kernel = int(layer["kernel"])
+        stride = int(layer["stride"])
+        padding = int(layer["padding"])
+        out_length = conv1d_output_length(
+            length,
+            kernel=kernel,
+            stride=stride,
+            padding=padding,
+        )
+        parameters += in_channels * out_channels * kernel
+        parameters += 2 * out_channels  # BatchNorm gamma/beta
+        macs += in_channels * out_channels * kernel * out_length
+        receptive_field += (kernel - 1) * jump
+        jump *= stride
+        length = out_length
+        in_channels = out_channels
+
+    for block in network["residual_blocks"]:
+        channels = int(block["channels"])
+        kernel = int(block["kernel"])
+        projection_kernel = int(block["projection_kernel"])
+        if channels != in_channels:
+            raise ValueError("generation-1 residual block changes channel width")
+        parameters += channels * channels * kernel
+        parameters += 2 * channels
+        parameters += channels * channels * projection_kernel
+        parameters += 2 * channels
+        macs += channels * channels * kernel * length
+        macs += channels * channels * projection_kernel * length
+        receptive_field += (kernel - 1) * jump
+
+    projection_kernel = int(network["projection_kernel"])
+    parameters += in_channels * vocab_size * projection_kernel + vocab_size
+    macs += in_channels * vocab_size * projection_kernel * length
+
+    return {
+        "parameters": parameters,
+        "macs_fixed_input": macs,
+        "receptive_field_feature_frames": receptive_field,
+        "output_frames": length,
+        "fp16_weight_bytes": parameters * 2,
+    }
+
+
 def manifest_record_eligibility(record: dict, spec: dict, vocab: dict) -> dict:
     """Return the fixed-shape CTC eligibility decision for one manifest record."""
     sample_count = int(record["audio"]["end_sample"]) - int(record["audio"]["start_sample"])
