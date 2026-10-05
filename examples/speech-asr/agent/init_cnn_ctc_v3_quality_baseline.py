@@ -14,6 +14,7 @@ SPEECH_ROOT = HERE.parent
 ROOT = SPEECH_ROOT.parents[1]
 sys.path.insert(0, str(SPEECH_ROOT / "python"))
 
+from speech_asr.cnn_ctc import canonical_sha256  # noqa: E402
 from speech_asr.orchestration import V3_ARCHITECTURE  # noqa: E402
 
 MODEL_SPEC = SPEECH_ROOT / "models" / "cnn_ctc_v3" / "model_spec.json"
@@ -70,6 +71,14 @@ def validate_qualification() -> dict:
         raise ValueError("model-quality training manifest hash differs from reviewed baseline")
     if sha256_path(VALIDATION_MANIFEST) != VALIDATION_MANIFEST_SHA256:
         raise ValueError("model-quality validation manifest hash differs from reviewed baseline")
+
+    package = json.loads(MODEL_SPEC.read_text(encoding="utf-8"))
+    vocab_path = MODEL_SPEC.parent / "vocab.json"
+    vocab = json.loads(vocab_path.read_text(encoding="utf-8"))
+    if canonical_sha256(package) != MODEL_SPEC_SHA256:
+        raise ValueError("checked-in cnn_ctc_v3 model spec hash differs from reviewed baseline")
+    if canonical_sha256(vocab) != VOCAB_SHA256:
+        raise ValueError("checked-in cnn_ctc_v3 vocabulary hash differs from reviewed baseline")
 
     value = json.loads(QUALIFICATION.read_text(encoding="utf-8"))
     if value.get("status") != "structurally_valid":
