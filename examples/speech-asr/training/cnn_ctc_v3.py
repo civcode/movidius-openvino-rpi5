@@ -58,13 +58,17 @@ class ResidualTemporalBlockV3(nn.Module):
 class CnnCtcV3(nn.Module):
     def __init__(self, spec: dict, vocab_size: int):
         super().__init__()
-        if spec.get("id") != "cnn_ctc_v3":
-            raise ValueError("CnnCtcV3 requires cnn_ctc_v3 model spec")
+        if spec.get("id") not in {"cnn_ctc_v3", "cnn_ctc_v4"}:
+            raise ValueError(
+                "CnnCtcV3 graph implementation requires cnn_ctc_v3/v4 model spec"
+            )
         network = spec["network"]
         if network.get("kind") != "residual-temporal-v2":
-            raise ValueError("cnn_ctc_v3 requires residual-temporal-v2 network")
+            raise ValueError(
+                f"{spec.get('id')} requires residual-temporal-v2 network"
+            )
         if network.get("normalization") != "none":
-            raise ValueError("cnn_ctc_v3 must remain normalization-free")
+            raise ValueError(f"{spec.get('id')} must remain normalization-free")
 
         in_channels = int(spec["frontend"]["mel_bins"])
         stem_layers = []
@@ -92,7 +96,7 @@ class CnnCtcV3(nn.Module):
             channels = int(block["channels"])
             if channels != in_channels:
                 raise ValueError(
-                    "cnn_ctc_v3 generation-2 residual blocks must preserve channels"
+                    f"{spec.get('id')} residual blocks must preserve channels"
                 )
             blocks.append(
                 ResidualTemporalBlockV3(
