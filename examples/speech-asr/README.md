@@ -235,3 +235,31 @@ The Phase 10 physical acceptance run on 2026-10-05 used
 `exp-f915ec624a63caf6/attempt-0001` and completed with
 `acceptance: accepted` at `AWAIT_REVIEW`. The project is ready to move into
 Phase 11 architecture optimization while keeping this execution path fixed.
+
+
+## Phase 11 generation 1
+
+The first architecture optimization candidate is `cnn_ctc_v2`: a residual
+large-kernel temporal CTC encoder inspired by the low-rate computation of
+FastConformer/Zipformer and the residual temporal-convolution approach of
+QuartzNet/Citrinet, constrained to the legacy OpenVINO/MYRIAD deployment
+envelope.
+
+It preserves `[1,64,512] -> [1,128,39]` and the existing frontend/decoder, but
+moves to two stride-2 stems plus five 96-channel residual blocks with kernels
+`11,19,27,35,43`. The fixed estimate is 1,347,463 parameters and
+174,804,992 MACs.
+
+Run it through the formal lifecycle with:
+
+```bash
+EXP="$(
+  ./scripts/init-cnn-ctc-v2-experiment.sh |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
+)"
+./scripts/run-speech-experiment.sh --experiment "$EXP" --worker edge
+```
+
+The controller physically probes the initialized v2 graph on MA2450 before full
+CUDA training. Phase 11 remains open until generation 1 is reviewed and a
+second architecture generation is selected and evaluated from that evidence.
