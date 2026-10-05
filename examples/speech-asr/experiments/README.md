@@ -209,3 +209,18 @@ without manually authoring JSON:
 
 That initializer does not propose a new architecture; it declares the frozen
 `cnn_ctc_v1` executor specifically to qualify Phase 10 orchestration.
+
+
+## Phase 10 acceptance
+
+Accepted on 2026-10-05 with experiment `exp-f915ec624a63caf6`,
+attempt `attempt-0001`. Oberon executed the approved baseline request through
+the dedicated edge worktree and physical MA2450 worker, collected the returned
+evidence, applied the frozen acceptance policy and produced:
+
+- `status: completed`;
+- `acceptance: accepted`;
+- `review_state: AWAIT_REVIEW`.
+
+This is the first accepted end-to-end Phase 9/10 experiment bundle and is the
+reference handoff shape for later architecture experiments.
