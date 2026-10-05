@@ -743,6 +743,15 @@ def validate_experiment_history(document: Any) -> Dict[str, Any]:
         errors.append("$.experiments: entries must be sorted by experiment_id")
     if len(ids) != len(set(ids)):
         errors.append("$.experiments: duplicate experiment_id")
+    known = set(ids)
+    for index, value in enumerate(experiments):
+        if isinstance(value, Mapping):
+            parent = value.get("parent_experiment_id")
+            if parent is not None and parent not in known:
+                errors.append(
+                    f"$.experiments[{index}].parent_experiment_id: "
+                    "parent is not present in history index"
+                )
     _raise_if_errors(errors)
     return dict(root)
 
@@ -764,6 +773,12 @@ def validate_deployment_manifest(document: Any) -> Dict[str, Any]:
         commit = root.get(key)
         if not isinstance(commit, str) or len(commit) != 40 or _GIT_SHA_RE.fullmatch(commit) is None:
             errors.append(f"$.{key}: expected full 40-character Git commit id")
+    if (
+        isinstance(root.get("controller_commit"), str)
+        and isinstance(root.get("worker_commit"), str)
+        and root.get("controller_commit") != root.get("worker_commit")
+    ):
+        errors.append("$.worker_commit: must match $.controller_commit")
     model = _mapping(root.get("model"), "$.model", errors)
     _nonempty_string(model.get("id"), "$.model.id", errors)
     _sha256(model.get("spec_sha256"), "$.model.spec_sha256", errors)
