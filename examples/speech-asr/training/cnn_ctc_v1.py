@@ -15,7 +15,11 @@ import sys
 sys.path.insert(0, str(SPEECH_ROOT / "python"))
 
 from speech_asr.audio import read_f32le  # noqa: E402
-from speech_asr.cnn_ctc import acoustic_output_length, encode_text  # noqa: E402
+from speech_asr.cnn_ctc import (  # noqa: E402
+    acoustic_output_length,
+    encode_text,
+    manifest_record_eligibility,
+)
 from speech_asr.cnn_ctc_frontend import logmel_features  # noqa: E402
 from speech_asr.contracts import validate_speech_sample  # noqa: E402
 
@@ -98,28 +102,21 @@ class ManifestCtcDataset(Dataset):
         self.manifest = manifest
         self.spec = spec
         self.vocab = vocab
-        fixed_audio = int(spec["frontend"]["fixed_audio_samples"])
-        window = int(spec["frontend"]["window_samples"])
-        hop = int(spec["frontend"]["hop_samples"])
-        fixed_frames = int(spec["frontend"]["fixed_frames"])
-
         eligible = []
         skipped_long = []
         skipped_target = []
         for record in read_manifest(manifest):
-            sample_count = record["audio"]["end_sample"] - record["audio"]["start_sample"]
-            if sample_count > fixed_audio:
-                skipped_long.append(record["id"])
-                continue
-            valid_frames = (
-                1
-                if sample_count < window
-                else min(fixed_frames, 1 + (sample_count - window) // hop)
-            )
-            output_frames = acoustic_output_length(valid_frames, spec)
-            target = encode_text(record["transcript"]["text"], vocab)
-            if len(target) > output_frames:
-                skipped_target.append(record["id"])
+            decision = manifest_record_eligibility(record, spec, vocab)
+            if not decision["eligible"]:
+                if decision["reason"] == "too_long":
+                    skipped_long.append(record["id"])
+                elif decision["reason"] == "target_too_long":
+                    skipped_target.append(record["id"])
+                else:
+                    raise ValueError(
+                        f"{record['id']}: unknown cnn_ctc_v1 eligibility reason "
+                        f"{decision['reason']!r}"
+                    )
                 continue
             eligible.append(record)
 
