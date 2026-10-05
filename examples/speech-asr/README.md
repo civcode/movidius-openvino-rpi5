@@ -345,3 +345,21 @@ EXP="$(
 The experiment keeps `cnn_ctc_v3` unchanged and removes smoke-derived WER/CER
 acceptance ceilings. It establishes the larger-data accuracy reference while
 retaining the proven OpenVINO/MYRIAD realtime gates.
+
+
+## cnn_ctc_v4 valid-frame frontend
+
+After the deterministic SpecAugment diagnostic regressed decoder emission,
+model development moved to a structural frontend correction rather than
+stronger regularization.
+
+`cnn_ctc_v4` keeps the v3 Conv1D/ReLU inference graph and MA2450 workload but
+changes host feature normalization from padding-inclusive `logmel-v1` to
+valid-frame `logmel-v2`. Padding no longer contributes to CMVN and padded
+normalized frames are zero.
+
+Run the reviewed child with:
+
+```bash
+./scripts/init-cnn-ctc-v4-valid-cmvn.sh
+```
