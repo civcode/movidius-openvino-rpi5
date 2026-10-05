@@ -6,6 +6,8 @@
 #   ./run.sh shell           # bash inside the runtime image
 #   ./run.sh bench --iterations 20
 #   ./run.sh custom --model /work/model.xml --weights /work/model.bin
+#   ./run.sh custom-server --model /work/model.xml --weights /work/model.bin
+#                                            # persistent binary tensor stream
 #   ./run.sh mobilenet                     # MobileNet v2 on the stick, checked against
 #                                          # the ONNX model zoo reference output
 #   ./run.sh mobilenet --image /models/images/dog.ppm
@@ -60,7 +62,7 @@ if (( PRINT_PLATFORM )); then platform_print; exit 0; fi
 
 MODE="${1:-demo}"
 case "${MODE}" in
-    demo|--demo|list|demo-list|shell|bench|custom|mobilenet|ssd|seg|speech-reference|speech-regress)
+    demo|--demo|list|demo-list|shell|bench|custom|custom-server|mobilenet|ssd|seg|speech-reference|speech-regress)
         [[ $# -gt 0 ]] && shift
         ;;
     *) MODE=demo ;;
@@ -131,6 +133,10 @@ case "${MODE}" in
     custom)
         DOCKER_ARGS+=(-v "${ROOT}/work:/work")
         ENTRY=(/opt/openvino/bin/hello_myriad --device MYRIAD "$@")
+        ;;
+    custom-server)
+        DOCKER_ARGS+=(-i -v "${ROOT}/work:/work")
+        ENTRY=(/opt/openvino/bin/hello_myriad --device MYRIAD --stdin "$@")
         ;;
     speech-reference|speech-regress)
         MODEL_DIR="${ROOT}/vendor/models/rm_cnn4a_smbr"
@@ -214,6 +220,11 @@ esac
 if (( VERBOSE )); then
     platform_print
 fi
-echo ">> target=${TARGET} image=${IMAGE} platform=${DOCKER_PLATFORM}"
-printf '>> docker run'; printf ' %q' "${DOCKER_ARGS[@]}" "${IMAGE}" "${ENTRY[@]}"; printf '\n'
+if [[ "${MODE}" == custom-server ]]; then
+    echo ">> target=${TARGET} image=${IMAGE} platform=${DOCKER_PLATFORM}" >&2
+    { printf '>> docker run'; printf ' %q' "${DOCKER_ARGS[@]}" "${IMAGE}" "${ENTRY[@]}"; printf '\n'; } >&2
+else
+    echo ">> target=${TARGET} image=${IMAGE} platform=${DOCKER_PLATFORM}"
+    printf '>> docker run'; printf ' %q' "${DOCKER_ARGS[@]}" "${IMAGE}" "${ENTRY[@]}"; printf '\n'
+fi
 exec docker run "${DOCKER_ARGS[@]}" "${IMAGE}" "${ENTRY[@]}"
