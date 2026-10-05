@@ -442,11 +442,14 @@ test -f examples/speech-asr/datasets/ami/splits/eval-full-corpus-asr-sc-v1.json 
 test -f examples/speech-asr/tools/qualify_heldout_evaluation_manifest.py || fail 'held-out qualifier missing'
 test -f examples/speech-asr/evaluation/evaluate_frozen_cnn_ctc_v3_reference.py || fail 'frozen held-out reference evaluator missing'
 test -f examples/speech-asr/agent/run_frozen_heldout_evaluation.py || fail 'sealed held-out controller missing'
+test -f examples/speech-asr/agent/review_heldout_evaluation.py || fail 'held-out review helper missing'
+test -f examples/speech-asr/docs/adr/heldout-full-corpus-asr-sc-v1.md || fail 'held-out evaluation ADR missing'
 for f in \
     scripts/prepare-speech-heldout-eval.sh \
     scripts/qualify-speech-heldout-eval.sh \
     scripts/provision-speech-heldout-eval-edge.sh \
-    scripts/run-speech-heldout-eval.sh; do
+    scripts/run-speech-heldout-eval.sh \
+    scripts/review-speech-heldout-eval.sh; do
     test -x "$f" || fail "held-out shell entry point is not executable: $f"
 done
 python3 - <<'PY_HELDOUT'
@@ -489,6 +492,7 @@ if grep -q 'train-cnn' examples/speech-asr/agent/run_frozen_heldout_evaluation.p
     fail 'held-out controller must not invoke a training wrapper'
 fi
 grep -q 'BatchMode=yes' scripts/provision-speech-heldout-eval-edge.sh || fail 'held-out data provisioning is not non-interactive'
+grep -q -- '--verify-only' scripts/provision-speech-heldout-eval-edge.sh || fail 'held-out provisioning must verify rather than regenerate qualification'
 if grep -q 'StrictHostKeyChecking=no' scripts/provision-speech-heldout-eval-edge.sh; then
     fail 'held-out data provisioning disables host-key verification'
 fi
@@ -533,6 +537,7 @@ for name in [
     "examples/speech-asr/agent/init_cnn_ctc_v3_expanded_data.py",
     "examples/speech-asr/agent/init_cnn_ctc_v3_scaled_data.py",
     "examples/speech-asr/agent/run_frozen_heldout_evaluation.py",
+    "examples/speech-asr/agent/review_heldout_evaluation.py",
     "examples/speech-asr/agent/review_experiment.py",
     "examples/speech-asr/agent/run_experiment.py",
     "examples/speech-asr/agent/edge_worker.py",
