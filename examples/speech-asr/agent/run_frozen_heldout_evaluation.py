@@ -567,18 +567,20 @@ def main() -> int:
         if push.returncode != 0:
             raise ValueError("held-out deployment rsync to edge failed")
 
-        worker_proc = ssh_run(
-            args.worker,
-            [
-                "bash",
-                f"{worker_repo}/scripts/edge-speech-worker.sh",
-                "--deployment",
-                f"{incoming}/deployment-manifest.json",
-                "--bundle-dir",
-                incoming,
-                "--output-dir",
-                remote_output,
-            ],
+        worker_proc = run_streaming(
+            ssh_command(
+                args.worker,
+                [
+                    "bash",
+                    f"{worker_repo}/scripts/edge-speech-worker.sh",
+                    "--deployment",
+                    f"{incoming}/deployment-manifest.json",
+                    "--bundle-dir",
+                    incoming,
+                    "--output-dir",
+                    remote_output,
+                ],
+            ),
             log_path=logs_dir / "edge-worker.log",
         )
 
