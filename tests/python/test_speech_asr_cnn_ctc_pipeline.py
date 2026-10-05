@@ -95,6 +95,16 @@ class CnnCtcPipelineSourceTests(unittest.TestCase):
         )
         self.assertIn("--init-only", probe)
         self.assertIn("--no-device", probe)
+        self.assertNotIn('[[ -s "$MANIFEST" ]]', probe)
+
+    def test_init_only_does_not_construct_manifest_dataset(self):
+        source = (
+            ROOT / "examples" / "speech-asr" / "training" / "train_cnn_ctc_v1.py"
+        ).read_text(encoding="utf-8")
+        guard = source.index("if not args.init_only:")
+        dataset = source.index("train_dataset = ManifestCtcDataset(")
+        self.assertLess(guard, dataset)
+        self.assertIn('"manifest": None if args.init_only else str(args.manifest)', source)
 
     def test_full_pipeline_exports_before_mo(self):
         pipeline = (ROOT / "scripts" / "train-cnn-ctc-v1.sh").read_text(encoding="utf-8")
