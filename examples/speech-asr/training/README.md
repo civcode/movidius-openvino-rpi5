@@ -155,3 +155,25 @@ Generation 1 deliberately avoids grouped/depthwise convolution and attention
 despite their use in efficient modern ASR models. The first goal is to learn how
 much accuracy can be recovered with a large-receptive-field residual encoder
 while staying inside an operator family already close to the proven v1 graph.
+
+
+## Phase 11 generation 2: cnn_ctc_v3
+
+Generation 2 preserves the generation-1 temporal/receptive-field design but
+changes optimization dynamics based on the rejected v2 evidence.
+
+The inference model is normalization-free and contains ordinary Conv1d, ReLU,
+Add and the final transpose only. Residual projections are zero-initialized so
+the residual stack begins close to identity.
+
+The reviewed default training budget is 32 epochs, batch size 1, Adam 3e-4,
+cosine decay to 3e-5, gradient clipping at norm 5.0, and best-validation-loss
+checkpoint selection. Training evidence records optimizer-step count and the
+selected epoch.
+
+Use the experiment lifecycle rather than editing those defaults during a run:
+
+```bash
+./scripts/init-cnn-ctc-v3-experiment.sh
+./scripts/run-speech-experiment.sh --experiment work/.../exp-... --worker edge
+```
