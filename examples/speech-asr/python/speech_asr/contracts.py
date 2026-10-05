@@ -583,8 +583,18 @@ def validate_experiment_request(document: Any) -> Dict[str, Any]:
     _sha256(benchmark.get("manifest_sha256"), "$.benchmark.manifest_sha256", errors)
 
     documents = _mapping(root.get("documents"), "$.documents", errors)
+    expected_document_paths = {
+        "proposal": "request/proposal.json",
+        "model_spec": "request/model-spec.json",
+        "train_config": "request/train-config.json",
+        "acceptance": "request/acceptance.json",
+    }
     for name in ("proposal", "model_spec", "train_config", "acceptance"):
-        _artifact_ref(documents.get(name), f"$.documents.{name}", errors)
+        ref = _artifact_ref(documents.get(name), f"$.documents.{name}", errors)
+        if ref.get("path") != expected_document_paths[name]:
+            errors.append(
+                f"$.documents.{name}.path: expected {expected_document_paths[name]!r}"
+            )
 
     _raise_if_errors(errors)
     return dict(root)
