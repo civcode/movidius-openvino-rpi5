@@ -232,6 +232,11 @@ grep -q 'clip_grad_norm_' examples/speech-asr/training/train_cnn_ctc_v3.py || fa
 grep -q 'CosineAnnealingLR' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'cnn_ctc_v3 cosine schedule missing'
 grep -q 'best_validation_loss' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'cnn_ctc_v3 best-checkpoint selection missing'
 grep -q 'optimizer_steps' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'cnn_ctc_v3 optimizer-step evidence missing'
+grep -q 'prepare-cnn-ctc-v3.sh' scripts/probe-cnn-ctc-v3.sh || fail 'cnn_ctc_v3 probe uses wrong conversion wrapper'
+if grep -q 'prepare-cnn-ctc-v2.sh' scripts/probe-cnn-ctc-v3.sh; then
+    fail 'cnn_ctc_v3 probe must not invoke v2 conversion'
+fi
+grep -q 'cnn_ctc_v3.xml' scripts/probe-cnn-ctc-v3.sh || fail 'cnn_ctc_v3 probe does not assert v3 XML output'
 grep -q 'cnn_ctc_v3' examples/speech-asr/agent/edge_worker.py || fail 'edge worker does not register cnn_ctc_v3'
 if grep -Eq 'BatchNorm|groups=|MultiheadAttention|LayerNorm' examples/speech-asr/training/cnn_ctc_v3.py; then
     fail 'cnn_ctc_v3 inference graph violated normalization/operator policy'
