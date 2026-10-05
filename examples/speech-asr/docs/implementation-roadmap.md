@@ -25,7 +25,7 @@ The central rule is:
 | 8 — custom PyTorch training skeleton | **complete** — deterministic CUDA training, ONNX/OpenVINO export, physical Pi 5/arm64 + MA2450 execution, and contract-valid AMI smoke evaluation accepted |
 | 9 — experiment lifecycle | **complete** — immutable content-derived requests, attempt state machine, artifact/result provenance, deployment manifests and history index accepted by static checks and the full speech-ASR unit suite |
 | 10 — local execution agent and frontier handoff | **complete** — oberon controller, exact-commit edge worktree, non-interactive SSH/rsync, hash-bound deployment, exclusive MYRIAD locking, result collection and AWAIT_REVIEW handoff physically accepted on Pi 5/MA2450 |
-| 11 — architecture optimization loop | **generation 2 implemented; evaluation pending** — generation 1 was reviewed as optimization-starved; cnn_ctc_v3 keeps its successful hardware envelope but removes BatchNorm and fixes the training/update budget |
+| 11 — architecture optimization loop | **complete** — two reviewed generations completed on physical MA2450; v2/v3 proved the hardware envelope but smoke-set CER did not support meaningful architecture selection |
 
 Phase 0 was re-reviewed after later implementation work. The root audio,
 benchmark, model and text contracts now have executable semantic validators,
@@ -40,7 +40,7 @@ The work is grouped into three major milestones.
 |---|---:|---|
 | **A. Measurement platform** | 0-6 | **complete** — reproducible Pi/Movidius worker validated with frozen repeated-run evidence |
 | **B. Trainable deployment platform** | 7-8 | **complete** — a custom PyTorch model was trained, exported, converted and evaluated on physical MYRIAD |
-| **C. Agent-driven model development** | 9-11 | Frontier models can design architectures while local agents execute experiments and return deterministic evidence |
+| **C. Agent-driven model development** | 9-11 | **complete** — reviewed architectures can be executed end-to-end with deterministic CUDA/OpenVINO/MYRIAD evidence and returned to REVIEW |
 
 The dependency chain is:
 
@@ -877,6 +877,38 @@ by the comparator. Argmax agreement and top-two margins remain recorded
 diagnostics. The trained experiment's accuracy/latency acceptance policy is
 unchanged.
 
+Generation 2 was then executed successfully as
+`exp-a6f83c0451532122/attempt-0001`.
+
+Its execution path was fully healthy:
+
+- 197 speech tests passed with 4 expected NumPy-environment skips;
+- the controller verified the CNN model and logits on `cuda:0`;
+- NVIDIA GeForce RTX 4070 Ti SUPER peak allocated/reserved CUDA memory was
+  168,837,120 / 316,669,952 bytes;
+- deterministic CTC loss remained on CPU by policy;
+- OpenVINO IR validation and PyTorch/ONNX agreement passed;
+- initialized MYRIAD numerical compatibility passed with max absolute error
+  0.000905376;
+- p95 MYRIAD latency was 16.59 ms;
+- inference-only RTF was 0.004579;
+- there were zero hardware failures.
+
+Training also behaved as designed: 32 epochs, 64 optimizer steps, best epoch 32
+and best validation loss 2.66385. Despite that substantial loss improvement,
+greedy WER remained 1.0 and CER regressed to 1.0, so the frozen CER gate
+rejected the candidate.
+
+This completes the Phase 11 research loop. The evidence is sufficient to reject
+another smoke-set architecture iteration: `ami-smoke-v1` has only two eligible
+records for this path and is reused for validation, so it cannot reliably rank
+architecture or training changes. See `docs/phase11-final-review.md`.
+
+Before any generation-3 architecture is reviewed, establish a model-quality
+data boundary with disjoint train/validation manifests, a materially larger
+eligible population, speaker/session separation where possible, and decoder
+diagnostics such as blank rate, emitted-token count and per-sample hypotheses.
+
 
 ---
 
@@ -925,34 +957,25 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-Phase 11 generation 2 is **implemented; evaluation pending**.
+Phase 11 and Milestone C are **complete**.
 
-Run the repository checks, then initialize and execute `cnn_ctc_v3`:
+Do not create `cnn_ctc_v4` from the smoke-set result. The next research
+boundary is data/evaluation quality rather than architecture.
 
-```bash
-git pull --ff-only
-./ci/verify-static.sh
-./scripts/test-speech-asr.sh
+The next implementation work should:
 
-EXP="$(
-  ./scripts/init-cnn-ctc-v3-experiment.sh |
-  python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
-)"
+1. define deterministic, disjoint AMI train and validation manifests suitable
+   for model-quality work rather than lifecycle smoke testing;
+2. ensure the selected records are eligible for the fixed
+   `[1,64,512] -> [1,128,39]` CTC contract, or explicitly review a new input
+   geometry before changing it;
+3. freeze source/manifests/hashes and speaker/session separation;
+4. add decoder diagnostics to evaluation results: blank-frame fraction,
+   emitted-token count, hypothesis/reference lengths, per-sample hypotheses and
+   edit counts;
+5. express training budget in optimizer steps or processed audio duration in
+   addition to epochs;
+6. rerun a frozen baseline before proposing a third architecture generation.
 
-./scripts/run-speech-experiment.sh \
-  --experiment "$EXP" \
-  --worker edge
-```
-
-As with generation 1, the controller first exports/converts an initialized model
-and performs a physical MA2450 numerical probe before full CUDA training.
-
-When it reaches `AWAIT_REVIEW`, run:
-
-```bash
-./scripts/review-speech-experiment.sh --experiment "$EXP"
-```
-
-Phase 11 is complete only after generation 2 is evaluated and reviewed with
-lineage sufficient to explain whether the normalization-free/update-budget
-change improved CER without violating the hardware envelope.
+The Phase 9/10 orchestration and Phase 11 v2/v3 hardware envelopes remain the
+qualified execution platform for that work.
