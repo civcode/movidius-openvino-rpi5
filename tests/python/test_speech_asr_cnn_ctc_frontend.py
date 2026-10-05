@@ -52,7 +52,27 @@ class CnnCtcComparisonTests(unittest.TestCase):
         self.assertEqual(result["frame_count"], 2)
         self.assertEqual(result["frame_argmax_matches"], 1)
         self.assertEqual(result["frame_argmax_agreement"], 0.5)
+        self.assertEqual(result["frame_argmax_mismatches"], 1)
+        self.assertGreater(
+            result["max_mismatched_reference_top2_margin"],
+            0.0,
+        )
         self.assertGreater(result["max_abs_error"], 0.0)
+
+    def test_comparison_reports_low_margin_argmax_flip(self):
+        import numpy as np
+        from speech_asr.cnn_ctc_compare import compare_arrays
+
+        reference = np.array([[[1.0, 0.999, 0.0]]], dtype=np.float32)
+        candidate = np.array([[[0.999, 1.0, 0.0]]], dtype=np.float32)
+        result = compare_arrays(reference, candidate)
+        self.assertEqual(result["frame_argmax_mismatches"], 1)
+        self.assertAlmostEqual(
+            result["max_mismatched_reference_top2_margin"],
+            0.001,
+            places=5,
+        )
+        self.assertAlmostEqual(result["max_abs_error"], 0.001, places=5)
 
 
 if __name__ == "__main__":
