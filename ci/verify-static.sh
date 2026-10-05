@@ -84,7 +84,9 @@ done < <(find . -path './vendor' -prune -o -path './work' -prune -o -type f -nam
 grep -q 'arm64)' scripts/platform.sh || fail 'platform helper lacks arm64 target'
 grep -q 'DOCKER_PLATFORM="linux/arm64"' scripts/platform.sh || fail 'arm64 Docker platform missing'
 grep -q 'EXPECTED_ELF_MACHINE_ID=183' scripts/platform.sh || fail 'arm64 ELF machine ID missing'
-grep -q 'arm64:aarch64' scripts/host-run.sh || fail 'host-run lacks native arm64 host acceptance'
+grep -q 'runtime_target_can_run_host' scripts/host-run.sh || fail 'host-run bypasses shared host-target acceptance'
+grep -q 'arm64:aarch64' scripts/lib/runtime.sh || fail 'runtime helper lacks native aarch64 host acceptance'
+grep -q 'arm64:arm64' scripts/lib/runtime.sh || fail 'runtime helper lacks native arm64 host acceptance'
 grep -q 'arm64:arm64' scripts/verify.sh || fail 'runtime verifier lacks arm64 image validation'
 
 # Phase 6 speech benchmark worker invariants.
