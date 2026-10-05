@@ -235,6 +235,49 @@ def source_state(
     }
 
 
+def validate_cached_reference(
+    reference: dict[str, Any],
+    *,
+    source: dict[str, Any],
+    manifest_path: pathlib.Path,
+    reference_device: str,
+) -> None:
+    if reference.get("schema") != "speech-asr/frozen-reference-evaluation":
+        raise ValueError("cached reference schema mismatch")
+    if reference.get("status") != "completed":
+        raise ValueError("cached reference is not completed")
+    if reference.get("role") != "heldout_test":
+        raise ValueError("cached reference role mismatch")
+
+    ref_source = reference.get("source", {})
+    if ref_source.get("experiment_id") != SOURCE_EXPERIMENT_ID:
+        raise ValueError("cached reference source experiment mismatch")
+    if ref_source.get("attempt_id") != SOURCE_ATTEMPT_ID:
+        raise ValueError("cached reference source attempt mismatch")
+    if ref_source.get("checkpoint_sha256") != source["artifacts"]["checkpoint"]["sha256"]:
+        raise ValueError("cached reference checkpoint hash mismatch")
+    if ref_source.get("onnx_sha256") != source["artifacts"]["onnx"]["sha256"]:
+        raise ValueError("cached reference ONNX hash mismatch")
+
+    benchmark = reference.get("benchmark", {})
+    if benchmark.get("id") != BENCHMARK_ID:
+        raise ValueError("cached reference benchmark mismatch")
+    if benchmark.get("manifest_sha256") != sha256_path(manifest_path):
+        raise ValueError("cached reference manifest hash mismatch")
+
+    runtime = reference.get("runtime", {})
+    expected_device = "cpu" if reference_device == "cpu" else "cuda:0"
+    if runtime.get("pytorch_device") != expected_device:
+        raise ValueError(
+            "cached reference PyTorch device mismatch: "
+            f"{runtime.get('pytorch_device')!r} != {expected_device!r}"
+        )
+    if runtime.get("onnx_provider") != "CPUExecutionProvider":
+        raise ValueError("cached reference ONNX provider mismatch")
+    if reference.get("agreement", {}).get("frame_argmax_agreement") != 1.0:
+        raise ValueError("cached reference agreement is not exact")
+
+
 def validate_qualification(
     qualification_path: pathlib.Path,
     manifest_path: pathlib.Path,
@@ -333,7 +376,12 @@ def main() -> int:
     parser.add_argument(
         "--reference-device",
         choices=("cuda", "cpu"),
-        default="cuda",
+        default="cpu",
+    )
+    parser.add_argument(
+        "--reuse-reference",
+        action="store_true",
+        help="reuse an existing validated reference.json after a retryable edge failure",
     )
     args = parser.parse_args()
 
@@ -391,44 +439,61 @@ def main() -> int:
         repo_commit = git_head()
 
         reference_path = output_dir / "reference.json"
-        reference_proc = run_streaming(
-            [
-                str(ROOT / "scripts" / "python-training.sh"),
-                str(REFERENCE_EVALUATOR),
-                "--checkpoint",
-                str(source["paths"]["checkpoint"]),
-                "--onnx",
-                str(source["paths"]["onnx"]),
-                "--manifest",
-                str(args.manifest),
-                "--benchmark-id",
-                BENCHMARK_ID,
-                "--source-experiment-id",
-                SOURCE_EXPERIMENT_ID,
-                "--source-attempt-id",
-                SOURCE_ATTEMPT_ID,
-                "--device",
-                args.reference_device,
-                "--progress-every",
-                "250",
-                "--quiet-result",
-                "--output",
-                str(reference_path),
-            ],
-            log_path=logs_dir / "reference.log",
-        )
-        if reference_proc.returncode != 0 or not reference_path.is_file():
-            raise ValueError(
-                "frozen PyTorch/ONNX reference evaluation failed:\n"
-                + "\n".join(reference_proc.stdout.splitlines()[-40:])
+        if args.reuse_reference:
+            if not reference_path.is_file():
+                raise ValueError(
+                    "--reuse-reference requested but reference.json is missing"
+                )
+            reference = load_json(reference_path)
+            validate_cached_reference(
+                reference,
+                source=source,
+                manifest_path=args.manifest,
+                reference_device=args.reference_device,
             )
-        reference = load_json(reference_path)
-        if (
-            reference.get("agreement", {}).get("frame_argmax_agreement")
-            != 1.0
-        ):
-            raise ValueError(
-                "held-out PyTorch/ONNX frame argmax agreement is not exact"
+            print(
+                "held-out reference: reusing validated "
+                f"{reference_path}",
+                flush=True,
+            )
+        else:
+            reference_proc = run_streaming(
+                [
+                    str(ROOT / "scripts" / "python-training.sh"),
+                    str(REFERENCE_EVALUATOR),
+                    "--checkpoint",
+                    str(source["paths"]["checkpoint"]),
+                    "--onnx",
+                    str(source["paths"]["onnx"]),
+                    "--manifest",
+                    str(args.manifest),
+                    "--benchmark-id",
+                    BENCHMARK_ID,
+                    "--source-experiment-id",
+                    SOURCE_EXPERIMENT_ID,
+                    "--source-attempt-id",
+                    SOURCE_ATTEMPT_ID,
+                    "--device",
+                    args.reference_device,
+                    "--progress-every",
+                    "250",
+                    "--quiet-result",
+                    "--output",
+                    str(reference_path),
+                ],
+                log_path=logs_dir / "reference.log",
+            )
+            if reference_proc.returncode != 0 or not reference_path.is_file():
+                raise ValueError(
+                    "frozen PyTorch/ONNX reference evaluation failed:\n"
+                    + "\n".join(reference_proc.stdout.splitlines()[-40:])
+                )
+            reference = load_json(reference_path)
+            validate_cached_reference(
+                reference,
+                source=source,
+                manifest_path=args.manifest,
+                reference_device=args.reference_device,
             )
 
         home_proc = ssh_run(
