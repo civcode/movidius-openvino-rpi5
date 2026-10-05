@@ -311,6 +311,8 @@ class FrozenHeldoutControllerSourceTests(unittest.TestCase):
             evaluator,
         )
         self.assertIn("class PersistentMyriadServer:", evaluator)
+        self.assertIn("def require_persistent_runtime(", evaluator)
+        self.assertIn("runtime image lacks persistent tensor-stream support", evaluator)
         self.assertIn('"custom-server"', evaluator)
         self.assertIn("CACHE_VERSION = 2", evaluator)
         self.assertIn('"execution_mode": EXECUTION_MODE', evaluator)
