@@ -264,3 +264,33 @@ It does not change the model graph, data, seed, optimizer, learning-rate
 schedule or number of training epochs. Only the selected checkpoint changes.
 This isolates whether the observed blank collapse is primarily a surrogate
 checkpoint-selection problem before introducing augmentation or regularization.
+
+
+## Deterministic SpecAugment diagnostic
+
+CER-aligned checkpoint selection improved the reviewed speaker-D validation CER
+to 0.866935 and reduced empty hypotheses to 19/95, but the model still
+under-emits and WER remains above 1.
+
+The next child adds only input regularization. `specaugment-v1` is applied to
+training batches before the CUDA copy and never to validation/export/inference.
+
+Frozen policy:
+
+- 2 frequency masks, width uniformly sampled from 0..8 mel bins;
+- 2 time masks, width uniformly sampled from 0..min(20, 10% of valid frontend
+  frames);
+- zero mask value;
+- dedicated deterministic CPU torch.Generator seeded with `seed + 1`.
+
+The batch contract now preserves true valid frontend-frame lengths so time
+masks cannot be placed into padded-only regions.
+
+Initialize with:
+
+```bash
+./scripts/init-cnn-ctc-v3-specaugment.sh
+```
+
+Training results and REVIEW include both the augmentation policy and aggregate
+mask application counts. The inference graph is unchanged.
