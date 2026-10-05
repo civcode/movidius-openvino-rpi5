@@ -86,3 +86,18 @@ The same pretraining physical MYRIAD gate applies before CUDA training. The
 local executor still has no authority to change the v3 update budget,
 normalization policy, kernels, widths, thresholds or benchmark after execution
 begins.
+
+
+## Frontend-correction generation
+
+The executor registry now also contains the explicitly reviewed
+`cnn_ctc_v4` declaration.
+
+v4 is not a generic architecture expansion. Its inference architecture is
+exactly the frozen v3 residual temporal declaration; the only model-contract
+change is frontend `logmel-v2`, which performs valid-frame-only per-mel-bin
+mean normalization and zeroes padded normalized frames.
+
+The controller requires exact equality against both the v4 frontend declaration
+and `V4_ARCHITECTURE`, physically probes the initialized graph on MA2450, and
+uses separate v4 artifact/evaluator names end-to-end.
