@@ -135,6 +135,28 @@ grep -q 'artifact is immutable once recorded' examples/speech-asr/python/speech_
 grep -q 'must match \$.controller_commit' examples/speech-asr/python/speech_asr/contracts.py || fail 'deployment worker revision pin missing'
 grep -q 'retryable_failure_classes' examples/speech-asr/tools/manage_experiment.py || fail 'experiment retry policy enforcement missing'
 
+# Phase 10 local execution agent / edge orchestration invariants.
+test -f examples/speech-asr/python/speech_asr/orchestration.py || fail 'Phase 10 orchestration core missing'
+test -f examples/speech-asr/agent/run_experiment.py || fail 'Phase 10 controller missing'
+test -f examples/speech-asr/agent/edge_worker.py || fail 'Phase 10 edge worker missing'
+test -f examples/speech-asr/agent/init_cnn_ctc_v1_experiment.py || fail 'Phase 10 baseline initializer missing'
+test -f scripts/run-speech-experiment.sh || fail 'Phase 10 controller wrapper missing'
+test -f scripts/edge-speech-bootstrap.sh || fail 'Phase 10 edge bootstrap missing'
+test -f scripts/edge-speech-preflight.sh || fail 'Phase 10 edge preflight missing'
+test -f scripts/edge-speech-worker.sh || fail 'Phase 10 edge worker wrapper missing'
+grep -q 'BatchMode=yes' examples/speech-asr/python/speech_asr/orchestration.py || fail 'Phase 10 SSH is not non-interactive'
+if grep -R -n 'StrictHostKeyChecking=no' examples/speech-asr/agent examples/speech-asr/python/speech_asr/orchestration.py scripts/edge-speech-*.sh; then
+    fail 'Phase 10 disables SSH host-key verification'
+fi
+grep -q 'worktree add --detach' scripts/edge-speech-bootstrap.sh || fail 'edge automation checkout is not a dedicated worktree'
+grep -q 'flock -n' scripts/edge-speech-worker.sh || fail 'MYRIAD worker lock is not non-blocking'
+grep -q 'worker_busy' scripts/edge-speech-worker.sh || fail 'MYRIAD busy state is not explicit'
+grep -q -- '--work-dir' scripts/train-cnn-ctc-v1.sh || fail 'training outputs are not experiment-isolatable'
+grep -q 'AWAIT_REVIEW' examples/speech-asr/agent/run_experiment.py || fail 'Phase 10 controller does not hand off to review'
+if grep -q 'build.sh --platform' examples/speech-asr/agent/run_experiment.py; then
+    fail 'ordinary experiment execution must not rebuild the edge runtime'
+fi
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
 for name in [
@@ -148,6 +170,10 @@ for name in [
     "examples/speech-asr/python/speech_asr/cnn_ctc_frontend.py",
     "examples/speech-asr/python/speech_asr/cnn_ctc_compare.py",
     "examples/speech-asr/python/speech_asr/experiment.py",
+    "examples/speech-asr/python/speech_asr/orchestration.py",
+    "examples/speech-asr/agent/init_cnn_ctc_v1_experiment.py",
+    "examples/speech-asr/agent/run_experiment.py",
+    "examples/speech-asr/agent/edge_worker.py",
     "examples/speech-asr/tools/manage_experiment.py",
     "examples/speech-asr/tools/validate_contract.py",
     "examples/speech-asr/training/cnn_ctc_v1.py",
