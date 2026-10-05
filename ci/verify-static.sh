@@ -285,6 +285,21 @@ test -f examples/speech-asr/agent/init_cnn_ctc_v3_cer_selection.py || fail 'CER-
 test -x scripts/init-cnn-ctc-v3-cer-selection.sh || fail 'CER-selection experiment wrapper is not executable'
 grep -q '"checkpoint_selection": "validation_cer"' examples/speech-asr/agent/init_cnn_ctc_v3_cer_selection.py || fail 'CER-selection experiment policy changed'
 grep -q '"max_realtime_factor": None' examples/speech-asr/agent/init_cnn_ctc_v3_cer_selection.py || fail 'CER-selection experiment must measure rather than gate RTF'
+grep -q 'feature_lengths' examples/speech-asr/training/cnn_ctc_v1.py || fail 'training batches do not preserve valid frontend lengths'
+grep -q 'specaugment-v1' examples/speech-asr/contracts/train-config-v1.schema.json || fail 'train config lacks SpecAugment policy'
+grep -q 'apply_specaugment_v1' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'v3 trainer lacks deterministic SpecAugment'
+grep -q 'augmentation_generator.manual_seed' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'SpecAugment RNG is not deterministically seeded'
+grep -q 'batch\["feature_lengths"\]' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'SpecAugment does not respect valid frontend lengths'
+test -f examples/speech-asr/agent/init_cnn_ctc_v3_specaugment.py || fail 'SpecAugment experiment initializer missing'
+test -x scripts/init-cnn-ctc-v3-specaugment.sh || fail 'SpecAugment experiment wrapper is not executable'
+grep -q 'DEFAULT_PARENT = "exp-3c7727ca3f37ba2c"' examples/speech-asr/agent/init_cnn_ctc_v3_specaugment.py || fail 'SpecAugment parent changed'
+grep -q '"kind": "specaugment-v1"' examples/speech-asr/agent/init_cnn_ctc_v3_specaugment.py || fail 'SpecAugment experiment policy missing'
+grep -q '"frequency_masks": 2' examples/speech-asr/agent/init_cnn_ctc_v3_specaugment.py || fail 'SpecAugment frequency-mask count changed'
+grep -q '"frequency_max_width": 8' examples/speech-asr/agent/init_cnn_ctc_v3_specaugment.py || fail 'SpecAugment frequency width changed'
+grep -q '"time_masks": 2' examples/speech-asr/agent/init_cnn_ctc_v3_specaugment.py || fail 'SpecAugment time-mask count changed'
+grep -q '"time_max_width": 20' examples/speech-asr/agent/init_cnn_ctc_v3_specaugment.py || fail 'SpecAugment time width changed'
+grep -q '"time_max_fraction": 0.1' examples/speech-asr/agent/init_cnn_ctc_v3_specaugment.py || fail 'SpecAugment time fraction changed'
+grep -q '"checkpoint_selection": "validation_cer"' examples/speech-asr/agent/init_cnn_ctc_v3_specaugment.py || fail 'SpecAugment must retain CER-aligned checkpointing'
 grep -q 'manifest\["benchmark"\]\["id"\]' examples/speech-asr/agent/edge_worker.py || fail 'edge evaluator does not propagate benchmark id'
 grep -q 'benchmark id mismatch' examples/speech-asr/agent/edge_worker.py || fail 'edge result does not validate benchmark id'
 grep -q 'same_benchmark_manifest' examples/speech-asr/agent/review_experiment.py || fail 'review tool is not benchmark-aware'
@@ -314,6 +329,7 @@ for name in [
     "examples/speech-asr/agent/init_cnn_ctc_v3_experiment.py",
     "examples/speech-asr/agent/init_cnn_ctc_v3_quality_baseline.py",
     "examples/speech-asr/agent/init_cnn_ctc_v3_cer_selection.py",
+    "examples/speech-asr/agent/init_cnn_ctc_v3_specaugment.py",
     "examples/speech-asr/agent/review_experiment.py",
     "examples/speech-asr/agent/run_experiment.py",
     "examples/speech-asr/agent/edge_worker.py",
