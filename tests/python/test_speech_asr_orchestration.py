@@ -9,6 +9,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 SPEECH = ROOT / "examples" / "speech-asr"
 sys.path.insert(0, str(SPEECH / "python"))
 
+from speech_asr.contracts import ContractValidationError, validate_edge_worker_result
+
 from speech_asr.orchestration import (
     acceptance_evaluation,
     remote_failure_class,
@@ -198,6 +200,43 @@ class Phase10TransportTests(unittest.TestCase):
             remote_failure_class(22),
             ("failed", "result_contract"),
         )
+
+
+class EdgeWorkerResultContractTests(unittest.TestCase):
+    def test_completed_worker_result_validates(self):
+        sha = "a" * 64
+        document = {
+            "schema": "speech-asr/edge-worker-result",
+            "version": 1,
+            "status": "completed",
+            "failure_class": None,
+            "experiment_id": "exp-0123456789abcdef",
+            "attempt_id": "attempt-0001",
+            "worker_commit": "b" * 40,
+            "deployment_sha256": sha,
+            "hardware_result": {"path": "hardware.json", "sha256": sha},
+            "evaluator_log": {"path": "evaluator.log", "sha256": sha},
+            "metrics": {"wer": 1.0},
+        }
+        self.assertEqual(
+            validate_edge_worker_result(document)["status"],
+            "completed",
+        )
+
+    def test_failed_worker_result_requires_failure_class(self):
+        document = {
+            "schema": "speech-asr/edge-worker-result",
+            "version": 1,
+            "status": "failed",
+            "failure_class": None,
+            "experiment_id": None,
+            "attempt_id": None,
+            "worker_commit": None,
+            "deployment_sha256": None,
+            "diagnostics": {"summary": "preflight failed"},
+        }
+        with self.assertRaisesRegex(ContractValidationError, "requires class"):
+            validate_edge_worker_result(document)
 
 
 class EdgeWorkerBundleTests(unittest.TestCase):
