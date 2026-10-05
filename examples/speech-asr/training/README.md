@@ -163,7 +163,7 @@ Generation 2 preserves the generation-1 temporal/receptive-field design but
 changes optimization dynamics based on the rejected v2 evidence.
 
 The inference model is normalization-free and contains ordinary Conv1d, ReLU,
-Add and the final transpose only. Residual projections are zero-initialized so
+Add and the final transpose only. Residual projections use Kaiming weights scaled to 1% so
 the residual stack begins close to identity.
 
 The reviewed default training budget is 32 epochs, batch size 1, Adam 3e-4,
