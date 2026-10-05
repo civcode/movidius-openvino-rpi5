@@ -19,6 +19,7 @@ runtime provenance and benchmark results.
 - `acceptance-policy-v1.schema.json` — required gates, thresholds and retry policy.
 - `experiment-lifecycle-v1.schema.json` — immutable request, attempts, summaries and history.
 - `deployment-manifest-v1.schema.json` — hash-bound controller-to-edge deployment handoff.
+- `edge-worker-result-v1.schema.json` — Phase 10 edge execution/failure envelope.
 
 The three `.yaml` files intentionally contain JSON syntax. JSON is valid YAML
 1.2, and this keeps the root contracts parseable with the Python standard
@@ -89,3 +90,11 @@ worker Git revision matching for a deployment manifest.
 
 The JSON schemas describe the portable shape; `speech_asr.contracts` and
 `speech_asr.experiment` enforce cross-field identity and lifecycle invariants.
+
+## Phase 10 worker contract
+
+`edge-worker-result-v1` makes the controller/worker boundary explicit. A
+completed worker result binds the experiment/attempt IDs, exact worker commit,
+deployment-manifest hash, hardware-result hash and evaluator-log hash. Failed
+worker results carry one declared failure class plus diagnostics. The controller
+validates this envelope again after rsync before accepting hardware evidence.
