@@ -957,46 +957,44 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-Phase 11 and Milestone C are **complete**. The post-Phase-11 data qualification
-has now been reviewed and accepted for an interim model-quality baseline.
+Phase 11/Milestone C are complete, and the first larger-data baseline has now
+executed as `exp-62a94f36aefddb58/attempt-0001`.
 
-Reviewed model-quality-v1 identity:
+The execution path is healthy: CUDA placement, OpenVINO conversion, exact
+PyTorch/ONNX argmax agreement and physical MA2450 execution all passed. p95
+MYRIAD latency remained 16.65 ms.
 
-- source: `ami-benchmark-v1`, 277 records;
-- train: speakers A/B/C, 125 eligible records, 219.998 seconds,
-  manifest `89a8624a5dc46ef28845f35591fc1e623dfbd3026d7a4729b7578153d03baf5a`;
-- validation: speaker D, 95 eligible records, 122.52 seconds,
-  manifest `07ebc41041238c1ec374ad64eefe7209fd6c11d1050e8f6f72f0226d358c8923`;
-- record overlap: 0;
-- speaker overlap: 0;
-- meeting: ES2002a on both sides.
+The request's only acceptance rejection was the old RTF <= 0.01 threshold.
+Because the graph is fixed-shape and the new validation clips are shorter, RTF
+rose to 0.012877 despite unchanged per-inference latency. Model-quality
+experiments therefore treat RTF as a measured benchmark statistic and retain
+the direct p95 latency gate.
 
-This is approved for the next controlled baseline, but remains an interim
-speaker-holdout experiment rather than final cross-meeting generalization
-evidence. See `docs/model-quality-v1-baseline.md`.
+The important model evidence is severe held-out-speaker CTC blank collapse:
 
-The next experiment must keep `cnn_ctc_v3` architecture and optimization
-policy unchanged so data quality is the only substantive experimental change.
-Its 32-epoch/batch-1 schedule corresponds to 4,000 optimizer steps on the
-reviewed training manifest.
+- CER 0.980847, WER 1.0;
+- 95.93% blank argmax frames;
+- 84 / 95 empty hypotheses;
+- only 25 emitted non-space characters for 992 reference characters;
+- best validation CTC loss at epoch 11;
+- final train/validation loss 0.4756 / 10.9583 after 4,000 optimizer steps.
 
-Before execution, provision the reviewed dataset once to edge. This is an
-explicit infrastructure operation and is not part of ordinary experiment
-transfer:
+Do **not** change the inference architecture yet.
+
+The next diagnostic keeps the same `cnn_ctc_v3` graph, exact model-quality-v1
+manifests, seed and optimizer trajectory. It adds transcript-quality validation
+at every epoch and selects the exported checkpoint by minimum greedy validation
+CER instead of CTC loss.
+
+Run:
 
 ```bash
 git pull --ff-only
 ./ci/verify-static.sh
 ./scripts/test-speech-asr.sh
 
-./scripts/provision-speech-model-data-edge.sh
-```
-
-Then create and run the exact-hash baseline:
-
-```bash
 EXP="$(
-  ./scripts/init-cnn-ctc-v3-quality-baseline.sh |
+  ./scripts/init-cnn-ctc-v3-cer-selection.sh |
   python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
 )"
 
@@ -1010,8 +1008,8 @@ echo "$EXP"
   --experiment "$EXP"
 ```
 
-This baseline intentionally has no numeric WER/CER acceptance ceiling. WER/CER
-are the measurements being established. Hardware/compatibility gates remain
-RTF <= 0.01, p95 <= 25 ms and PyTorch/ONNX frame argmax agreement = 1.0.
+No new edge dataset provisioning is required if the reviewed model-quality-v1
+dataset remains present and hash-valid.
 
-REVIEW the larger-data baseline before proposing another architecture.
+REVIEW the per-epoch CER/blank-collapse trajectory before adding SpecAugment,
+weight decay or another architecture generation.
