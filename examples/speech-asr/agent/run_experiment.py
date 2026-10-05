@@ -1017,6 +1017,9 @@ def main() -> int:
                     "attempt_id": attempt_id,
                     "review_state": "AWAIT_REVIEW",
                     "acceptance": acceptance_result["status"],
+                    "acceptance_reasons": acceptance_result["reasons"],
+                    "metrics": headline_metrics,
+                    "threshold_checks": acceptance_result["threshold_checks"],
                     "result": str(
                         attempt_dir / "results" / "result.json"
                     ),
