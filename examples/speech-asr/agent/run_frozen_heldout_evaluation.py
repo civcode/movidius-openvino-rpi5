@@ -95,6 +95,37 @@ def run(
     return proc
 
 
+def run_streaming(
+    command: list[str],
+    *,
+    log_path: pathlib.Path,
+) -> subprocess.CompletedProcess[str]:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    output: list[str] = []
+    with log_path.open("w", encoding="utf-8") as log_handle:
+        proc = subprocess.Popen(
+            command,
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            bufsize=1,
+        )
+        if proc.stdout is None:
+            raise ValueError("streaming subprocess stdout is unavailable")
+        for line in proc.stdout:
+            print(line, end="", flush=True)
+            log_handle.write(line)
+            log_handle.flush()
+            output.append(line)
+        returncode = proc.wait()
+    return subprocess.CompletedProcess(
+        command,
+        returncode,
+        "".join(output),
+    )
+
+
 def ssh_run(
     worker: str,
     command: list[str],
@@ -360,7 +391,7 @@ def main() -> int:
         repo_commit = git_head()
 
         reference_path = output_dir / "reference.json"
-        reference_proc = run(
+        reference_proc = run_streaming(
             [
                 str(ROOT / "scripts" / "python-training.sh"),
                 str(REFERENCE_EVALUATOR),
@@ -378,6 +409,9 @@ def main() -> int:
                 SOURCE_ATTEMPT_ID,
                 "--device",
                 args.reference_device,
+                "--progress-every",
+                "250",
+                "--quiet-result",
                 "--output",
                 str(reference_path),
             ],
