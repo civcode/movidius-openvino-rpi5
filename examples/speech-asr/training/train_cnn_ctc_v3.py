@@ -96,8 +96,23 @@ def set_deterministic(seed: int) -> None:
         torch.backends.cudnn.deterministic = True
 
 
-def deterministic_ctc_loss(loss_fn, logits, batch):
-    log_probs = logits.log_softmax(dim=-1).transpose(0, 1)
+def deterministic_ctc_loss(
+    loss_fn,
+    logits,
+    batch,
+    *,
+    blank_index: int = 0,
+    blank_logit_penalty: float = 0.0,
+):
+    if blank_logit_penalty < 0:
+        raise ValueError("blank_logit_penalty must be >= 0")
+    adjusted_logits = logits
+    if blank_logit_penalty:
+        adjusted_logits = logits.clone()
+        adjusted_logits[..., blank_index] = (
+            adjusted_logits[..., blank_index] - blank_logit_penalty
+        )
+    log_probs = adjusted_logits.log_softmax(dim=-1).transpose(0, 1)
     if log_probs.device.type == "cuda":
         log_probs = log_probs.cpu()
     return loss_fn(
@@ -297,6 +312,11 @@ def main() -> int:
         choices=("validation_loss", "validation_cer"),
     )
     parser.add_argument(
+        "--ctc-objective-kind",
+        choices=("blank-logit-penalty-v1",),
+    )
+    parser.add_argument("--blank-logit-penalty", type=float)
+    parser.add_argument(
         "--augmentation-kind",
         choices=("specaugment-v1",),
     )
@@ -375,6 +395,26 @@ def main() -> int:
                 "cnn_ctc_v3 package checkpoint_selection must remain best_validation_loss"
             )
         checkpoint_selection = args.checkpoint_selection or "validation_loss"
+
+        ctc_objective = None
+        blank_logit_penalty = 0.0
+        if args.ctc_objective_kind is None:
+            if args.blank_logit_penalty is not None:
+                raise ValueError(
+                    "--blank-logit-penalty requires --ctc-objective-kind"
+                )
+        else:
+            if args.blank_logit_penalty is None:
+                raise ValueError(
+                    "blank-logit-penalty-v1 requires --blank-logit-penalty"
+                )
+            blank_logit_penalty = float(args.blank_logit_penalty)
+            if not 0 < blank_logit_penalty <= 1.0:
+                raise ValueError("blank_logit_penalty must be > 0 and <= 1")
+            ctc_objective = {
+                "kind": args.ctc_objective_kind,
+                "blank_logit_penalty": blank_logit_penalty,
+            }
 
         augmentation_policy = None
         augmentation_generator = None
@@ -532,7 +572,13 @@ def main() -> int:
                     logits = model(features)
                     if observed_logits_device is None:
                         observed_logits_device = str(logits.device)
-                    loss = deterministic_ctc_loss(loss_fn, logits, batch)
+                    loss = deterministic_ctc_loss(
+                        loss_fn,
+                        logits,
+                        batch,
+                        blank_index=int(vocab["blank_index"]),
+                        blank_logit_penalty=blank_logit_penalty,
+                    )
                     loss.backward()
                     gradient_norm = torch.nn.utils.clip_grad_norm_(
                         model.parameters(),
@@ -626,6 +672,7 @@ def main() -> int:
                 "best_epoch": best_epoch,
                 "checkpoint_selection": checkpoint_selection,
                 "selected_metric_value": selected_metric_value,
+                "ctc_objective": ctc_objective,
                 "augmentation": augmentation_policy,
                 "augmentation_stats": augmentation_stats,
                 "best_validation_loss": best_validation_loss,
@@ -672,6 +719,7 @@ def main() -> int:
             "gradient_clip_norm": gradient_clip_norm,
             "checkpoint_selection": checkpoint_selection,
             "selected_metric_value": selected_metric_value,
+            "ctc_objective": ctc_objective,
             "augmentation": augmentation_policy,
             "augmentation_stats": augmentation_stats,
             "parameter_count": parameter_count(model),
