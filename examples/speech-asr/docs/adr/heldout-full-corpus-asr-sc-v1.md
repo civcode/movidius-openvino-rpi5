@@ -100,6 +100,44 @@ Before MA2450 execution it:
 
 A completed result refuses a second execution for model-selection purposes.
 
+### Persistent MA2450 execution
+
+The held-out hardware path uses one long-running container and one compiled
+OpenVINO `ExecutableNetwork` per server session. The evaluator sends each
+fixed-shape float32 feature tensor over a binary stdin protocol and receives
+one float32 logits tensor over stdout. The network is loaded once, one
+unmeasured warmup inference is performed, and then every held-out utterance is
+measured with the same live `InferRequest`.
+
+The authoritative latency samples are the server-side `Infer()` durations.
+Frontend calculation, pipe transfer, decoding, scoring, container startup and
+model load/compile time are excluded from p50/p95 and realtime-factor
+aggregation. Model-load time is recorded separately per persistent session.
+
+Hardware execution is resumable after transport/device failures. A reusable
+sample result is accepted only when its cache entry is bound to:
+
+- execution mode `persistent-tensor-stream-v1`;
+- sample feature SHA-256;
+- exact frozen XML and BIN SHA-256;
+- evaluator source SHA-256;
+- output tensor element count and logits SHA-256;
+- recorded persistent-server session identity and inference latency.
+
+Earlier one-container-per-utterance cache entries are deliberately incompatible
+with this contract and are not reused. This prevents cold-start measurements
+from being mixed into the steady-state held-out latency distribution.
+
+A retry may create a new persistent server session after a hardware transient;
+each new session again performs one unmeasured warmup. The final result records
+the number of server sessions and their model-load timings. No model weights,
+decoder behavior, scoring rule, held-out sample, or acceptance threshold changes
+when execution resumes.
+
+The runtime image must contain the tensor-stream-capable `hello_myriad`. The
+evaluator checks that capability before touching the held-out hardware path and
+fails with an explicit rebuild instruction if the image predates the protocol.
+
 The result records both the original training commit and the evaluation-code
 commit so model weights and evaluation implementation remain independently
 auditable.
