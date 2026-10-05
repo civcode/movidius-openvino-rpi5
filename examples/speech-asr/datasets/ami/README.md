@@ -129,3 +129,51 @@ Frozen output identities:
 Those expected values are stored in the split specifications themselves.
 `--verify-only` therefore verifies not only internal consistency but also that
 the prepared output is exactly the frozen Phase 1 corpus identity.
+
+
+## Post-Phase-11 model-quality manifests
+
+The frozen `ami-benchmark-v1` preparation contains 277 records from ES2002a,
+covering annotated speakers A-D. Phase 11 showed that the four-record smoke
+split is too small for architecture selection, so model-quality work now derives
+a speaker-disjoint training/validation partition from the prepared benchmark
+manifest.
+
+Prepare or verify the benchmark corpus first, then qualify the derived
+manifests:
+
+```bash
+./scripts/python.sh examples/speech-asr/datasets/ami/prepare_ami.py \
+  --subset benchmark
+
+./scripts/qualify-speech-model-data.sh
+```
+
+The default partition is:
+
+- training: speakers A, B and C;
+- validation: speaker D.
+
+The qualification tool applies the exact selected model's fixed-shape CTC
+eligibility policy before writing either manifest. It emits:
+
+```text
+work/speech-asr/ami/model-quality-v1/
+├── train.manifest.jsonl
+├── validation.manifest.jsonl
+└── qualification.json
+```
+
+`qualification.json` records source/model/vocabulary hashes, manifest hashes,
+eligible and excluded counts, audio duration, word/character totals, meeting
+and speaker sets, and explicit zero record/speaker overlap.
+
+Audio is not copied. Derived records rewrite their relative audio path back to
+the frozen `ami-benchmark-v1/audio/` files while preserving normalized-audio
+provenance.
+
+This is speaker-disjoint but **not meeting-disjoint**: the current frozen
+benchmark source contains only ES2002a. It is suitable for the next controlled
+learnability baseline, but it is not yet a final generalization benchmark.
+Later corpus expansion should use disjoint meetings/sessions before strong ASR
+quality claims are made.
