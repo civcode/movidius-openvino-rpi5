@@ -283,13 +283,16 @@ def command_transition(args: argparse.Namespace) -> None:
     )
 
     if args.state == "AWAIT_REVIEW":
+        metrics = load_json(args.metrics_json) if args.metrics_json else None
+        diagnostics = (
+            load_json(args.diagnostics_json)
+            if args.diagnostics_json
+            else ({"summary": args.diagnostic} if args.diagnostic else None)
+        )
         summary = make_summary(
             updated,
-            diagnostics=(
-                {"summary": args.diagnostic}
-                if args.diagnostic
-                else None
-            ),
+            metrics=metrics,
+            diagnostics=diagnostics,
         )
         result_path = path.parent / "results" / "result.json"
         if result_path.exists():
@@ -498,6 +501,8 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     transition.add_argument("--diagnostic")
+    transition.add_argument("--metrics-json", type=pathlib.Path)
+    transition.add_argument("--diagnostics-json", type=pathlib.Path)
     transition.set_defaults(func=command_transition)
 
     stage = sub.add_parser("record-stage")
