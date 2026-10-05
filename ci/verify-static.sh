@@ -266,6 +266,24 @@ grep -q 'speaker_overlap' examples/speech-asr/tools/qualify_model_quality_manife
 grep -q 'greedy_decode_logits_diagnostics' examples/speech-asr/evaluation/evaluate_cnn_ctc_v3.py || fail 'v3 evaluator lacks decoder diagnostics'
 grep -q 'blank_frame_fraction' examples/speech-asr/python/speech_asr/cnn_ctc.py || fail 'CTC blank-collapse diagnostics missing'
 grep -q 'character_edits' examples/speech-asr/evaluation/evaluate_cnn_ctc_v3.py || fail 'v3 evaluator lacks per-sample character edits'
+grep -q 'aggregate_decoder_diagnostics' examples/speech-asr/evaluation/evaluate_cnn_ctc_v3.py || fail 'v3 evaluator lacks decoder aggregate'
+test -f examples/speech-asr/agent/init_cnn_ctc_v3_quality_baseline.py || fail 'model-quality baseline initializer missing'
+test -x scripts/init-cnn-ctc-v3-quality-baseline.sh || fail 'model-quality baseline wrapper is not executable'
+test -x scripts/provision-speech-model-data-edge.sh || fail 'model-quality edge provisioning wrapper is not executable'
+grep -q '89a8624a5dc46ef28845f35591fc1e623dfbd3026d7a4729b7578153d03baf5a' examples/speech-asr/agent/init_cnn_ctc_v3_quality_baseline.py || fail 'reviewed train manifest hash changed'
+grep -q '07ebc41041238c1ec374ad64eefe7209fd6c11d1050e8f6f72f0226d358c8923' examples/speech-asr/agent/init_cnn_ctc_v3_quality_baseline.py || fail 'reviewed validation manifest hash changed'
+grep -q '"max_wer": None' examples/speech-asr/agent/init_cnn_ctc_v3_quality_baseline.py || fail 'quality baseline must not inherit smoke WER ceiling'
+grep -q '"max_cer": None' examples/speech-asr/agent/init_cnn_ctc_v3_quality_baseline.py || fail 'quality baseline must not inherit smoke CER ceiling'
+grep -q 'processed_train_audio_seconds' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'v3 processed-audio budget evidence missing'
+grep -q 'manifest\["benchmark"\]\["id"\]' examples/speech-asr/agent/edge_worker.py || fail 'edge evaluator does not propagate benchmark id'
+grep -q 'benchmark id mismatch' examples/speech-asr/agent/edge_worker.py || fail 'edge result does not validate benchmark id'
+grep -q 'same_benchmark_manifest' examples/speech-asr/agent/review_experiment.py || fail 'review tool is not benchmark-aware'
+grep -q 'BatchMode=yes' scripts/provision-speech-model-data-edge.sh || fail 'edge dataset provisioning is not non-interactive'
+if grep -q 'StrictHostKeyChecking=no' scripts/provision-speech-model-data-edge.sh; then
+    fail 'edge dataset provisioning disables host-key verification'
+fi
+grep -q 'rsync -a --delete --checksum' scripts/provision-speech-model-data-edge.sh || fail 'edge dataset provisioning does not use reviewed rsync path'
+grep -q 'edge-speech-bootstrap.sh' scripts/provision-speech-model-data-edge.sh || fail 'edge dataset provisioning does not pin worker revision'
 
 python3 - <<'PY_CHECK'
 from pathlib import Path
@@ -284,6 +302,7 @@ for name in [
     "examples/speech-asr/agent/init_cnn_ctc_v1_experiment.py",
     "examples/speech-asr/agent/init_cnn_ctc_v2_experiment.py",
     "examples/speech-asr/agent/init_cnn_ctc_v3_experiment.py",
+    "examples/speech-asr/agent/init_cnn_ctc_v3_quality_baseline.py",
     "examples/speech-asr/agent/review_experiment.py",
     "examples/speech-asr/agent/run_experiment.py",
     "examples/speech-asr/agent/edge_worker.py",
