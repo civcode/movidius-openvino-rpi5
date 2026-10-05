@@ -206,5 +206,15 @@ Always run compatibility before training:
 ```
 
 On the Pi, run the physical compatibility probe and trained-model evaluator.
-Further model-development automation belongs to Phase 9's explicit experiment
-lifecycle rather than changing benchmark or model contracts implicitly.
+
+Phase 9 now provides the explicit immutable experiment lifecycle used for
+further model development. Reviewed proposal/model/training/acceptance documents
+are managed with:
+
+```bash
+./scripts/python.sh examples/speech-asr/tools/manage_experiment.py --help
+```
+
+Phase 10 will automate the accepted oberon -> edge SSH/rsync execution path
+using those experiment and deployment-manifest contracts; it must not change
+architecture, benchmark or acceptance policy implicitly.
