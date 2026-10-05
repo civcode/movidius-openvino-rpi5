@@ -24,7 +24,7 @@ The central rule is:
 | 7 — streaming layer | **complete** — real prepared AMI replay accepted: byte-identical repeated results, contract-valid, WER/CER 0 |
 | 8 — custom PyTorch training skeleton | **complete** — deterministic CUDA training, ONNX/OpenVINO export, physical Pi 5/arm64 + MA2450 execution, and contract-valid AMI smoke evaluation accepted |
 | 9 — experiment lifecycle | **complete** — immutable content-derived requests, attempt state machine, artifact/result provenance, deployment manifests and history index accepted by static checks and the full speech-ASR unit suite |
-| 10 — local execution agent and frontier handoff | **implemented; physical acceptance pending** — oberon controller, exact-commit edge worktree, non-interactive SSH/rsync, hash-bound deployment, exclusive MYRIAD locking, result collection and AWAIT_REVIEW handoff implemented |
+| 10 — local execution agent and frontier handoff | **complete** — oberon controller, exact-commit edge worktree, non-interactive SSH/rsync, hash-bound deployment, exclusive MYRIAD locking, result collection and AWAIT_REVIEW handoff physically accepted on Pi 5/MA2450 |
 | 11 | not started |
 
 Phase 0 was re-reviewed after later implementation work. The root audio,
@@ -698,13 +698,20 @@ A declared experiment can be executed end-to-end by the local agent, while a
 new architecture cannot be created without crossing the explicit frontier
 design/review boundary.
 
-Phase 10 acceptance requires:
+Phase 10 acceptance completed on 2026-10-05 with baseline experiment
+`exp-f915ec624a63caf6`, attempt `attempt-0001`:
 
-- `./ci/verify-static.sh` and `./scripts/test-speech-asr.sh` to pass on oberon;
-- one baseline `cnn_ctc_v1` experiment to complete from oberon through the
-  dedicated edge worktree and physical MA2450;
-- the returned attempt to validate and end in `AWAIT_REVIEW` with a compact
-  result and acceptance-policy evidence.
+- oberon initialized and executed the experiment through the dedicated edge
+  worker without manual artifact handoff;
+- the edge worker completed physical Pi 5/arm64 + MA2450 evaluation;
+- the controller returned `status: completed`;
+- the frozen acceptance policy returned `accepted`;
+- the lifecycle ended in `AWAIT_REVIEW`;
+- the authoritative compact result was written below the owning attempt.
+
+The acceptance run also exercised the non-interactive `uv` discovery fallback:
+the SSH PATH omitted `~/.local/bin`, while the worker resolved the installed
+`~/.local/bin/uv` before execution.
 
 ---
 
@@ -803,29 +810,20 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-Phase 10 is **implemented; physical acceptance pending**.
+Phase 10 is **complete**.
 
-Run the hardware-free checks on oberon, then create and execute the frozen
-baseline experiment:
+The next implementation boundary is **Phase 11 — architecture optimization**.
+The execution platform is now qualified, so new work may focus on reviewed
+model-design experiments while preserving the Phase 9/10 lifecycle:
 
-```bash
-git pull --ff-only
-./ci/verify-static.sh
-./scripts/test-speech-asr.sh
+1. REVIEW the accepted `cnn_ctc_v1` evidence and define the first explicit
+   optimization hypothesis;
+2. extend the executable model registry only for reviewed model specs rather
+   than teaching Phase 10 to infer architectures;
+3. keep compatibility gates ahead of expensive CUDA training;
+4. run each approved architecture through the same immutable
+   oberon -> edge -> `AWAIT_REVIEW` path;
+5. compare accuracy, latency, RTF and compatibility evidence across lineage.
 
-./scripts/init-cnn-ctc-v1-experiment.sh
-# Use the returned experiment path:
-./scripts/run-speech-experiment.sh \
-  --experiment work/speech-asr/experiments/exp-... \
-  --worker edge
-```
-
-The first controller run will create/update the dedicated automation worktree on
-edge at `~/workspace/movidius-openvino-rpi5-worker`. It reuses the already
-prepared AMI tree from the human edge checkout via a symlink when available.
-The normal edge checkout remains on its current branch and is not reset or
-pulled by experiment execution.
-
-If the run reaches `AWAIT_REVIEW`, validate the experiment bundle and freeze
-the evidence; Phase 10 can then be marked complete and Phase 11 architecture
-optimization can begin.
+Architecture changes remain frontier-design decisions; Phase 10 execution
+continues to be deterministic infrastructure.
