@@ -204,6 +204,39 @@ if grep -Eq 'MultiheadAttention|LayerNorm' examples/speech-asr/training/cnn_ctc_
     fail 'cnn_ctc_v2 generation 1 must not use attention/layer normalization'
 fi
 
+# Phase 11 generation-2 optimization-dynamics invariants.
+for f in \
+    examples/speech-asr/models/cnn_ctc_v3/model_spec.json \
+    examples/speech-asr/models/cnn_ctc_v3/vocab.json \
+    examples/speech-asr/training/cnn_ctc_v3.py \
+    examples/speech-asr/training/train_cnn_ctc_v3.py \
+    examples/speech-asr/training/export_cnn_ctc_v3.py \
+    examples/speech-asr/evaluation/compare_cnn_ctc_v3_onnx.py \
+    examples/speech-asr/evaluation/evaluate_cnn_ctc_v3.py \
+    examples/speech-asr/agent/init_cnn_ctc_v3_experiment.py; do
+    test -f "$f" || fail "Phase 11 cnn_ctc_v3 file missing: $f"
+done
+for f in \
+    scripts/init-cnn-ctc-v3-experiment.sh \
+    scripts/train-cnn-ctc-v3.sh \
+    scripts/probe-cnn-ctc-v3.sh \
+    scripts/prepare-cnn-ctc-v3.sh \
+    scripts/evaluate-cnn-ctc-v3.sh; do
+    test -x "$f" || fail "Phase 11 generation-2 shell entry point is not executable: $f"
+done
+grep -q '"normalization": "none"' examples/speech-asr/models/cnn_ctc_v3/model_spec.json || fail 'cnn_ctc_v3 must remain normalization-free'
+grep -q '"residual_projection_init": "zeros"' examples/speech-asr/models/cnn_ctc_v3/model_spec.json || fail 'cnn_ctc_v3 zero-init residual policy missing'
+grep -q '"epochs": 32' examples/speech-asr/models/cnn_ctc_v3/model_spec.json || fail 'cnn_ctc_v3 optimization budget changed'
+grep -q '"batch_size": 1' examples/speech-asr/models/cnn_ctc_v3/model_spec.json || fail 'cnn_ctc_v3 batch size changed'
+grep -q 'clip_grad_norm_' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'cnn_ctc_v3 gradient clipping missing'
+grep -q 'CosineAnnealingLR' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'cnn_ctc_v3 cosine schedule missing'
+grep -q 'best_validation_loss' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'cnn_ctc_v3 best-checkpoint selection missing'
+grep -q 'optimizer_steps' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'cnn_ctc_v3 optimizer-step evidence missing'
+grep -q 'cnn_ctc_v3' examples/speech-asr/agent/edge_worker.py || fail 'edge worker does not register cnn_ctc_v3'
+if grep -Eq 'BatchNorm|groups=|MultiheadAttention|LayerNorm' examples/speech-asr/training/cnn_ctc_v3.py; then
+    fail 'cnn_ctc_v3 inference graph violated normalization/operator policy'
+fi
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
 for name in [
@@ -220,6 +253,7 @@ for name in [
     "examples/speech-asr/python/speech_asr/orchestration.py",
     "examples/speech-asr/agent/init_cnn_ctc_v1_experiment.py",
     "examples/speech-asr/agent/init_cnn_ctc_v2_experiment.py",
+    "examples/speech-asr/agent/init_cnn_ctc_v3_experiment.py",
     "examples/speech-asr/agent/review_experiment.py",
     "examples/speech-asr/agent/run_experiment.py",
     "examples/speech-asr/agent/edge_worker.py",
@@ -231,11 +265,16 @@ for name in [
     "examples/speech-asr/training/cnn_ctc_v2.py",
     "examples/speech-asr/training/train_cnn_ctc_v2.py",
     "examples/speech-asr/training/export_cnn_ctc_v2.py",
+    "examples/speech-asr/training/cnn_ctc_v3.py",
+    "examples/speech-asr/training/train_cnn_ctc_v3.py",
+    "examples/speech-asr/training/export_cnn_ctc_v3.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v1_onnx.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v1_tensor.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v1.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v2_onnx.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v2.py",
+    "examples/speech-asr/evaluation/compare_cnn_ctc_v3_onnx.py",
+    "examples/speech-asr/evaluation/evaluate_cnn_ctc_v3.py",
 ]:
     src = Path(name).read_text()
     compile(src, name, "exec")
