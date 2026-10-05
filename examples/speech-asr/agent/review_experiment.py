@@ -95,8 +95,19 @@ def attempt_summary(experiment: pathlib.Path, attempt: pathlib.Path) -> dict[str
             "pretraining_myriad_frame_argmax_agreement": (
                 physical.get("comparison", {}).get("frame_argmax_agreement")
             ),
+            "pretraining_myriad_frame_argmax_mismatches": (
+                physical.get("comparison", {}).get("frame_argmax_mismatches")
+            ),
             "pretraining_myriad_max_abs_error": (
                 physical.get("comparison", {}).get("max_abs_error")
+            ),
+            "pretraining_myriad_max_mismatched_top2_margin": (
+                physical.get("comparison", {}).get(
+                    "max_mismatched_reference_top2_margin"
+                )
+            ),
+            "pretraining_myriad_numerical_gate": physical.get(
+                "numerical_gate"
             ),
         }
 
