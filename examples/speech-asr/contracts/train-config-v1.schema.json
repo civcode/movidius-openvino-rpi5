@@ -14,6 +14,20 @@
     "batch_size":{"type":"integer","minimum":1},
     "max_samples":{"type":["integer","null"],"minimum":1},
     "checkpoint_selection":{"enum":["validation_loss","validation_cer"]},
+    "augmentation":{
+      "type":"object","additionalProperties":false,
+      "required":["kind","frequency_masks","frequency_max_width","time_masks","time_max_width","time_max_fraction","mask_value","seed_offset"],
+      "properties":{
+        "kind":{"const":"specaugment-v1"},
+        "frequency_masks":{"type":"integer","minimum":1,"maximum":4},
+        "frequency_max_width":{"type":"integer","minimum":1,"maximum":32},
+        "time_masks":{"type":"integer","minimum":1,"maximum":4},
+        "time_max_width":{"type":"integer","minimum":1,"maximum":128},
+        "time_max_fraction":{"type":"number","exclusiveMinimum":0,"maximum":0.5},
+        "mask_value":{"const":0},
+        "seed_offset":{"type":"integer","minimum":1}
+      }
+    },
     "optimizer":{
       "type":"object","additionalProperties":true,
       "required":["kind","learning_rate"],
