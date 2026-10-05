@@ -215,7 +215,7 @@ documents are managed with:
 ./scripts/python.sh examples/speech-asr/tools/manage_experiment.py --help
 ```
 
-Phase 10 implements the accepted oberon -> edge SSH/rsync execution path
+Phase 10 is complete and implements the accepted oberon -> edge SSH/rsync execution path
 using those experiment and deployment-manifest contracts. For the frozen
 `cnn_ctc_v1` baseline:
 
@@ -229,3 +229,9 @@ using those experiment and deployment-manifest contracts. For the frozen
 The executor rejects unknown architecture declarations rather than silently
 changing or ignoring them. Runtime-image rebuilds and benchmark/acceptance
 changes remain outside ordinary experiment execution.
+
+
+The Phase 10 physical acceptance run on 2026-10-05 used
+`exp-f915ec624a63caf6/attempt-0001` and completed with
+`acceptance: accepted` at `AWAIT_REVIEW`. The project is ready to move into
+Phase 11 architecture optimization while keeping this execution path fixed.
