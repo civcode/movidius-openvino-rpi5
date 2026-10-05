@@ -80,6 +80,18 @@ def attempt_summary(experiment: pathlib.Path, attempt: pathlib.Path) -> dict[str
             "gradient_clip_norm": training.get("gradient_clip_norm"),
             "lr_schedule": training.get("lr_schedule"),
             "duration_seconds": training.get("duration_seconds"),
+            "device_requested": training.get("device_requested"),
+            "device_used": training.get("device_used"),
+            "model_device": training.get("model_device"),
+            "observed_logits_device": training.get("observed_logits_device"),
+            "ctc_loss_device": training.get("ctc_loss_device"),
+            "cuda_device_name": training.get("cuda_device_name"),
+            "cuda_peak_memory_allocated_bytes": training.get(
+                "cuda_peak_memory_allocated_bytes"
+            ),
+            "cuda_peak_memory_reserved_bytes": training.get(
+                "cuda_peak_memory_reserved_bytes"
+            ),
             "last_epoch": history[-1] if history else None,
         }
 
