@@ -22,12 +22,6 @@ while [[ $# -gt 0 ]]; do
 done
 platform_load "$TARGET_REQUEST"
 
-[[ -s "$MANIFEST" ]] || {
-    echo "AMI manifest missing: $MANIFEST" >&2
-    echo "prepare it first with: ./scripts/python.sh examples/speech-asr/datasets/ami/prepare_ami.py --subset smoke" >&2
-    exit 2
-}
-
 TRAIN="$ROOT/work/speech-asr/cnn_ctc_v1/training-probe"
 EXPORT="$ROOT/work/speech-asr/cnn_ctc_v1/export"
 IR="$ROOT/work/speech-asr/cnn_ctc_v1/openvino/fp16"
