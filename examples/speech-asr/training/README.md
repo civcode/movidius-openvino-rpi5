@@ -95,7 +95,11 @@ Evaluate the trained FP16 IR on the Pi after copying the generated
 The evaluator computes the declared log-mel frontend on the Pi, sends one fixed
 feature tensor per sample to MYRIAD, greedily decodes CTC logits, and emits the
 existing `speech-asr/experiment-result` contract with real WER/CER plus
-inference-only RTF and p50/p95 device latency.
+inference-only RTF and p50/p95 device latency. It applies the same fixed-shape
+eligibility policy as training: over-limit audio and transcripts whose CTC
+target cannot fit the available output frames are skipped consistently. The
+result records the full manifest hash, evaluated-sample count, and skipped IDs,
+so the scored population remains explicit.
 
 Generated checkpoints, ONNX, IR and evaluation files live below `work/` and
 are not committed by default.
