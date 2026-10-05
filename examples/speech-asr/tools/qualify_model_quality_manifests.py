@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
+import os
 import pathlib
 import sys
 from typing import Any
@@ -86,6 +88,25 @@ def write_manifest(path: pathlib.Path, records: list[dict[str, Any]]) -> str:
             handle.write(canonical_line(record))
             handle.write("\n")
     return sha256_path(path)
+
+
+def relocate_audio_paths(
+    records: list[dict[str, Any]],
+    *,
+    source_dir: pathlib.Path,
+    output_dir: pathlib.Path,
+) -> list[dict[str, Any]]:
+    relocated: list[dict[str, Any]] = []
+    for record in records:
+        value = copy.deepcopy(record)
+        raw = pathlib.Path(value["audio"]["path"])
+        source_audio = raw if raw.is_absolute() else source_dir / raw
+        value["audio"]["path"] = os.path.relpath(
+            source_audio.resolve(),
+            output_dir.resolve(),
+        )
+        relocated.append(value)
+    return relocated
 
 
 def corpus_stats(records: list[dict[str, Any]]) -> dict[str, Any]:
@@ -196,10 +217,20 @@ def qualify(
     output_dir.mkdir(parents=True, exist_ok=True)
     train_path = output_dir / "train.manifest.jsonl"
     validation_path = output_dir / "validation.manifest.jsonl"
-    train_sha = write_manifest(train_path, selected["train"])
+    train_records = relocate_audio_paths(
+        selected["train"],
+        source_dir=source_manifest.parent,
+        output_dir=output_dir,
+    )
+    validation_records = relocate_audio_paths(
+        selected["validation"],
+        source_dir=source_manifest.parent,
+        output_dir=output_dir,
+    )
+    train_sha = write_manifest(train_path, train_records)
     validation_sha = write_manifest(
         validation_path,
-        selected["validation"],
+        validation_records,
     )
 
     result = {
