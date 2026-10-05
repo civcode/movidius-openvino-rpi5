@@ -10,6 +10,7 @@ BATCH_SIZE=""
 SEED=""
 LEARNING_RATE=""
 MAX_SAMPLES=""
+CHECKPOINT_SELECTION=""
 WORK_DIR="$ROOT/work/speech-asr/cnn_ctc_v3"
 TRAIN="$WORK_DIR/training"
 EXPORT="$WORK_DIR/export"
@@ -25,9 +26,10 @@ while [[ $# -gt 0 ]]; do
         --seed) [[ $# -ge 2 ]] || { echo "--seed needs an integer" >&2; exit 2; }; SEED="$2"; shift 2 ;;
         --learning-rate) [[ $# -ge 2 ]] || { echo "--learning-rate needs a number" >&2; exit 2; }; LEARNING_RATE="$2"; shift 2 ;;
         --max-samples) [[ $# -ge 2 ]] || { echo "--max-samples needs an integer" >&2; exit 2; }; MAX_SAMPLES="$2"; shift 2 ;;
+        --checkpoint-selection) [[ $# -ge 2 ]] || { echo "--checkpoint-selection needs validation_loss|validation_cer" >&2; exit 2; }; CHECKPOINT_SELECTION="$2"; shift 2 ;;
         --work-dir) [[ $# -ge 2 ]] || { echo "--work-dir needs a path" >&2; exit 2; }; WORK_DIR="$2"; TRAIN="$WORK_DIR/training"; EXPORT="$WORK_DIR/export"; IR="$WORK_DIR/openvino/fp16"; shift 2 ;;
         -h|--help)
-            echo "usage: $0 [--manifest path] [--validation-manifest path] [--device cuda|cpu|auto] [--epochs N] [--batch-size N] [--seed N] [--learning-rate RATE] [--max-samples N] [--work-dir path]"
+            echo "usage: $0 [--manifest path] [--validation-manifest path] [--device cuda|cpu|auto] [--epochs N] [--batch-size N] [--seed N] [--learning-rate RATE] [--max-samples N] [--checkpoint-selection validation_loss|validation_cer] [--work-dir path]"
             exit 0
             ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
@@ -48,6 +50,7 @@ args=(--manifest "$MANIFEST" --output-dir "$TRAIN" --device "$DEVICE")
 [[ -n "$SEED" ]] && args+=(--seed "$SEED")
 [[ -n "$LEARNING_RATE" ]] && args+=(--learning-rate "$LEARNING_RATE")
 [[ -n "$MAX_SAMPLES" ]] && args+=(--max-samples "$MAX_SAMPLES")
+[[ -n "$CHECKPOINT_SELECTION" ]] && args+=(--checkpoint-selection "$CHECKPOINT_SELECTION")
 
 echo "== train cnn_ctc_v3 =="
 "$ROOT/scripts/python-training.sh"     "$ROOT/examples/speech-asr/training/train_cnn_ctc_v3.py"     "${args[@]}"
