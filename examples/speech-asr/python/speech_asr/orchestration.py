@@ -13,6 +13,7 @@ SSH_OPTIONS = (
     "-o",
     "ConnectTimeout=10",
 )
+RSYNC_RSH = "ssh -o BatchMode=yes -o ConnectTimeout=10"
 
 
 def validate_cnn_ctc_v1_executor_request(
@@ -226,6 +227,8 @@ def rsync_push_command(
         "rsync",
         "-a",
         "--checksum",
+        "-e",
+        RSYNC_RSH,
         "--",
         *[str(path) for path in sources],
         f"{worker}:{remote_dir.rstrip('/')}/",
