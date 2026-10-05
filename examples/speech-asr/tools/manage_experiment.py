@@ -16,7 +16,11 @@ SPEECH_ROOT = HERE.parent
 ROOT = SPEECH_ROOT.parents[1]
 sys.path.insert(0, str(SPEECH_ROOT / "python"))
 
-from speech_asr.contracts import validate_experiment_attempt  # noqa: E402
+from speech_asr.contracts import (  # noqa: E402
+    validate_deployment_manifest,
+    validate_experiment_attempt,
+    validate_experiment_summary,
+)
 from speech_asr.experiment import (  # noqa: E402
     DOCUMENT_FILENAMES,
     DOCUMENT_VALIDATORS,
@@ -289,8 +293,12 @@ def command_transition(args: argparse.Namespace) -> None:
         )
         result_path = path.parent / "results" / "result.json"
         if result_path.exists():
-            raise ValueError(f"terminal result already exists: {result_path}")
-        write_json(result_path, summary)
+            if load_json(result_path) != summary:
+                raise ValueError(
+                    f"terminal result already exists with different content: {result_path}"
+                )
+        else:
+            write_json(result_path, summary)
         updated = set_stage_result(
             updated,
             "result",
@@ -320,6 +328,7 @@ def command_record_stage(args: argparse.Namespace) -> None:
         )
     if not args.source.is_file():
         raise ValueError(f"stage result missing: {args.source}")
+    load_json(args.source)
 
     destination = path.parent / "results" / f"{args.stage}.json"
     if destination.exists():
@@ -415,8 +424,34 @@ def command_validate(args: argparse.Namespace) -> None:
             raise ValueError(f"{path}: request_sha256 mismatch")
         for name, ref in attempt["stage_results"].items():
             verify_ref(name=f"{attempt['attempt_id']} stage {name}", ref=ref, base=args.experiment)
+            if name == "result":
+                result_path = args.experiment / ref["path"]
+                summary = validate_experiment_summary(load_json(result_path))
+                if summary["experiment_id"] != request["experiment_id"]:
+                    raise ValueError(f"{result_path}: experiment_id mismatch")
+                if summary["attempt_id"] != attempt["attempt_id"]:
+                    raise ValueError(f"{result_path}: attempt_id mismatch")
+                if summary["request_sha256"] != attempt["request_sha256"]:
+                    raise ValueError(f"{result_path}: request_sha256 mismatch")
+                if summary["outcome"] != attempt["outcome"]:
+                    raise ValueError(f"{result_path}: outcome mismatch")
+                if summary["artifacts"] != attempt["artifacts"]:
+                    raise ValueError(f"{result_path}: artifact index mismatch")
         for name, ref in attempt["artifacts"].items():
             verify_ref(name=f"{attempt['attempt_id']} artifact {name}", ref=ref, base=ROOT)
+
+        deployment_path = path.parent / "deployment-manifest.json"
+        if deployment_path.is_file():
+            deployment = validate_deployment_manifest(load_json(deployment_path))
+            if deployment["experiment_id"] != request["experiment_id"]:
+                raise ValueError(f"{deployment_path}: experiment_id mismatch")
+            if deployment["attempt_id"] != attempt["attempt_id"]:
+                raise ValueError(f"{deployment_path}: attempt_id mismatch")
+            for name, ref in deployment["artifacts"].items():
+                if attempt["artifacts"].get(name) != ref:
+                    raise ValueError(
+                        f"{deployment_path}: artifact {name!r} does not match attempt"
+                    )
     print(json.dumps({"status": "valid", "experiment_id": request["experiment_id"], "attempts": len(attempts)}, sort_keys=True))
 
 
