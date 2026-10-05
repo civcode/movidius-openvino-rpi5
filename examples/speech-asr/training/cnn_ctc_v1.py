@@ -144,6 +144,7 @@ class ManifestCtcDataset(Dataset):
         return {
             "id": record["id"],
             "features": torch.from_numpy(features[0]),
+            "feature_length": valid_frames,
             "input_length": output_frames,
             "target": torch.tensor(target, dtype=torch.long),
             "target_length": len(target),
@@ -159,6 +160,10 @@ def collate_ctc(batch: Iterable[dict]) -> dict:
         "ids": [item["id"] for item in values],
         "texts": [item["text"] for item in values],
         "features": torch.stack([item["features"] for item in values], dim=0),
+        "feature_lengths": torch.tensor(
+            [item["feature_length"] for item in values],
+            dtype=torch.long,
+        ),
         "input_lengths": torch.tensor(
             [item["input_length"] for item in values],
             dtype=torch.long,
