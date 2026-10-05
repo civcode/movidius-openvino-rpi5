@@ -363,3 +363,24 @@ Run the reviewed child with:
 ```bash
 ./scripts/init-cnn-ctc-v4-valid-cmvn.sh
 ```
+
+
+## Held-out promotion boundary
+
+The current quality reference is the scaled-data `cnn_ctc_v3` checkpoint
+`exp-87538823d2bf1562/attempt-0001`. Before another model-development
+decision, it must be measured once on the sealed AMI Full-corpus-ASR unseen
+scenario-component evaluation boundary.
+
+The workflow is:
+
+```bash
+./scripts/prepare-speech-heldout-eval.sh
+./scripts/provision-speech-heldout-eval-edge.sh
+./scripts/run-speech-heldout-eval.sh
+./scripts/review-speech-heldout-eval.sh
+```
+
+This path performs no training and no checkpoint selection. It verifies and
+reuses the exact recorded checkpoint/ONNX/OpenVINO artifacts from the accepted
+source experiment.
