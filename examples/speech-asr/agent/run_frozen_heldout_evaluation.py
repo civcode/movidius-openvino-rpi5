@@ -308,12 +308,17 @@ def main() -> int:
 
     try:
         validate_worker_alias(args.worker)
-        qualification = validate_qualification(
-            args.qualification,
-            args.manifest,
-        )
-        source = source_state(args.experiment)
-        repo_commit = git_head()
+        if not args.manifest.is_file():
+            raise ValueError(
+                f"held-out manifest missing: {args.manifest}"
+            )
+        expected_qualification = args.manifest.parent / "qualification.json"
+        if args.qualification.resolve() != expected_qualification.resolve():
+            raise ValueError(
+                "held-out qualification must be the sealed sibling of "
+                "the held-out manifest"
+            )
+
         manifest_sha = sha256_path(args.manifest)
         output_dir = (
             ROOT
@@ -331,6 +336,28 @@ def main() -> int:
             )
         output_dir.mkdir(parents=True, exist_ok=True)
         logs_dir = output_dir / "logs"
+
+        verify_proc = run(
+            [
+                str(ROOT / "scripts" / "qualify-speech-heldout-eval.sh"),
+                "--output-dir",
+                str(args.manifest.parent),
+                "--verify-only",
+            ],
+            log_path=logs_dir / "heldout-qualification-verify.log",
+        )
+        if verify_proc.returncode != 0:
+            raise ValueError(
+                "held-out qualification verification failed:\n"
+                + "\n".join(verify_proc.stdout.splitlines()[-40:])
+            )
+
+        qualification = validate_qualification(
+            args.qualification,
+            args.manifest,
+        )
+        source = source_state(args.experiment)
+        repo_commit = git_head()
 
         reference_path = output_dir / "reference.json"
         reference_proc = run(
