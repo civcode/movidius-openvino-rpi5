@@ -64,7 +64,7 @@
     },
     "attempt":{
       "type":"object","additionalProperties":false,
-      "required":["schema","version","experiment_id","attempt_id","attempt_index","request_sha256","state","outcome","events","stage_results"],
+      "required":["schema","version","experiment_id","attempt_id","attempt_index","request_sha256","state","outcome","events","stage_results","artifacts"],
       "properties":{
         "schema":{"const":"speech-asr/experiment-attempt"},
         "version":{"const":1},
@@ -79,6 +79,9 @@
           "enum":[null,"request_config","controller_execution","transport_preflight","worker_busy","hardware_execution","hardware_transient","result_contract"]
         },
         "events":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/event"}},
+        "artifacts":{
+          "type":"object","additionalProperties":{"$ref":"#/$defs/artifact_ref"}
+        },
         "stage_results":{
           "type":"object","additionalProperties":false,
           "properties":{
