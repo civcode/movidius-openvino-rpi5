@@ -138,6 +138,32 @@ def main() -> int:
             raise ValueError("seed must be >= 0")
         set_deterministic(seed)
         device = choose_device(args.device)
+        if device.type == "cuda":
+            torch.cuda.reset_peak_memory_stats(device)
+            cuda_name = torch.cuda.get_device_name(device)
+        else:
+            cuda_name = None
+        ctc_loss_device = "cpu" if device.type == "cuda" else str(device)
+        print(
+            json.dumps(
+                {
+                    "event": "training_device",
+                    "requested": args.device,
+                    "model_device": str(device),
+                    "ctc_loss_device": ctc_loss_device,
+                    "cuda_available": bool(torch.cuda.is_available()),
+                    "cuda_device_name": cuda_name,
+                    "note": (
+                        "CNN forward/backward runs on CUDA; deterministic "
+                        "PyTorch 2.2 CTC loss runs on CPU."
+                        if device.type == "cuda"
+                        else "Training runs on CPU."
+                    ),
+                },
+                sort_keys=True,
+            ),
+            flush=True,
+        )
 
         batch_size = args.batch_size or int(spec["training"]["batch_size"])
         epochs = (
@@ -208,6 +234,7 @@ def main() -> int:
             )
 
         model = CnnCtcV3(spec, len(vocab["tokens"])).to(device)
+        model_device = str(next(model.parameters()).device)
         loss_fn = nn.CTCLoss(
             blank=int(vocab["blank_index"]),
             zero_infinity=bool(spec["training"]["zero_infinity"]),
@@ -224,6 +251,7 @@ def main() -> int:
 
         history = []
         optimizer_steps = 0
+        observed_logits_device = None
         best_epoch = None
         best_validation_loss = None
         best_state_dict = copy.deepcopy(model.state_dict())
@@ -242,6 +270,8 @@ def main() -> int:
                     features = batch["features"].to(device)
                     optimizer.zero_grad(set_to_none=True)
                     logits = model(features)
+                    if observed_logits_device is None:
+                        observed_logits_device = str(logits.device)
                     loss = deterministic_ctc_loss(loss_fn, logits, batch)
                     loss.backward()
                     gradient_norm = torch.nn.utils.clip_grad_norm_(
@@ -315,12 +345,20 @@ def main() -> int:
             "init_only": args.init_only,
             "device_requested": args.device,
             "device_used": str(device),
-            "ctc_loss_device": "cpu" if device.type == "cuda" else str(device),
+            "model_device": model_device,
+            "observed_logits_device": observed_logits_device,
+            "ctc_loss_device": ctc_loss_device,
             "cuda_available": bool(torch.cuda.is_available()),
-            "cuda_device_name": (
-                torch.cuda.get_device_name(device)
+            "cuda_device_name": cuda_name,
+            "cuda_peak_memory_allocated_bytes": (
+                int(torch.cuda.max_memory_allocated(device))
                 if device.type == "cuda"
-                else None
+                else 0
+            ),
+            "cuda_peak_memory_reserved_bytes": (
+                int(torch.cuda.max_memory_reserved(device))
+                if device.type == "cuda"
+                else 0
             ),
             "torch_version": torch.__version__,
             "python_version": platform.python_version(),
