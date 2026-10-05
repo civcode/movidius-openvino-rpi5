@@ -36,7 +36,13 @@ class ResidualTemporalBlockV3(nn.Module):
             padding=0,
             bias=True,
         )
-        nn.init.zeros_(self.projection.weight)
+        nn.init.kaiming_normal_(
+            self.projection.weight,
+            mode="fan_out",
+            nonlinearity="relu",
+        )
+        with torch.no_grad():
+            self.projection.weight.mul_(0.01)
         nn.init.zeros_(self.projection.bias)
 
     def forward(self, features):
