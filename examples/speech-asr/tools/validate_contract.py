@@ -16,12 +16,21 @@ from speech_asr.contracts import (  # noqa: E402
     validate_acoustic_regression_result,
     validate_audio_contract,
     validate_benchmark_contract,
+    validate_acceptance_policy,
+    validate_deployment_manifest,
+    validate_experiment_attempt,
+    validate_experiment_history,
+    validate_experiment_model_spec,
+    validate_experiment_proposal,
+    validate_experiment_request,
     validate_experiment_result,
+    validate_experiment_summary,
     validate_model_contract,
     validate_speech_sample,
     validate_streaming_contract,
     validate_streaming_replay_result,
     validate_text_contract,
+    validate_train_config,
 )
 
 
@@ -36,6 +45,15 @@ VALIDATORS = {
     "acoustic-benchmark": validate_acoustic_benchmark_result,
     "streaming": validate_streaming_contract,
     "streaming-replay": validate_streaming_replay_result,
+    "experiment-proposal": validate_experiment_proposal,
+    "experiment-model-spec": validate_experiment_model_spec,
+    "train-config": validate_train_config,
+    "acceptance-policy": validate_acceptance_policy,
+    "experiment-request": validate_experiment_request,
+    "experiment-attempt": validate_experiment_attempt,
+    "experiment-summary": validate_experiment_summary,
+    "experiment-history": validate_experiment_history,
+    "deployment-manifest": validate_deployment_manifest,
 }
 
 SCHEMA_TO_KIND = {
@@ -49,6 +67,15 @@ SCHEMA_TO_KIND = {
     "speech-asr/acoustic-benchmark-result": "acoustic-benchmark",
     "speech-asr/streaming": "streaming",
     "speech-asr/streaming-replay-result": "streaming-replay",
+    "speech-asr/experiment-proposal": "experiment-proposal",
+    "speech-asr/experiment-model-spec": "experiment-model-spec",
+    "speech-asr/train-config": "train-config",
+    "speech-asr/acceptance-policy": "acceptance-policy",
+    "speech-asr/experiment-request": "experiment-request",
+    "speech-asr/experiment-attempt": "experiment-attempt",
+    "speech-asr/experiment-summary": "experiment-summary",
+    "speech-asr/experiment-history": "experiment-history",
+    "speech-asr/deployment-manifest": "deployment-manifest",
 }
 
 
