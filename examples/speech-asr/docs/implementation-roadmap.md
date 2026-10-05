@@ -25,7 +25,7 @@ The central rule is:
 | 8 — custom PyTorch training skeleton | **complete** — deterministic CUDA training, ONNX/OpenVINO export, physical Pi 5/arm64 + MA2450 execution, and contract-valid AMI smoke evaluation accepted |
 | 9 — experiment lifecycle | **complete** — immutable content-derived requests, attempt state machine, artifact/result provenance, deployment manifests and history index accepted by static checks and the full speech-ASR unit suite |
 | 10 — local execution agent and frontier handoff | **complete** — oberon controller, exact-commit edge worktree, non-interactive SSH/rsync, hash-bound deployment, exclusive MYRIAD locking, result collection and AWAIT_REVIEW handoff physically accepted on Pi 5/MA2450 |
-| 11 — architecture optimization loop | **generation 1 evaluated; review pending** — cnn_ctc_v2 completed the full physical lifecycle to AWAIT_REVIEW but the frozen acceptance policy rejected the result; generation 2 awaits evidence review |
+| 11 — architecture optimization loop | **generation 2 implemented; evaluation pending** — generation 1 was reviewed as optimization-starved; cnn_ctc_v3 keeps its successful hardware envelope but removes BatchNorm and fixes the training/update budget |
 
 Phase 0 was re-reviewed after later implementation work. The root audio,
 benchmark, model and text contracts now have executable semantic validators,
@@ -821,8 +821,49 @@ Generation 1 was physically executed on 2026-10-05 as
 `AWAIT_REVIEW`, but the frozen acceptance policy returned `rejected`.
 The rejection is therefore model/threshold evidence, not an execution failure.
 
-Generation 2 must be chosen after reviewing the authoritative metric and
-threshold evidence from that attempt rather than preselected now.
+REVIEW found a single failed gate: CER 0.945652 exceeded the 0.913043
+baseline ceiling. Compatibility and hardware were strong: ONNX argmax agreement
+1.0, initialized MYRIAD argmax agreement 1.0, p95 latency 16.647 ms, RTF
+0.004587 and zero failures. Training after one epoch remained weak
+(train/validation loss 5.9129/4.7632), so generation 2 targets optimization
+dynamics rather than capacity or hardware cost.
+
+### Generation 2 implementation: cnn_ctc_v3
+
+Generation 2 is `cnn_ctc_v3`, defined in
+`models/cnn_ctc_v3/model_spec.json` and
+`docs/adr/phase11-cnn-ctc-v3.md`.
+
+It keeps v2's fixed tensor geometry, 4x temporal reduction, 96-channel encoder,
+five residual kernels, 533-frame receptive field and 174,804,992 convolution
+MACs. The controlled changes are:
+
+- remove BatchNorm from stem and residual blocks;
+- use bias-bearing ordinary Conv1d layers;
+- zero-initialize each residual block's final 1x1 projection so the residual
+  stack begins as an identity perturbation;
+- change training from 1 epoch / batch 2 to 32 epochs / batch 1;
+- Adam learning rate 3e-4 with cosine decay to 3e-5;
+- deterministic gradient clipping at norm 5.0;
+- export the checkpoint with the best validation loss;
+- record optimizer-step count, best epoch and gradient evidence.
+
+The resource estimate is 1,346,343 parameters, the same 174,804,992 MACs and
+the same fixed `[1,128,39]` output contract. No new inference operator family
+is introduced.
+
+Generation 2's acceptance policy requires:
+
+- WER <= 1.0;
+- CER <= 0.913043;
+- inference-only RTF <= 0.01;
+- MYRIAD p95 latency <= 25 ms;
+- PyTorch/ONNX frame argmax agreement = 1.0;
+- all training/export/OpenVINO/MYRIAD/accuracy gates to complete.
+
+It is a child of `exp-1c682f4eda475a01`, preserving the rejected generation-1
+result in lineage.
+
 
 ---
 
@@ -871,21 +912,34 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-Phase 11 generation 1 is **evaluated; REVIEW pending**.
+Phase 11 generation 2 is **implemented; evaluation pending**.
 
-The accepted workflow now has a dedicated review command:
+Run the repository checks, then initialize and execute `cnn_ctc_v3`:
 
 ```bash
 git pull --ff-only
+./ci/verify-static.sh
+./scripts/test-speech-asr.sh
 
-./scripts/review-speech-experiment.sh \
-  --experiment work/speech-asr/experiments/exp-1c682f4eda475a01
+EXP="$(
+  ./scripts/init-cnn-ctc-v3-experiment.sh |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
+)"
+
+./scripts/run-speech-experiment.sh \
+  --experiment "$EXP" \
+  --worker edge
 ```
 
-That emits the candidate metrics, failed acceptance thresholds, training
-summary, ONNX/OpenVINO/MYRIAD compatibility evidence, and deltas against the
-accepted v1 parent.
+As with generation 1, the controller first exports/converts an initialized model
+and performs a physical MA2450 numerical probe before full CUDA training.
 
-Do not implement generation 2 until that evidence has been reviewed. The next
-architecture should respond to the measured bottleneck: accuracy, hardware
-latency/RTF, numerical compatibility, or training behavior.
+When it reaches `AWAIT_REVIEW`, run:
+
+```bash
+./scripts/review-speech-experiment.sh --experiment "$EXP"
+```
+
+Phase 11 is complete only after generation 2 is evaluated and reviewed with
+lineage sufficient to explain whether the normalization-free/update-budget
+change improved CER without violating the hardware envelope.
