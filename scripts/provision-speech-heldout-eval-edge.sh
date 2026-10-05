@@ -38,7 +38,7 @@ done
 
 "$ROOT/scripts/python.sh"     "$ROOT/examples/speech-asr/datasets/ami/prepare_ami.py"     --spec "$SPLIT_SPEC"     --verify-only >/dev/null
 
-"$ROOT/scripts/qualify-speech-heldout-eval.sh" >/dev/null
+"$ROOT/scripts/qualify-speech-heldout-eval.sh" --verify-only >/dev/null
 
 for path in     "$SOURCE_DIR/manifest.jsonl"     "$SOURCE_DIR/provenance.json"     "$HELDOUT_DIR/manifest.jsonl"     "$HELDOUT_DIR/qualification.json"; do
     [[ -f "$path" ]] || {
