@@ -258,6 +258,7 @@ fi
 
 # Post-Phase-11 model-quality data boundary.
 test -f examples/speech-asr/docs/phase11-final-review.md || fail 'Phase 11 final review missing'
+test -f examples/speech-asr/docs/model-quality-v1-baseline.md || fail 'model-quality baseline review missing'
 test -f examples/speech-asr/tools/qualify_model_quality_manifests.py || fail 'model-quality qualification tool missing'
 test -x scripts/qualify-speech-model-data.sh || fail 'model-quality qualification wrapper is not executable'
 grep -q 'train_speakers=("A", "B", "C")' examples/speech-asr/tools/qualify_model_quality_manifests.py || fail 'model-quality train speaker partition changed'
