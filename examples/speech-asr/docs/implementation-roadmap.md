@@ -758,3 +758,8 @@ formalize experiment IDs, lineage, proposal/training/acceptance records, artifac
 hash references, and a compact result handoff before automating local execution
 or architecture mutation.
 
+
+The multi-host execution architecture for oberon -> edge orchestration is
+specified separately in
+[`remote-experiment-orchestration.md`](remote-experiment-orchestration.md).
+
