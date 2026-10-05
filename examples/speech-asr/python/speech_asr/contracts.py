@@ -766,6 +766,83 @@ def validate_experiment_history(document: Any) -> Dict[str, Any]:
     return dict(root)
 
 
+def validate_edge_worker_result(document: Any) -> Dict[str, Any]:
+    errors: list[str] = []
+    root = _mapping(document, "$", errors)
+    if root.get("schema") != "speech-asr/edge-worker-result":
+        errors.append("$.schema: expected 'speech-asr/edge-worker-result'")
+    if root.get("version") != 1:
+        errors.append("$.version: expected 1")
+
+    status = root.get("status")
+    if status not in {"completed", "failed"}:
+        errors.append("$.status: expected completed or failed")
+
+    failure_class = root.get("failure_class")
+    allowed_failures = {
+        None,
+        "request_config",
+        "transport_preflight",
+        "hardware_execution",
+        "hardware_transient",
+        "result_contract",
+    }
+    if failure_class not in allowed_failures:
+        errors.append("$.failure_class: unknown edge-worker failure class")
+
+    experiment_id = root.get("experiment_id")
+    attempt_id = root.get("attempt_id")
+    worker_commit = root.get("worker_commit")
+    deployment_sha = root.get("deployment_sha256")
+
+    if experiment_id is not None and (
+        not isinstance(experiment_id, str)
+        or _EXPERIMENT_ID_RE.fullmatch(experiment_id) is None
+    ):
+        errors.append("$.experiment_id: invalid experiment id")
+    if attempt_id is not None and (
+        not isinstance(attempt_id, str)
+        or _ATTEMPT_ID_RE.fullmatch(attempt_id) is None
+    ):
+        errors.append("$.attempt_id: invalid attempt id")
+    if worker_commit is not None and (
+        not isinstance(worker_commit, str)
+        or len(worker_commit) != 40
+        or _GIT_SHA_RE.fullmatch(worker_commit) is None
+    ):
+        errors.append("$.worker_commit: expected null or full Git commit id")
+    if deployment_sha is not None:
+        _sha256(deployment_sha, "$.deployment_sha256", errors)
+
+    if status == "completed":
+        if failure_class is not None:
+            errors.append("$.failure_class: completed worker result must be null")
+        for key, value in (
+            ("experiment_id", experiment_id),
+            ("attempt_id", attempt_id),
+            ("worker_commit", worker_commit),
+            ("deployment_sha256", deployment_sha),
+        ):
+            if value is None:
+                errors.append(f"$.{key}: completed worker result requires value")
+        _artifact_ref(root.get("hardware_result"), "$.hardware_result", errors)
+        _artifact_ref(root.get("evaluator_log"), "$.evaluator_log", errors)
+        _mapping(root.get("metrics"), "$.metrics", errors)
+
+    if status == "failed":
+        if failure_class is None:
+            errors.append("$.failure_class: failed worker result requires class")
+        diagnostics = _mapping(root.get("diagnostics"), "$.diagnostics", errors)
+        _nonempty_string(
+            diagnostics.get("summary"),
+            "$.diagnostics.summary",
+            errors,
+        )
+
+    _raise_if_errors(errors)
+    return dict(root)
+
+
 def validate_deployment_manifest(document: Any) -> Dict[str, Any]:
     errors: list[str] = []
     root = _mapping(document, "$", errors)
