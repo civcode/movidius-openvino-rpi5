@@ -90,9 +90,11 @@ def load_spec(path: Path) -> dict:
             raise ValueError(f"{model_id} residual channels must remain 96")
         if (
             model_id == "cnn_ctc_v3"
-            and network.get("residual_projection_init") != "zeros"
+            and network.get("residual_projection_init") != "kaiming_scaled_0.01"
         ):
-            raise ValueError("cnn_ctc_v3 residual projection init must be zeros")
+            raise ValueError(
+                "cnn_ctc_v3 residual projection init must be kaiming_scaled_0.01"
+            )
     return value
 
 
