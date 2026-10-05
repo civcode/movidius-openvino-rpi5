@@ -275,7 +275,16 @@ grep -q '89a8624a5dc46ef28845f35591fc1e623dfbd3026d7a4729b7578153d03baf5a' examp
 grep -q '07ebc41041238c1ec374ad64eefe7209fd6c11d1050e8f6f72f0226d358c8923' examples/speech-asr/agent/init_cnn_ctc_v3_quality_baseline.py || fail 'reviewed validation manifest hash changed'
 grep -q '"max_wer": None' examples/speech-asr/agent/init_cnn_ctc_v3_quality_baseline.py || fail 'quality baseline must not inherit smoke WER ceiling'
 grep -q '"max_cer": None' examples/speech-asr/agent/init_cnn_ctc_v3_quality_baseline.py || fail 'quality baseline must not inherit smoke CER ceiling'
+grep -q '"max_realtime_factor": None' examples/speech-asr/agent/init_cnn_ctc_v3_quality_baseline.py || fail 'quality baseline must not gate benchmark-dependent RTF'
 grep -q 'processed_train_audio_seconds' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'v3 processed-audio budget evidence missing'
+grep -q 'validation_cer' examples/speech-asr/contracts/train-config-v1.schema.json || fail 'train config lacks validation-CER checkpoint selection'
+grep -q 'evaluate_validation' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'v3 trainer lacks transcript-quality validation'
+grep -q 'validation_blank_frame_fraction' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'v3 trainer lacks per-epoch blank-collapse evidence'
+grep -q 'best_validation_cer' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'v3 trainer lacks CER checkpoint evidence'
+test -f examples/speech-asr/agent/init_cnn_ctc_v3_cer_selection.py || fail 'CER-selection experiment initializer missing'
+test -x scripts/init-cnn-ctc-v3-cer-selection.sh || fail 'CER-selection experiment wrapper is not executable'
+grep -q '"checkpoint_selection": "validation_cer"' examples/speech-asr/agent/init_cnn_ctc_v3_cer_selection.py || fail 'CER-selection experiment policy changed'
+grep -q '"max_realtime_factor": None' examples/speech-asr/agent/init_cnn_ctc_v3_cer_selection.py || fail 'CER-selection experiment must measure rather than gate RTF'
 grep -q 'manifest\["benchmark"\]\["id"\]' examples/speech-asr/agent/edge_worker.py || fail 'edge evaluator does not propagate benchmark id'
 grep -q 'benchmark id mismatch' examples/speech-asr/agent/edge_worker.py || fail 'edge result does not validate benchmark id'
 grep -q 'same_benchmark_manifest' examples/speech-asr/agent/review_experiment.py || fail 'review tool is not benchmark-aware'
@@ -304,6 +313,7 @@ for name in [
     "examples/speech-asr/agent/init_cnn_ctc_v2_experiment.py",
     "examples/speech-asr/agent/init_cnn_ctc_v3_experiment.py",
     "examples/speech-asr/agent/init_cnn_ctc_v3_quality_baseline.py",
+    "examples/speech-asr/agent/init_cnn_ctc_v3_cer_selection.py",
     "examples/speech-asr/agent/review_experiment.py",
     "examples/speech-asr/agent/run_experiment.py",
     "examples/speech-asr/agent/edge_worker.py",
