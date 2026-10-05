@@ -214,3 +214,16 @@ The qualified boundary contains 1,487 eligible ES2005a-d training utterances
 validation manifest from model-quality-v1. Record overlap and meeting overlap
 are both zero. See
 [`../../docs/adr/model-quality-v2-expanded-ami.md`](../../docs/adr/model-quality-v2-expanded-ami.md).
+
+The accepted v2 result is scaled to three official scenario teams by
+`splits/train-es2005-es2007-v1.json` and model-quality-v3:
+
+```bash
+./scripts/python.sh examples/speech-asr/datasets/ami/prepare_ami.py \
+  --spec examples/speech-asr/datasets/ami/splits/train-es2005-es2007-v1.json
+./scripts/qualify-speech-model-data-v3.sh
+```
+
+This yields 4,429 eligible training utterances and 7,150.12 seconds while
+retaining the same validation contract. See
+[`../../docs/adr/model-quality-v3-scaled-ami.md`](../../docs/adr/model-quality-v3-scaled-ami.md).

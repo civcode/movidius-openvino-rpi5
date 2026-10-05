@@ -969,21 +969,31 @@ but failed against `exp-3c7727ca3f37ba2c`:
 - p95 MA2450 latency: 16.64 -> 16.64 ms.
 
 Reject InterCTC for this boundary and do not tune its weight. V5 remains only a
-size/latency Pareto point. The accepted quality reference remains v3.
+size/latency Pareto point.
 
-The next controlled change is the reviewed
-[`model-quality-v2`](adr/model-quality-v2-expanded-ami.md) data boundary. It
-keeps v3 and the byte-identical ES2002a validation benchmark but expands
-training from 125 utterances / 219.998 seconds to 1,487 utterances / 2,393.989
-seconds from meeting-disjoint ES2005a-d.
+The meeting-disjoint v2 data expansion completed as
+`exp-aa5380b542b0d784/attempt-0001`. It passed every gate and is the new quality
+reference:
+
+- CER: 0.866935 -> 0.844758 (better);
+- WER: 1.161417 -> 1.043307 (better);
+- blank-frame fraction: 61.33% -> 73.34% (worse);
+- empty hypotheses: 19/95 -> 14/95 (better);
+- emitted/reference characters: 47.98% -> 50.60% (better);
+- p95 MA2450 latency: 16.64 -> 16.63 ms.
+
+The next controlled change scales only this successful variable. The reviewed
+[`model-quality-v3`](adr/model-quality-v3-scaled-ami.md) boundary uses 4,429
+utterances / 7,150.12 seconds from ES2005a-d, ES2006a-d and ES2007a-d while
+keeping the same model and byte-identical ES2002a validation benchmark.
 
 ```bash
 ./scripts/python.sh examples/speech-asr/datasets/ami/prepare_ami.py \
-  --spec examples/speech-asr/datasets/ami/splits/train-es2005-v1.json
-./scripts/qualify-speech-model-data-v2.sh
+  --spec examples/speech-asr/datasets/ami/splits/train-es2005-es2007-v1.json
+./scripts/qualify-speech-model-data-v3.sh
 
 EXP="$(
-  ./scripts/init-cnn-ctc-v3-expanded-data.sh |
+  ./scripts/init-cnn-ctc-v3-scaled-data.sh |
   python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
 )"
 
@@ -995,7 +1005,6 @@ EXP="$(
   --experiment "$EXP"
 ```
 
-Edge dataset reprovisioning is unnecessary because validation is unchanged;
-expanded training audio remains on the controller. Review CER and emission
-against v3. The validation set is used for checkpoint selection, so results
-remain model-selection evidence rather than an unbiased final test.
+Edge dataset reprovisioning remains unnecessary because validation is
+unchanged. Results remain model-selection evidence rather than an unbiased
+final test.

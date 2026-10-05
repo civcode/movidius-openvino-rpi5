@@ -10,6 +10,9 @@ sys.path.insert(0, str(SPEECH / "python"))
 from speech_asr.ami import validate_split_spec
 
 SPLIT = SPEECH / "datasets" / "ami" / "splits" / "train-es2005-v1.json"
+SCALED_SPLIT = (
+    SPEECH / "datasets" / "ami" / "splits" / "train-es2005-es2007-v1.json"
+)
 
 
 class ExpandedAmiContractTests(unittest.TestCase):
@@ -31,6 +34,19 @@ class ExpandedAmiContractTests(unittest.TestCase):
                 [item["speaker"] for item in source["selections"]],
                 ["A", "B", "C", "D"],
             )
+
+    def test_scaled_split_is_frozen_to_three_official_training_teams(self):
+        value = validate_split_spec(
+            json.loads(SCALED_SPLIT.read_text(encoding="utf-8"))
+        )
+        self.assertEqual(len(value["sources"]), 12)
+        self.assertEqual(value["sources"][0]["meeting"], "ES2005a")
+        self.assertEqual(value["sources"][-1]["meeting"], "ES2007d")
+        self.assertEqual(value["expected"]["records"], 5596)
+        self.assertEqual(
+            value["expected"]["manifest_sha256"],
+            "882c21c3c0da9fbc9a4758ac15703a419bf1d9ec044f92e6c4b64b9eebdc4187",
+        )
 
     def test_qualifier_enforces_meeting_disjointness_and_eligibility(self):
         source = (
@@ -58,10 +74,23 @@ class ExpandedAmiContractTests(unittest.TestCase):
         self.assertNotIn('"ctc_objective": {', source)
         self.assertNotIn('"augmentation": {', source)
 
+    def test_scaled_initializer_uses_accepted_expanded_parent(self):
+        source = (
+            SPEECH / "agent" / "init_cnn_ctc_v3_scaled_data.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('DEFAULT_PARENT = "exp-aa5380b542b0d784"', source)
+        self.assertIn('"model-quality-v3"', source)
+        self.assertIn("4429", source)
+        self.assertIn("7150.12", source)
+        self.assertNotIn('"ctc_objective": {', source)
+        self.assertNotIn('"augmentation": {', source)
+
     def test_commands_are_executable(self):
         for name in (
             "qualify-speech-model-data-v2.sh",
             "init-cnn-ctc-v3-expanded-data.sh",
+            "qualify-speech-model-data-v3.sh",
+            "init-cnn-ctc-v3-scaled-data.sh",
         ):
             path = ROOT / "scripts" / name
             self.assertTrue(path.is_file())

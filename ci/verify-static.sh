@@ -437,6 +437,19 @@ if grep -q '"ctc_objective": {' examples/speech-asr/agent/init_cnn_ctc_v3_expand
     fail 'expanded-data experiment must use standard CTC'
 fi
 
+# Scaled three-team follow-up after accepted expanded-data result.
+test -f examples/speech-asr/datasets/ami/splits/train-es2005-es2007-v1.json || fail 'scaled AMI split missing'
+test -f examples/speech-asr/agent/init_cnn_ctc_v3_scaled_data.py || fail 'scaled-data initializer missing'
+test -x scripts/qualify-speech-model-data-v3.sh || fail 'scaled qualifier wrapper is not executable'
+test -x scripts/init-cnn-ctc-v3-scaled-data.sh || fail 'scaled initializer wrapper is not executable'
+grep -q '"records": 5596' examples/speech-asr/datasets/ami/splits/train-es2005-es2007-v1.json || fail 'scaled AMI source count changed'
+grep -q 'DEFAULT_PARENT = "exp-aa5380b542b0d784"' examples/speech-asr/agent/init_cnn_ctc_v3_scaled_data.py || fail 'scaled-data parent changed'
+grep -q '4429' examples/speech-asr/agent/init_cnn_ctc_v3_scaled_data.py || fail 'scaled eligible count changed'
+grep -q '7150.12' examples/speech-asr/agent/init_cnn_ctc_v3_scaled_data.py || fail 'scaled training duration changed'
+if grep -q '"ctc_objective": {' examples/speech-asr/agent/init_cnn_ctc_v3_scaled_data.py; then
+    fail 'scaled-data experiment must use standard CTC'
+fi
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
 for name in [
@@ -462,6 +475,7 @@ for name in [
     "examples/speech-asr/agent/init_cnn_ctc_v5_interctc.py",
     "examples/speech-asr/agent/init_cnn_ctc_v6_interctc.py",
     "examples/speech-asr/agent/init_cnn_ctc_v3_expanded_data.py",
+    "examples/speech-asr/agent/init_cnn_ctc_v3_scaled_data.py",
     "examples/speech-asr/agent/review_experiment.py",
     "examples/speech-asr/agent/run_experiment.py",
     "examples/speech-asr/agent/edge_worker.py",

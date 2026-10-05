@@ -1,6 +1,6 @@
 # ADR: model-quality-v2 expanded AMI training boundary
 
-Status: accepted for controlled execution
+Status: executed and accepted as quality reference
 Date: 2026-10-05
 Accuracy reference: exp-3c7727ca3f37ba2c (`cnn_ctc_v3`)
 
@@ -32,6 +32,16 @@ comparable with the accepted v3 reference.
 The first experiment changes only training data. It restores standard v3 CTC,
 uses no augmentation or auxiliary objective, and retains 32 epochs, Adam/cosine
 and validation-CER checkpoint selection.
+
+## Result
+
+`exp-aa5380b542b0d784/attempt-0001` passed all compatibility and physical
+MA2450 gates. Relative to `exp-3c7727ca3f37ba2c`, CER improved from 0.86694 to
+0.84476, WER from 1.16142 to 1.04331, empty hypotheses from 19/95 to 14/95 and
+emitted/reference characters from 47.98% to 50.60%. P95 latency was unchanged
+at 16.63 ms. Blank-frame fraction increased from 61.33% to 73.34%, but the
+primary CER and transcript-level emission measures improved. Accept this as the
+new quality reference and continue controlled data scaling.
 
 ## Scope and limitations
 
