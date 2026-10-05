@@ -101,6 +101,29 @@ def validate_model_executor_request(
     if optimizer.get("kind") != "adam":
         raise ValueError(f"{model_id} executor supports only Adam")
 
+    ctc_objective = train_config.get("ctc_objective")
+    if ctc_objective is not None:
+        if model_id != "cnn_ctc_v3":
+            raise ValueError(
+                "blank-logit CTC objective is supported only by cnn_ctc_v3"
+            )
+        if not isinstance(ctc_objective, Mapping):
+            raise ValueError("ctc_objective must be an object")
+        expected_keys = {"kind", "blank_logit_penalty"}
+        if set(ctc_objective) != expected_keys:
+            raise ValueError(
+                "ctc_objective supports only kind + blank_logit_penalty"
+            )
+        if ctc_objective.get("kind") != "blank-logit-penalty-v1":
+            raise ValueError("unsupported ctc_objective kind")
+        penalty = ctc_objective.get("blank_logit_penalty")
+        if (
+            not isinstance(penalty, (int, float))
+            or isinstance(penalty, bool)
+            or not (0 < float(penalty) <= 1.0)
+        ):
+            raise ValueError("blank_logit_penalty must be > 0 and <= 1")
+
 
 def validate_cnn_ctc_v1_executor_request(
     model_spec: Mapping[str, Any],
@@ -174,6 +197,18 @@ def training_command(
         command.extend([
             "--checkpoint-selection",
             str(checkpoint_selection),
+        ])
+    ctc_objective = train_config.get("ctc_objective")
+    if ctc_objective is not None:
+        if model_id != "cnn_ctc_v3":
+            raise ValueError(
+                "blank-logit CTC objective is supported only by cnn_ctc_v3"
+            )
+        command.extend([
+            "--ctc-objective-kind",
+            str(ctc_objective["kind"]),
+            "--blank-logit-penalty",
+            str(ctc_objective["blank_logit_penalty"]),
         ])
     augmentation = train_config.get("augmentation")
     if augmentation is not None:
