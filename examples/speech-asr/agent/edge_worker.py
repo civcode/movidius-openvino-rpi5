@@ -20,6 +20,7 @@ sys.path.insert(0, str(SPEECH_ROOT / "python"))
 
 from speech_asr.contracts import (  # noqa: E402
     validate_deployment_manifest,
+    validate_edge_worker_result,
     validate_experiment_result,
 )
 
@@ -340,6 +341,7 @@ def main() -> int:
             },
             "metrics": result["metrics"],
         }
+        validate_edge_worker_result(worker_result)
         write_json(worker_result_path, worker_result)
     except WorkerError as exc:
         worker_result = {
@@ -354,8 +356,9 @@ def main() -> int:
             "diagnostics": {"summary": exc.message},
         }
         try:
+            validate_edge_worker_result(worker_result)
             write_json(worker_result_path, worker_result)
-        except OSError:
+        except (OSError, ValueError):
             pass
         print(f"error: {exc}", file=sys.stderr)
         return exc.exit_code
@@ -372,8 +375,9 @@ def main() -> int:
             "diagnostics": {"summary": str(exc)},
         }
         try:
+            validate_edge_worker_result(worker_result)
             write_json(worker_result_path, worker_result)
-        except OSError:
+        except (OSError, ValueError):
             pass
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_RESULT
