@@ -6,10 +6,14 @@ MANIFEST="$ROOT/work/speech-asr/ami/ami-smoke-v1/manifest.jsonl"
 VALIDATION=""
 DEVICE=cuda
 EPOCHS=""
+BATCH_SIZE=""
+SEED=""
+LEARNING_RATE=""
 MAX_SAMPLES=""
-TRAIN="$ROOT/work/speech-asr/cnn_ctc_v1/training"
-EXPORT="$ROOT/work/speech-asr/cnn_ctc_v1/export"
-IR="$ROOT/work/speech-asr/cnn_ctc_v1/openvino/fp16"
+WORK_DIR="$ROOT/work/speech-asr/cnn_ctc_v1"
+TRAIN="$WORK_DIR/training"
+EXPORT="$WORK_DIR/export"
+IR="$WORK_DIR/openvino/fp16"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -17,9 +21,13 @@ while [[ $# -gt 0 ]]; do
         --validation-manifest) [[ $# -ge 2 ]] || { echo "--validation-manifest needs a path" >&2; exit 2; }; VALIDATION="$2"; shift 2 ;;
         --device) [[ $# -ge 2 ]] || { echo "--device needs cuda|cpu|auto" >&2; exit 2; }; DEVICE="$2"; shift 2 ;;
         --epochs) [[ $# -ge 2 ]] || { echo "--epochs needs an integer" >&2; exit 2; }; EPOCHS="$2"; shift 2 ;;
+        --batch-size) [[ $# -ge 2 ]] || { echo "--batch-size needs an integer" >&2; exit 2; }; BATCH_SIZE="$2"; shift 2 ;;
+        --seed) [[ $# -ge 2 ]] || { echo "--seed needs an integer" >&2; exit 2; }; SEED="$2"; shift 2 ;;
+        --learning-rate) [[ $# -ge 2 ]] || { echo "--learning-rate needs a number" >&2; exit 2; }; LEARNING_RATE="$2"; shift 2 ;;
         --max-samples) [[ $# -ge 2 ]] || { echo "--max-samples needs an integer" >&2; exit 2; }; MAX_SAMPLES="$2"; shift 2 ;;
+        --work-dir) [[ $# -ge 2 ]] || { echo "--work-dir needs a path" >&2; exit 2; }; WORK_DIR="$2"; TRAIN="$WORK_DIR/training"; EXPORT="$WORK_DIR/export"; IR="$WORK_DIR/openvino/fp16"; shift 2 ;;
         -h|--help)
-            echo "usage: $0 [--manifest path] [--validation-manifest path] [--device cuda|cpu|auto] [--epochs N] [--max-samples N]"
+            echo "usage: $0 [--manifest path] [--validation-manifest path] [--device cuda|cpu|auto] [--epochs N] [--batch-size N] [--seed N] [--learning-rate RATE] [--max-samples N] [--work-dir path]"
             exit 0
             ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
@@ -36,6 +44,9 @@ fi
 args=(--manifest "$MANIFEST" --output-dir "$TRAIN" --device "$DEVICE")
 [[ -n "$VALIDATION" ]] && args+=(--validation-manifest "$VALIDATION")
 [[ -n "$EPOCHS" ]] && args+=(--epochs "$EPOCHS")
+[[ -n "$BATCH_SIZE" ]] && args+=(--batch-size "$BATCH_SIZE")
+[[ -n "$SEED" ]] && args+=(--seed "$SEED")
+[[ -n "$LEARNING_RATE" ]] && args+=(--learning-rate "$LEARNING_RATE")
 [[ -n "$MAX_SAMPLES" ]] && args+=(--max-samples "$MAX_SAMPLES")
 
 echo "== train cnn_ctc_v1 =="
