@@ -63,8 +63,7 @@ same initialized-model probe on the physical stick:
 The probe spends no training budget. It records PyTorch-vs-ONNX and
 PyTorch-vs-MYRIAD numerical differences without applying an invented device
 tolerance. The physical Pi 5/arm64 + MA2450 compatibility gate for this fixed
-graph passed on 2026-10-05; full trained-checkpoint evaluation remains the
-Milestone B acceptance step.
+graph passed on 2026-10-05.
 
 Full skeleton training/export/conversion on a CUDA workstation:
 
@@ -103,3 +102,16 @@ so the scored population remains explicit.
 
 Generated checkpoints, ONNX, IR and evaluation files live below `work/` and
 are not committed by default.
+
+## Milestone B acceptance
+
+The complete trained lifecycle was accepted on 2026-10-05. One-epoch CUDA
+training, ONNX export/reference comparison, OpenVINO 2020.3 FP16 conversion,
+physical MA2450 execution, and the contract-valid AMI smoke evaluation all
+completed. The smoke evaluation scored 2 eligible records from the 4-record
+manifest, with WER 1.000000, CER 0.913043, inference-only RTF 0.001209, and
+MYRIAD latency p50/p95 4.380/4.407 ms.
+
+The next project phase is the experiment lifecycle; further architecture work
+should be expressed as explicit experiment records rather than extending this
+bring-up skeleton ad hoc.
