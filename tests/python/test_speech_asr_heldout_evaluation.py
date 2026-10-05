@@ -255,6 +255,10 @@ class FrozenHeldoutControllerSourceTests(unittest.TestCase):
         self.assertIn('"max_mismatched_reference_top2_margin"', source)
         self.assertIn('"mean_mismatched_reference_top2_margin"', source)
         self.assertIn('"mismatch_sample_examples"', source)
+        self.assertIn('"decoded_hypothesis_mismatches"', source)
+        self.assertIn('"decoded_hypothesis_mismatch_examples"', source)
+        self.assertIn('"wer_delta"', source)
+        self.assertIn('"cer_delta"', source)
         self.assertIn("json.dumps(agreement, sort_keys=True)", source)
 
     def test_reference_runtime_dependencies_are_declared(self):
