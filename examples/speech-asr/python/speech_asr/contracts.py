@@ -492,6 +492,60 @@ def validate_train_config(document: Any) -> Dict[str, Any]:
         errors.append(
             "$.checkpoint_selection: expected validation_loss or validation_cer"
         )
+    augmentation_value = root.get("augmentation")
+    if augmentation_value is not None:
+        augmentation = _mapping(
+            augmentation_value,
+            "$.augmentation",
+            errors,
+        )
+        if augmentation.get("kind") != "specaugment-v1":
+            errors.append(
+                "$.augmentation.kind: expected 'specaugment-v1'"
+            )
+        for key, maximum in (
+            ("frequency_masks", 4),
+            ("frequency_max_width", 32),
+            ("time_masks", 4),
+            ("time_max_width", 128),
+        ):
+            _integer(
+                augmentation.get(key),
+                f"$.augmentation.{key}",
+                errors,
+                minimum=1,
+            )
+            value = augmentation.get(key)
+            if (
+                isinstance(value, int)
+                and not isinstance(value, bool)
+                and value > maximum
+            ):
+                errors.append(
+                    f"$.augmentation.{key}: must be <= {maximum}"
+                )
+        time_fraction = augmentation.get("time_max_fraction")
+        _number(
+            time_fraction,
+            "$.augmentation.time_max_fraction",
+            errors,
+        )
+        if (
+            isinstance(time_fraction, (int, float))
+            and not isinstance(time_fraction, bool)
+            and not (0 < time_fraction <= 0.5)
+        ):
+            errors.append(
+                "$.augmentation.time_max_fraction: must be > 0 and <= 0.5"
+            )
+        if augmentation.get("mask_value") != 0:
+            errors.append("$.augmentation.mask_value: expected 0")
+        _integer(
+            augmentation.get("seed_offset"),
+            "$.augmentation.seed_offset",
+            errors,
+            minimum=1,
+        )
     optimizer = _mapping(root.get("optimizer"), "$.optimizer", errors)
     _nonempty_string(optimizer.get("kind"), "$.optimizer.kind", errors)
     learning_rate = optimizer.get("learning_rate")
