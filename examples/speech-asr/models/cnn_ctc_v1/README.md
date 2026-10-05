@@ -47,6 +47,27 @@ The tensor comparison reports signed mean error, MAE, RMS, maximum absolute
 error and framewise CTC argmax agreement. It is evidence-only until this custom
 model family has an explicitly frozen numerical acceptance policy.
 
+### Physical compatibility evidence
+
+The initialized-model gate was accepted on the Pi 5/arm64 + MA2450 path on
+2026-10-05. OpenVINO 2020.3.2 loaded and compiled the fixed rank-3 Conv1D IR on
+MYRIAD, then completed one inference successfully.
+
+Observed device evidence:
+
+- load + compile: 1565.23 ms;
+- inference: 4.35 ms;
+- output shape: `[1,128,39]`;
+- framewise CTC argmax agreement vs PyTorch: 128/128 (1.0);
+- maximum absolute error vs PyTorch: 0.0002685189;
+- mean absolute error: 0.0000487381;
+- RMS error: 0.0000625072.
+
+This proves deployment compatibility for the declared `cnn_ctc_v1` graph.
+It does not complete Milestone B by itself: a trained checkpoint must still be
+exported, converted, executed on MYRIAD and evaluated through the standard
+experiment-result contract.
+
 If the legacy MYRIAD compiler rejects the current rank-3 Conv1D graph, treat
 that as a compatibility failure before training. The architecture can then be
 re-expressed as an equivalent fixed Conv2D-over-time graph in the next design
