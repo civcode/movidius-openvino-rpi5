@@ -263,3 +263,30 @@ EXP="$(
 The controller physically probes the initialized v2 graph on MA2450 before full
 CUDA training. Phase 11 remains open until generation 1 is reviewed and a
 second architecture generation is selected and evaluated from that evidence.
+
+
+## Phase 11 generation 2
+
+Generation-1 review showed that `cnn_ctc_v2` was hardware-safe but
+optimization-starved: only CER failed, while OpenVINO/MYRIAD compatibility and
+realtime performance retained large margin.
+
+`cnn_ctc_v3` keeps v2's 4x reduction, 96-channel residual stack, kernel
+schedule and 174,804,992 MAC envelope, but removes BatchNorm and zero-initializes
+each residual block's final 1x1 projection. Training is increased to 32 epochs
+with batch size 1, Adam at 3e-4, cosine decay to 3e-5, gradient clipping and
+best-validation-loss checkpoint selection.
+
+Run generation 2 with:
+
+```bash
+EXP="$(
+  ./scripts/init-cnn-ctc-v3-experiment.sh |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
+)"
+./scripts/run-speech-experiment.sh --experiment "$EXP" --worker edge
+./scripts/review-speech-experiment.sh --experiment "$EXP"
+```
+
+The acceptance policy retains the v1 CER ceiling while tightening the already
+comfortable v2 hardware limits to RTF <= 0.01 and p95 <= 25 ms.
