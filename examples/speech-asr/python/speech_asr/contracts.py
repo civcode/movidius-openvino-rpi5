@@ -665,6 +665,11 @@ def validate_experiment_attempt(document: Any) -> Dict[str, Any]:
             elif positions.get(current, -1) != positions.get(previous, -1) + 1:
                 errors.append(f"$.events: invalid transition {previous} -> {current}")
 
+    artifacts = _mapping(root.get("artifacts"), "$.artifacts", errors)
+    for name, ref in artifacts.items():
+        _nonempty_string(name, "$.artifacts key", errors)
+        _artifact_ref(ref, f"$.artifacts.{name}", errors)
+
     stage_results = _mapping(root.get("stage_results"), "$.stage_results", errors)
     allowed_stages = {"training", "compatibility", "hardware", "accuracy", "result"}
     for name, ref in stage_results.items():
