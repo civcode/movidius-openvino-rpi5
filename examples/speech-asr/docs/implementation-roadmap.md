@@ -957,34 +957,33 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-Phase 11/Milestone C are complete, and the first larger-data baseline has now
-executed as `exp-62a94f36aefddb58/attempt-0001`.
+The first model-quality baseline and its checkpoint-selection diagnostic are
+complete.
 
-The execution path is healthy: CUDA placement, OpenVINO conversion, exact
-PyTorch/ONNX argmax agreement and physical MA2450 execution all passed. p95
-MYRIAD latency remained 16.65 ms.
+`exp-3c7727ca3f37ba2c/attempt-0001` established that metric-aligned checkpoint
+selection is necessary:
 
-The request's only acceptance rejection was the old RTF <= 0.01 threshold.
-Because the graph is fixed-shape and the new validation clips are shorter, RTF
-rose to 0.012877 despite unchanged per-inference latency. Model-quality
-experiments therefore treat RTF as a measured benchmark statistic and retain
-the direct p95 latency gate.
+- validation-loss optimum: epoch 11;
+- validation-CER optimum / exported checkpoint: epoch 21;
+- CER improved from 0.980847 to 0.866935;
+- blank-frame fraction improved from 95.93% to 61.33%;
+- empty hypotheses fell from 84/95 to 19/95;
+- emitted/reference character ratio rose from 2.52% to 47.98%;
+- MA2450 p95 latency remained 16.64 ms;
+- PyTorch/ONNX argmax agreement remained 1.0.
 
-The important model evidence is severe held-out-speaker CTC blank collapse:
+WER is still 1.1614 and the model still under-emits, so architecture work
+remains premature.
 
-- CER 0.980847, WER 1.0;
-- 95.93% blank argmax frames;
-- 84 / 95 empty hypotheses;
-- only 25 emitted non-space characters for 992 reference characters;
-- best validation CTC loss at epoch 11;
-- final train/validation loss 0.4756 / 10.9583 after 4,000 optimizer steps.
+The next isolated intervention is deterministic training-only SpecAugment. It
+retains the exact `cnn_ctc_v3` inference graph, manifests, optimizer schedule
+and CER-aligned checkpoint selection. Its reviewed policy is:
 
-Do **not** change the inference architecture yet.
-
-The next diagnostic keeps the same `cnn_ctc_v3` graph, exact model-quality-v1
-manifests, seed and optimizer trajectory. It adds transcript-quality validation
-at every epoch and selects the exported checkpoint by minimum greedy validation
-CER instead of CTC loss.
+- frequency masks: 2, maximum width 8/64 mel bins;
+- time masks: 2, maximum width 20 frontend frames;
+- time-mask cap: 10% of each sample's valid frontend frames;
+- mask value: 0;
+- augmentation seed offset: +1 from the frozen training seed.
 
 Run:
 
@@ -994,7 +993,7 @@ git pull --ff-only
 ./scripts/test-speech-asr.sh
 
 EXP="$(
-  ./scripts/init-cnn-ctc-v3-cer-selection.sh |
+  ./scripts/init-cnn-ctc-v3-specaugment.sh |
   python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
 )"
 
@@ -1008,8 +1007,9 @@ echo "$EXP"
   --experiment "$EXP"
 ```
 
-No new edge dataset provisioning is required if the reviewed model-quality-v1
-dataset remains present and hash-valid.
+No edge dataset reprovisioning is required while the reviewed
+`model-quality-v1` data remains hash-valid.
 
-REVIEW the per-epoch CER/blank-collapse trajectory before adding SpecAugment,
-weight decay or another architecture generation.
+REVIEW CER, WER, blank fraction, empty-hypothesis fraction, emitted/reference
+character ratio and augmentation evidence before considering weight decay,
+stronger augmentation or a new inference architecture.
