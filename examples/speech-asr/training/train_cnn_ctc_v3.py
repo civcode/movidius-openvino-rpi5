@@ -98,6 +98,15 @@ def deterministic_ctc_loss(loss_fn, logits, batch):
     )
 
 
+def dataset_audio_samples(dataset: ManifestCtcDataset | None) -> int:
+    if dataset is None:
+        return 0
+    return sum(
+        int(record["audio"]["end_sample"]) - int(record["audio"]["start_sample"])
+        for record in dataset.records
+    )
+
+
 def evaluate_loss(model, loader, loss_fn, device) -> float:
     model.eval()
     losses = []
@@ -232,6 +241,9 @@ def main() -> int:
                 num_workers=0,
                 collate_fn=collate_ctc,
             )
+
+        train_audio_samples_per_epoch = dataset_audio_samples(train_dataset)
+        validation_audio_samples = dataset_audio_samples(validation_dataset)
 
         model = CnnCtcV3(spec, len(vocab["tokens"])).to(device)
         model_device = str(next(model.parameters()).device)
@@ -377,6 +389,17 @@ def main() -> int:
             "train_samples": 0 if train_dataset is None else len(train_dataset),
             "validation_samples": (
                 0 if validation_dataset is None else len(validation_dataset)
+            ),
+            "train_audio_seconds_per_epoch": (
+                train_audio_samples_per_epoch / 16000.0
+            ),
+            "processed_train_audio_seconds": (
+                (train_audio_samples_per_epoch * epochs) / 16000.0
+                if not args.init_only
+                else 0.0
+            ),
+            "validation_audio_seconds": (
+                validation_audio_samples / 16000.0
             ),
             "skipped": {
                 "train_too_long": (
