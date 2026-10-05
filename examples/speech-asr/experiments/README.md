@@ -268,3 +268,28 @@ After execution, use:
 
 The review output now includes optimizer-step count, selected best epoch and
 best validation loss for generation-2 training.
+
+
+## Phase 11 final review
+
+Generation 2 completed as `exp-a6f83c0451532122/attempt-0001` and reached
+`AWAIT_REVIEW`. Execution was healthy: CUDA placement was verified, OpenVINO
+and MYRIAD compatibility passed, p95 latency was 16.59 ms and RTF was
+0.004579. The frozen policy rejected only CER because the candidate scored
+1.0 against a 0.913043 ceiling.
+
+The 32-epoch/64-step v3 run reduced best validation loss to 2.66385 but did not
+improve greedy transcript accuracy. Together with generation 1, this satisfies
+the Phase 11 two-generation REVIEW exit criterion and demonstrates that the
+two-eligible-record smoke population is not suitable for further architecture
+ranking.
+
+Do not create another model lineage from the smoke result. First run:
+
+```bash
+./scripts/qualify-speech-model-data.sh
+```
+
+and review the resulting
+`work/speech-asr/ami/model-quality-v1/qualification.json`. A later baseline
+experiment must bind the accepted train/validation manifest hashes explicitly.
