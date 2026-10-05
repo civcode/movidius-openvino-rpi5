@@ -154,6 +154,32 @@ class ExperimentContractTests(unittest.TestCase):
         ):
             validate_train_config(invalid)
 
+    def test_specaugment_policy_is_reviewed_training_identity(self):
+        changed = train_config()
+        changed["augmentation"] = {
+            "kind": "specaugment-v1",
+            "frequency_masks": 2,
+            "frequency_max_width": 8,
+            "time_masks": 2,
+            "time_max_width": 20,
+            "time_max_fraction": 0.1,
+            "mask_value": 0,
+            "seed_offset": 1,
+        }
+        validated = validate_train_config(changed)
+        self.assertEqual(
+            validated["augmentation"]["kind"],
+            "specaugment-v1",
+        )
+
+        invalid = copy.deepcopy(changed)
+        invalid["augmentation"]["mask_value"] = 1
+        with self.assertRaisesRegex(
+            ContractValidationError,
+            "mask_value",
+        ):
+            validate_train_config(invalid)
+
     def test_training_change_creates_new_experiment(self):
         first = request()
         changed = train_config()
