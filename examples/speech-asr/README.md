@@ -207,9 +207,9 @@ Always run compatibility before training:
 
 On the Pi, run the physical compatibility probe and trained-model evaluator.
 
-Phase 9 now provides the explicit immutable experiment lifecycle used for
-further model development. Reviewed proposal/model/training/acceptance documents
-are managed with:
+Phase 9 is complete and provides the explicit immutable experiment lifecycle
+used for further model development. Reviewed proposal/model/training/acceptance
+documents are managed with:
 
 ```bash
 ./scripts/python.sh examples/speech-asr/tools/manage_experiment.py --help
