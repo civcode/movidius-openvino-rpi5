@@ -46,8 +46,11 @@ V3_ARCHITECTURE = {
 }
 
 
+V4_ARCHITECTURE = dict(V3_ARCHITECTURE)
+
+
 def executor_model_basename(model_id: str) -> str:
-    if model_id in {"cnn_ctc_v1", "cnn_ctc_v2", "cnn_ctc_v3"}:
+    if model_id in {"cnn_ctc_v1", "cnn_ctc_v2", "cnn_ctc_v3", "cnn_ctc_v4"}:
         return model_id
     raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
 
@@ -57,20 +60,24 @@ def validate_model_executor_request(
     train_config: Mapping[str, Any],
 ) -> None:
     model_id = str(model_spec.get("model_id"))
-    if model_id not in {"cnn_ctc_v1", "cnn_ctc_v2", "cnn_ctc_v3"}:
+    if model_id not in {"cnn_ctc_v1", "cnn_ctc_v2", "cnn_ctc_v3", "cnn_ctc_v4"}:
         raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
     if model_spec.get("family") != "cnn_ctc":
         raise ValueError(f"{model_id} executor requires family 'cnn_ctc'")
-    if model_spec.get("frontend") != {"kind": "logmel-v1"}:
+    expected_frontend = {
+        "kind": "logmel-v2" if model_id == "cnn_ctc_v4" else "logmel-v1"
+    }
+    if model_spec.get("frontend") != expected_frontend:
         raise ValueError(
             f"{model_id} executor requires exact frontend declaration "
-            "{'kind': 'logmel-v1'}"
+            f"{expected_frontend!r}"
         )
 
     expected_architecture = {
         "cnn_ctc_v1": {"kind": "cnn_ctc_v1"},
         "cnn_ctc_v2": V2_ARCHITECTURE,
         "cnn_ctc_v3": V3_ARCHITECTURE,
+        "cnn_ctc_v4": V4_ARCHITECTURE,
     }[model_id]
     if model_spec.get("architecture") != expected_architecture:
         raise ValueError(
@@ -111,7 +118,7 @@ def compatibility_probe_command(
     model_id = str(model_spec["model_id"])
     if model_id == "cnn_ctc_v1":
         return None
-    if model_id in {"cnn_ctc_v2", "cnn_ctc_v3"}:
+    if model_id in {"cnn_ctc_v2", "cnn_ctc_v3", "cnn_ctc_v4"}:
         return [
             str(root / "scripts" / f"probe-{model_id.replace('_', '-')}.sh"),
             "--work-dir",
@@ -136,6 +143,7 @@ def training_command(
         "cnn_ctc_v1": "train-cnn-ctc-v1.sh",
         "cnn_ctc_v2": "train-cnn-ctc-v2.sh",
         "cnn_ctc_v3": "train-cnn-ctc-v3.sh",
+        "cnn_ctc_v4": "train-cnn-ctc-v4.sh",
     }.get(model_id)
     if executable is None:
         raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
