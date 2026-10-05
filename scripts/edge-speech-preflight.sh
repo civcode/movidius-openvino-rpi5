@@ -35,6 +35,11 @@ case "$(uname -m)" in
     *) echo "edge speech worker requires native arm64/aarch64 host" >&2; exit 2 ;;
 esac
 
+command -v flock >/dev/null 2>&1 || {
+    echo "flock is required for exclusive MYRIAD execution" >&2
+    exit 2
+}
+
 manifest="$ROOT/$MANIFEST_REL"
 [[ -f "$manifest" ]] || {
     echo "declared dataset manifest missing: $manifest" >&2
