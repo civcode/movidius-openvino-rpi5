@@ -163,6 +163,18 @@ class HeldoutQualificationTests(unittest.TestCase):
             self.assertEqual(result["test"]["stats"]["records"], 16)
             self.assertTrue((output / "manifest.jsonl").is_file())
             self.assertTrue((output / "qualification.json").is_file())
+            verified = self.tool.verify_existing(
+                source_manifest=source,
+                train_manifest=train,
+                selection_manifest=selection,
+                output_dir=output,
+                spec_path=SPEC,
+                vocab_path=VOCAB,
+            )
+            self.assertEqual(
+                verified["test"]["manifest_sha256"],
+                result["test"]["manifest_sha256"],
+            )
 
     def test_qualifier_rejects_training_meeting_overlap(self):
         with tempfile.TemporaryDirectory() as temp_name:
@@ -242,6 +254,7 @@ class FrozenHeldoutControllerSourceTests(unittest.TestCase):
         self.assertIn("edge-speech-bootstrap.sh", source)
         self.assertIn("rsync -a --delete --checksum", source)
         self.assertIn("heldout-eval-v1", source)
+        self.assertIn("--verify-only", source)
 
 
 if __name__ == "__main__":
