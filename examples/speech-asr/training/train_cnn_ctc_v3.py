@@ -123,6 +123,108 @@ def _sum_rate(counts) -> float:
     return errors / max(1, references)
 
 
+def apply_specaugment_v1(
+    features: torch.Tensor,
+    feature_lengths: torch.Tensor,
+    *,
+    generator: torch.Generator,
+    policy: dict,
+) -> tuple[torch.Tensor, dict]:
+    if features.ndim != 3:
+        raise ValueError(
+            f"SpecAugment expects [N,F,T] features, got {tuple(features.shape)}"
+        )
+    if feature_lengths.ndim != 1 or feature_lengths.numel() != features.shape[0]:
+        raise ValueError("SpecAugment feature-length batch does not match features")
+
+    value = features.clone()
+    frequency_masks_applied = 0
+    time_masks_applied = 0
+    frequency_bins_masked = 0
+    time_frames_masked = 0
+    mel_bins = int(value.shape[1])
+    fixed_frames = int(value.shape[2])
+    mask_value = float(policy["mask_value"])
+
+    for sample_index in range(value.shape[0]):
+        valid_frames = min(
+            fixed_frames,
+            max(1, int(feature_lengths[sample_index].item())),
+        )
+        for _ in range(int(policy["frequency_masks"])):
+            max_width = min(
+                mel_bins,
+                int(policy["frequency_max_width"]),
+            )
+            width = int(
+                torch.randint(
+                    0,
+                    max_width + 1,
+                    (1,),
+                    generator=generator,
+                ).item()
+            )
+            if width == 0:
+                continue
+            start = int(
+                torch.randint(
+                    0,
+                    mel_bins - width + 1,
+                    (1,),
+                    generator=generator,
+                ).item()
+            )
+            value[
+                sample_index,
+                start : start + width,
+                :valid_frames,
+            ] = mask_value
+            frequency_masks_applied += 1
+            frequency_bins_masked += width
+
+        time_cap = min(
+            int(policy["time_max_width"]),
+            max(
+                1,
+                int(valid_frames * float(policy["time_max_fraction"])),
+            ),
+        )
+        for _ in range(int(policy["time_masks"])):
+            width = int(
+                torch.randint(
+                    0,
+                    time_cap + 1,
+                    (1,),
+                    generator=generator,
+                ).item()
+            )
+            if width == 0:
+                continue
+            start = int(
+                torch.randint(
+                    0,
+                    valid_frames - width + 1,
+                    (1,),
+                    generator=generator,
+                ).item()
+            )
+            value[
+                sample_index,
+                :,
+                start : start + width,
+            ] = mask_value
+            time_masks_applied += 1
+            time_frames_masked += width
+
+    return value, {
+        "samples": int(value.shape[0]),
+        "frequency_masks_applied": frequency_masks_applied,
+        "time_masks_applied": time_masks_applied,
+        "frequency_bins_masked": frequency_bins_masked,
+        "time_frames_masked": time_frames_masked,
+    }
+
+
 def evaluate_validation(model, loader, loss_fn, device, vocab) -> dict:
     model.eval()
     losses = []
@@ -194,6 +296,17 @@ def main() -> int:
         "--checkpoint-selection",
         choices=("validation_loss", "validation_cer"),
     )
+    parser.add_argument(
+        "--augmentation-kind",
+        choices=("specaugment-v1",),
+    )
+    parser.add_argument("--frequency-masks", type=int)
+    parser.add_argument("--frequency-max-width", type=int)
+    parser.add_argument("--time-masks", type=int)
+    parser.add_argument("--time-max-width", type=int)
+    parser.add_argument("--time-max-fraction", type=float)
+    parser.add_argument("--augmentation-mask-value", type=float)
+    parser.add_argument("--augmentation-seed-offset", type=int)
     parser.add_argument("--init-only", action="store_true")
     args = parser.parse_args()
 
@@ -262,6 +375,65 @@ def main() -> int:
                 "cnn_ctc_v3 package checkpoint_selection must remain best_validation_loss"
             )
         checkpoint_selection = args.checkpoint_selection or "validation_loss"
+
+        augmentation_policy = None
+        augmentation_generator = None
+        augmentation_stats = {
+            "samples": 0,
+            "frequency_masks_applied": 0,
+            "time_masks_applied": 0,
+            "frequency_bins_masked": 0,
+            "time_frames_masked": 0,
+        }
+        augmentation_values = (
+            args.frequency_masks,
+            args.frequency_max_width,
+            args.time_masks,
+            args.time_max_width,
+            args.time_max_fraction,
+            args.augmentation_mask_value,
+            args.augmentation_seed_offset,
+        )
+        if args.augmentation_kind is None:
+            if any(value is not None for value in augmentation_values):
+                raise ValueError(
+                    "SpecAugment parameters require --augmentation-kind"
+                )
+        else:
+            if args.augmentation_kind != "specaugment-v1":
+                raise ValueError("unsupported augmentation policy")
+            if any(value is None for value in augmentation_values):
+                raise ValueError(
+                    "specaugment-v1 requires all augmentation parameters"
+                )
+            augmentation_policy = {
+                "kind": "specaugment-v1",
+                "frequency_masks": int(args.frequency_masks),
+                "frequency_max_width": int(args.frequency_max_width),
+                "time_masks": int(args.time_masks),
+                "time_max_width": int(args.time_max_width),
+                "time_max_fraction": float(args.time_max_fraction),
+                "mask_value": float(args.augmentation_mask_value),
+                "seed_offset": int(args.augmentation_seed_offset),
+            }
+            if not 1 <= augmentation_policy["frequency_masks"] <= 4:
+                raise ValueError("frequency_masks must be in [1,4]")
+            if not 1 <= augmentation_policy["frequency_max_width"] <= 32:
+                raise ValueError("frequency_max_width must be in [1,32]")
+            if not 1 <= augmentation_policy["time_masks"] <= 4:
+                raise ValueError("time_masks must be in [1,4]")
+            if not 1 <= augmentation_policy["time_max_width"] <= 128:
+                raise ValueError("time_max_width must be in [1,128]")
+            if not 0 < augmentation_policy["time_max_fraction"] <= 0.5:
+                raise ValueError("time_max_fraction must be in (0,0.5]")
+            if augmentation_policy["mask_value"] != 0.0:
+                raise ValueError("specaugment-v1 mask_value must be 0")
+            if augmentation_policy["seed_offset"] < 1:
+                raise ValueError("augmentation seed_offset must be >= 1")
+            augmentation_generator = torch.Generator()
+            augmentation_generator.manual_seed(
+                seed + augmentation_policy["seed_offset"]
+            )
 
         train_dataset = None
         validation_dataset = None
@@ -342,7 +514,20 @@ def main() -> int:
                 gradient_norms = []
                 current_lr = float(optimizer.param_groups[0]["lr"])
                 for batch in train_loader:
-                    features = batch["features"].to(device)
+                    features = batch["features"]
+                    if augmentation_policy is not None:
+                        assert augmentation_generator is not None
+                        features, batch_augmentation = apply_specaugment_v1(
+                            features,
+                            batch["feature_lengths"],
+                            generator=augmentation_generator,
+                            policy=augmentation_policy,
+                        )
+                        for key in augmentation_stats:
+                            augmentation_stats[key] += int(
+                                batch_augmentation[key]
+                            )
+                    features = features.to(device)
                     optimizer.zero_grad(set_to_none=True)
                     logits = model(features)
                     if observed_logits_device is None:
@@ -441,6 +626,8 @@ def main() -> int:
                 "best_epoch": best_epoch,
                 "checkpoint_selection": checkpoint_selection,
                 "selected_metric_value": selected_metric_value,
+                "augmentation": augmentation_policy,
+                "augmentation_stats": augmentation_stats,
                 "best_validation_loss": best_validation_loss,
                 "best_validation_loss_epoch": best_validation_loss_epoch,
                 "best_validation_cer": best_validation_cer,
@@ -485,6 +672,8 @@ def main() -> int:
             "gradient_clip_norm": gradient_clip_norm,
             "checkpoint_selection": checkpoint_selection,
             "selected_metric_value": selected_metric_value,
+            "augmentation": augmentation_policy,
+            "augmentation_stats": augmentation_stats,
             "parameter_count": parameter_count(model),
             "optimizer_steps": optimizer_steps,
             "best_epoch": best_epoch,
