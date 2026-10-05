@@ -144,6 +144,14 @@ test -f scripts/run-speech-experiment.sh || fail 'Phase 10 controller wrapper mi
 test -f scripts/edge-speech-bootstrap.sh || fail 'Phase 10 edge bootstrap missing'
 test -f scripts/edge-speech-preflight.sh || fail 'Phase 10 edge preflight missing'
 test -f scripts/edge-speech-worker.sh || fail 'Phase 10 edge worker wrapper missing'
+for f in \
+    scripts/run-speech-experiment.sh \
+    scripts/init-cnn-ctc-v1-experiment.sh \
+    scripts/edge-speech-bootstrap.sh \
+    scripts/edge-speech-preflight.sh \
+    scripts/edge-speech-worker.sh; do
+    test -x "$f" || fail "Phase 10 shell entry point is not executable: $f"
+done
 grep -q 'BatchMode=yes' examples/speech-asr/python/speech_asr/orchestration.py || fail 'Phase 10 SSH is not non-interactive'
 if grep -R -n 'StrictHostKeyChecking=no' examples/speech-asr/agent examples/speech-asr/python/speech_asr/orchestration.py scripts/edge-speech-*.sh; then
     fail 'Phase 10 disables SSH host-key verification'
