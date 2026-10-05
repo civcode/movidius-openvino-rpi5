@@ -199,3 +199,20 @@ record and the controller verifies:
 
 A `device: cuda` experiment fails if the model/logits are not actually on CUDA
 or peak allocated VRAM is zero.
+
+
+## Phase 11 training conclusion
+
+`cnn_ctc_v3` verified that the generation-2 CUDA training request really ran
+the CNN on the NVIDIA GeForce RTX 4070 Ti SUPER while retaining deterministic
+CPU CTC loss. The accepted device evidence recorded `cuda:0` for model and
+logits with positive peak VRAM use.
+
+After 32 epochs / 64 optimizer steps, best validation loss reached 2.66385, but
+greedy CER was 1.0. This is evidence that the current smoke population is too
+small for model selection, not a reason to weaken CUDA determinism or add
+another architecture immediately.
+
+The next training baseline must use reviewed, disjoint manifests produced by
+`scripts/qualify-speech-model-data.sh`. Training and validation must not reuse
+the same manifest for model-quality claims.
