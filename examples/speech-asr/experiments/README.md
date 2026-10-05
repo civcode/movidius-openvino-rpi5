@@ -224,3 +224,23 @@ evidence, applied the frozen acceptance policy and produced:
 
 This is the first accepted end-to-end Phase 9/10 experiment bundle and is the
 reference handoff shape for later architecture experiments.
+
+
+## Phase 11 generation-1 review
+
+The first `cnn_ctc_v2` experiment completed on 2026-10-05 as
+`exp-1c682f4eda475a01/attempt-0001`. Execution completed normally and the
+attempt reached `AWAIT_REVIEW`, but its frozen acceptance policy returned
+`rejected`.
+
+Use the review helper to inspect the authoritative reason instead of inferring
+from controller exit status:
+
+```bash
+./scripts/review-speech-experiment.sh \
+  --experiment work/speech-asr/experiments/exp-1c682f4eda475a01
+```
+
+The review output includes threshold failures and candidate-vs-parent metric
+deltas. Future controller runs also print acceptance reasons and threshold
+checks directly in their terminal JSON.
