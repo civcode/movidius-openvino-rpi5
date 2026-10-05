@@ -365,3 +365,20 @@ Initialize with:
 ```bash
 ./scripts/init-cnn-ctc-v4-valid-cmvn.sh
 ```
+
+
+## v4 result and CTC-objective child
+
+`exp-92ee80e9dfdfcc79/attempt-0001` completed successfully, but valid-frame
+CMVN regressed CER and blank/empty-hypothesis diagnostics relative to
+`exp-3c7727ca3f37ba2c`. v4 is therefore not the new parent.
+
+The next child again branches from `exp-3c7727ca3f37ba2c` and keeps
+`cnn_ctc_v3` / `logmel-v1` unchanged. Its only training-identity delta is
+`blank-logit-penalty-v1` with `blank_logit_penalty=0.25`.
+
+Initialize with:
+
+```bash
+./scripts/init-cnn-ctc-v3-blank-penalty.sh
+```
