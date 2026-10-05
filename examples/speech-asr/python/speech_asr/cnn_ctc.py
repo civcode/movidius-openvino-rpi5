@@ -28,12 +28,18 @@ def load_spec(path: Path) -> dict:
     if value.get("version") != 1:
         raise ValueError("model spec version must be 1")
     model_id = value.get("id")
-    if model_id not in {"cnn_ctc_v1", "cnn_ctc_v2", "cnn_ctc_v3"}:
+    if model_id not in {"cnn_ctc_v1", "cnn_ctc_v2", "cnn_ctc_v3", "cnn_ctc_v4"}:
         raise ValueError("unsupported cnn_ctc model spec id")
 
     frontend = value.get("frontend")
-    if not isinstance(frontend, dict) or frontend.get("kind") != "logmel-v1":
-        raise ValueError(f"{model_id} frontend must be logmel-v1")
+    expected_frontend_kind = "logmel-v2" if model_id == "cnn_ctc_v4" else "logmel-v1"
+    if (
+        not isinstance(frontend, dict)
+        or frontend.get("kind") != expected_frontend_kind
+    ):
+        raise ValueError(
+            f"{model_id} frontend must be {expected_frontend_kind}"
+        )
     expected = {
         "sample_rate_hz": 16000,
         "window_samples": 400,
@@ -46,6 +52,16 @@ def load_spec(path: Path) -> dict:
     for key, wanted in expected.items():
         if frontend.get(key) != wanted:
             raise ValueError(f"frontend.{key} must be {wanted!r}")
+    expected_normalization = (
+        "per_mel_bin_mean_valid_zero_pad"
+        if model_id == "cnn_ctc_v4"
+        else "per_mel_bin_mean"
+    )
+    if frontend.get("normalization") != expected_normalization:
+        raise ValueError(
+            f"{model_id} frontend.normalization must be "
+            f"{expected_normalization}"
+        )
 
     input_contract = value.get("input_contract")
     if not isinstance(input_contract, dict) or input_contract.get("shape") != [1, 64, 512]:
@@ -89,11 +105,11 @@ def load_spec(path: Path) -> dict:
         if any(int(block.get("channels", 0)) != 96 for block in blocks):
             raise ValueError(f"{model_id} residual channels must remain 96")
         if (
-            model_id == "cnn_ctc_v3"
+            model_id in {"cnn_ctc_v3", "cnn_ctc_v4"}
             and network.get("residual_projection_init") != "kaiming_scaled_0.01"
         ):
             raise ValueError(
-                "cnn_ctc_v3 residual projection init must be kaiming_scaled_0.01"
+                f"{model_id} residual projection init must be kaiming_scaled_0.01"
             )
     return value
 
@@ -252,7 +268,7 @@ def conv1d_output_length(
 def acoustic_output_length(feature_frames: int, spec: dict) -> int:
     length = int(feature_frames)
     network = spec["network"]
-    if spec.get("id") in {"cnn_ctc_v2", "cnn_ctc_v3"}:
+    if spec.get("id") in {"cnn_ctc_v2", "cnn_ctc_v3", "cnn_ctc_v4"}:
         layers = network["stem"]
         for layer in layers:
             length = conv1d_output_length(
@@ -279,8 +295,8 @@ def acoustic_output_length(feature_frames: int, spec: dict) -> int:
 
 def model_resource_estimate(spec: dict, vocab_size: int = 39) -> dict:
     """Return deterministic parameter/MAC/receptive-field estimates for fixed input."""
-    if spec.get("id") not in {"cnn_ctc_v2", "cnn_ctc_v3"}:
-        raise ValueError("resource estimator targets cnn_ctc_v2/v3")
+    if spec.get("id") not in {"cnn_ctc_v2", "cnn_ctc_v3", "cnn_ctc_v4"}:
+        raise ValueError("resource estimator targets cnn_ctc_v2/v3/v4")
 
     network = spec["network"]
     input_frames = int(spec["input_contract"]["shape"][2])
