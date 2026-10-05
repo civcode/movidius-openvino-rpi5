@@ -330,6 +330,183 @@ def preflight_edge(
         )
 
 
+def physical_compatibility_probe(
+    *,
+    experiment_dir: pathlib.Path,
+    attempt_id: str,
+    worker: str,
+    worker_repo: str,
+    request: dict[str, Any],
+    model_spec: dict[str, Any],
+    logs_dir: pathlib.Path,
+) -> pathlib.Path | None:
+    if model_spec["model_id"] != "cnn_ctc_v2":
+        return None
+
+    attempt_dir = experiment_dir / "attempts" / attempt_id
+    probe_dir = attempt_dir / "build" / "compatibility-probe"
+    export_dir = probe_dir / "export"
+    ir_dir = probe_dir / "openvino" / "fp16"
+    local_files = [
+        ir_dir / "cnn_ctc_v2.xml",
+        ir_dir / "cnn_ctc_v2.bin",
+        export_dir / "golden-input.f32",
+    ]
+    for path in local_files:
+        if not path.is_file():
+            raise ExecutionFailure(
+                f"pretraining compatibility artifact missing: {path}",
+                outcome="failed",
+                failure_class="controller_execution",
+            )
+
+    remote_stage = (
+        f"{worker_repo}/work/speech-asr/remote-probe/"
+        f"{request['experiment_id']}/{attempt_id}"
+    )
+    mkdir = remote_run(
+        worker,
+        ["mkdir", "-p", remote_stage],
+        log_path=logs_dir / "edge-model-probe-stage.log",
+    )
+    if mkdir.returncode != 0:
+        raise ExecutionFailure(
+            "could not create edge model-probe staging directory",
+            outcome="blocked",
+            failure_class="transport_preflight",
+        )
+
+    push = run_process(
+        rsync_push_command(
+            worker=worker,
+            sources=local_files,
+            remote_dir=remote_stage,
+        ),
+        log_path=logs_dir / "edge-model-probe-rsync-push.log",
+    )
+    if push.returncode != 0:
+        raise ExecutionFailure(
+            "pretraining model-probe rsync failed",
+            outcome="blocked",
+            failure_class="transport_preflight",
+        )
+
+    remote_output = f"{remote_stage}/myriad-output.f32"
+    probe = remote_run(
+        worker,
+        [
+            "bash",
+            f"{worker_repo}/scripts/edge-speech-model-probe.sh",
+            "--model",
+            f"{remote_stage}/cnn_ctc_v2.xml",
+            "--weights",
+            f"{remote_stage}/cnn_ctc_v2.bin",
+            "--tensor",
+            f"{remote_stage}/golden-input.f32",
+            "--output",
+            remote_output,
+        ],
+        log_path=logs_dir / "edge-model-probe.log",
+    )
+    if probe.returncode == 75:
+        raise ExecutionFailure(
+            "pretraining MYRIAD graph probe blocked: worker busy",
+            outcome="blocked",
+            failure_class="worker_busy",
+        )
+    if probe.returncode != 0:
+        raise ExecutionFailure(
+            "pretraining MYRIAD graph probe failed:\n"
+            + "\n".join(probe.stdout.splitlines()[-30:]),
+            outcome="failed",
+            failure_class="hardware_execution",
+        )
+
+    collected = attempt_dir / "generated" / "pretraining-probe"
+    collected.mkdir(parents=True, exist_ok=True)
+    pull = run_process(
+        [
+            "rsync",
+            "-a",
+            "--checksum",
+            "-e",
+            "ssh -o BatchMode=yes -o ConnectTimeout=10",
+            "--",
+            f"{worker}:{remote_output}",
+            str(collected / "myriad-output.f32"),
+        ],
+        log_path=logs_dir / "edge-model-probe-rsync-pull.log",
+    )
+    if pull.returncode != 0:
+        raise ExecutionFailure(
+            "pretraining MYRIAD probe output collection failed",
+            outcome="blocked",
+            failure_class="transport_preflight",
+        )
+
+    comparison_path = collected / "comparison.json"
+    comparison = run_process(
+        [
+            str(ROOT / "scripts" / "python-apps.sh"),
+            str(
+                ROOT
+                / "examples"
+                / "speech-asr"
+                / "evaluation"
+                / "compare_cnn_ctc_v1_tensor.py"
+            ),
+            str(export_dir / "golden-output.f32"),
+            str(collected / "myriad-output.f32"),
+            "--spec",
+            str(
+                ROOT
+                / "examples"
+                / "speech-asr"
+                / "models"
+                / "cnn_ctc_v2"
+                / "model_spec.json"
+            ),
+            "--candidate-name",
+            "MYRIAD-arm64-pretraining",
+            "--output",
+            str(comparison_path),
+        ],
+        log_path=logs_dir / "controller-model-probe-compare.log",
+    )
+    if comparison.returncode != 0:
+        raise ExecutionFailure(
+            "pretraining MYRIAD numerical comparison failed",
+            outcome="failed",
+            failure_class="result_contract",
+        )
+
+    comparison_doc = load_json(comparison_path)
+    agreement = comparison_doc.get("comparison", {}).get(
+        "frame_argmax_agreement"
+    )
+    if not isinstance(agreement, (int, float)) or agreement < 0.99:
+        raise ExecutionFailure(
+            f"pretraining MYRIAD argmax agreement too low: {agreement!r}",
+            outcome="failed",
+            failure_class="hardware_execution",
+        )
+
+    evidence_path = collected / "probe.json"
+    write_json(
+        evidence_path,
+        {
+            "schema": "speech-asr/pretraining-myriad-probe",
+            "version": 1,
+            "status": "completed",
+            "model_id": "cnn_ctc_v2",
+            "output_sha256": sha256_file(collected / "myriad-output.f32"),
+            "comparison": comparison_doc["comparison"],
+            "log_sha256": sha256_file(logs_dir / "edge-model-probe.log"),
+        },
+    )
+    return evidence_path
+
+
 def execute_local(
     *,
     experiment_dir: pathlib.Path,
@@ -723,6 +900,15 @@ def main() -> int:
                     outcome="failed",
                     failure_class="controller_execution",
                 )
+            physical_compatibility_probe(
+                experiment_dir=experiment_dir,
+                attempt_id=attempt_id,
+                worker=args.worker,
+                worker_repo=worker_repo,
+                request=request,
+                model_spec=model_spec,
+                logs_dir=logs_dir,
+            )
 
         manager(
             "transition",
