@@ -1,10 +1,35 @@
 #!/usr/bin/env bash
 # Shared uv-managed host Python environment helpers. Safe to source.
 
+python_env_resolve_uv() {
+    if command -v uv >/dev/null 2>&1; then
+        return 0
+    fi
+
+    local candidate
+    local -a candidates=()
+    [[ -n "${UV_INSTALL_DIR:-}" ]] && candidates+=("${UV_INSTALL_DIR}/uv")
+    [[ -n "${XDG_BIN_HOME:-}" ]] && candidates+=("${XDG_BIN_HOME}/uv")
+    [[ -n "${HOME:-}" ]] && candidates+=(
+        "${HOME}/.local/bin/uv"
+        "${HOME}/.cargo/bin/uv"
+    )
+
+    for candidate in "${candidates[@]}"; do
+        if [[ -x "$candidate" ]]; then
+            PATH="$(dirname "$candidate"):$PATH"
+            export PATH
+            command -v uv >/dev/null 2>&1 && return 0
+        fi
+    done
+    return 1
+}
+
 python_env_require_uv() {
-    if ! command -v uv >/dev/null 2>&1; then
+    if ! python_env_resolve_uv; then
         echo "uv is required for host Python environments." >&2
-        echo "Install the uv binary, then rerun this command." >&2
+        echo "Install the uv binary, or ensure it is available in PATH," >&2
+        echo "UV_INSTALL_DIR, XDG_BIN_HOME, ~/.local/bin, or ~/.cargo/bin." >&2
         echo "See docs/PYTHON-ENVIRONMENTS.md." >&2
         return 127
     fi
