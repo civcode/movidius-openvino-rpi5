@@ -261,6 +261,21 @@ class FrozenHeldoutControllerSourceTests(unittest.TestCase):
         self.assertIn('"cer_delta"', source)
         self.assertIn("json.dumps(agreement, sort_keys=True)", source)
 
+    def test_reference_retry_can_reuse_validated_cpu_result(self):
+        controller = (
+            SPEECH / "agent" / "run_frozen_heldout_evaluation.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('"--reuse-reference"', controller)
+        self.assertIn("validate_cached_reference(", controller)
+        self.assertIn('"cached reference checkpoint hash mismatch"', controller)
+        self.assertIn('"cached reference ONNX hash mismatch"', controller)
+        self.assertIn('"cached reference manifest hash mismatch"', controller)
+        self.assertIn('default="cpu"', controller)
+        self.assertIn(
+            '"held-out reference: reusing validated "',
+            controller,
+        )
+
     def test_reference_progress_is_streamed(self):
         controller = (
             SPEECH / "agent" / "run_frozen_heldout_evaluation.py"
