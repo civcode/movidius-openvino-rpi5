@@ -45,6 +45,41 @@ class ReviewSummaryTests(unittest.TestCase):
         self.assertAlmostEqual(result["wer"]["ratio"], 0.8)
         self.assertAlmostEqual(result["inference_latency_p95_ms"]["ratio"], 4.0)
 
+    def test_metric_delta_does_not_compare_accuracy_across_benchmarks(self):
+        candidate = {
+            "benchmark": {"manifest_sha256": "a" * 64},
+            "metrics": {
+                "wer": 0.5,
+                "cer": 0.2,
+                "realtime_factor": 0.02,
+                "inference_latency_p50_ms": 12.0,
+                "inference_latency_p95_ms": 20.0,
+            },
+        }
+        parent = {
+            "benchmark": {"manifest_sha256": "b" * 64},
+            "metrics": {
+                "wer": 1.0,
+                "cer": 0.5,
+                "realtime_factor": 0.01,
+                "inference_latency_p50_ms": 10.0,
+                "inference_latency_p95_ms": 18.0,
+            },
+        }
+        result = self.tool.delta(candidate, parent)
+        self.assertFalse(result["same_benchmark_manifest"])
+        self.assertEqual(
+            result["not_compared"],
+            ["wer", "cer", "realtime_factor"],
+        )
+        self.assertNotIn("wer", result)
+        self.assertNotIn("cer", result)
+        self.assertNotIn("realtime_factor", result)
+        self.assertAlmostEqual(
+            result["inference_latency_p95_ms"]["delta"],
+            2.0,
+        )
+
     def test_latest_attempt_uses_highest_number(self):
         with tempfile.TemporaryDirectory() as temp:
             root = pathlib.Path(temp)
