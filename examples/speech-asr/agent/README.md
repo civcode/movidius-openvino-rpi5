@@ -47,3 +47,16 @@ model.
 The final controller artifact is the compact Phase 9 `results/result.json`,
 which always returns to `AWAIT_REVIEW`. A rejected acceptance policy is
 reported as evidence; it does not authorize the execution side to enter DESIGN.
+
+
+## Phase 10 acceptance
+
+The local execution boundary was physically accepted on 2026-10-05 using
+`exp-f915ec624a63caf6/attempt-0001`. The controller completed the approved
+baseline through the exact-commit edge worker, physical MYRIAD evaluation,
+result collection and acceptance evaluation, then stopped at
+`AWAIT_REVIEW` as designed.
+
+Phase 10 is therefore qualified as execution infrastructure. Phase 11 may add
+new reviewed model executors, but it must not broaden this component's design
+authority.
