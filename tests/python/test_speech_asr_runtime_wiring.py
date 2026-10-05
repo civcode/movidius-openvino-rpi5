@@ -14,7 +14,8 @@ class SpeechRuntimeWiringTests(unittest.TestCase):
     def test_run_wrapper_exposes_regression_mode(self):
         text = (ROOT / "run.sh").read_text(encoding="utf-8")
         self.assertIn("speech-regress", text)
-        self.assertIn("-d MYRIAD", text)
+        self.assertIn("DEVICE=MYRIAD", text)
+        self.assertIn('-d "${DEVICE}"', text)
         self.assertIn("-bs 1", text)
         self.assertIn("score1_10.ark", text)
 
