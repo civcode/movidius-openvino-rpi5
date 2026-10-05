@@ -187,6 +187,7 @@ def make_attempt(
         "failure_class": None,
         "events": [{"state": "APPROVED", "at_utc": timestamp}],
         "stage_results": {},
+        "artifacts": {},
     }
     validate_experiment_attempt(attempt)
     return attempt
@@ -242,6 +243,26 @@ def transition_attempt(
     return updated
 
 
+def set_artifact(
+    attempt: Mapping[str, Any],
+    name: str,
+    *,
+    path: str,
+    sha256: str,
+) -> dict[str, Any]:
+    if not name or not name.strip():
+        raise ValueError("artifact name must be non-empty")
+    updated = copy.deepcopy(validate_experiment_attempt(attempt))
+    ref = {"path": path, "sha256": sha256}
+    if name in updated["artifacts"]:
+        if updated["artifacts"][name] != ref:
+            raise ValueError(f"artifact is immutable once recorded: {name}")
+        return updated
+    updated["artifacts"][name] = ref
+    validate_experiment_attempt(updated)
+    return updated
+
+
 def set_stage_result(
     attempt: Mapping[str, Any],
     stage: str,
@@ -285,7 +306,9 @@ def make_summary(
             for name, ref in validated["stage_results"].items()
             if name != "result"
         },
-        "artifacts": copy.deepcopy(dict(artifacts or {})),
+        "artifacts": copy.deepcopy(
+            dict(validated["artifacts"] if artifacts is None else artifacts)
+        ),
     }
     if metrics is not None:
         summary["metrics"] = copy.deepcopy(dict(metrics))
