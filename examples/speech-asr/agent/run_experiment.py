@@ -181,16 +181,24 @@ def verify_declared_manifest(ref: dict[str, Any], label: str) -> pathlib.Path:
 
 def remote_home(worker: str, log: pathlib.Path) -> str:
     proc = run_process(
-        ssh_command(worker, ["sh", "-c", 'printf "%s" "$HOME"']),
+        ssh_command(worker, ["sh", "-c", 'printf "%s\\n" "$HOME"']),
         log_path=log,
     )
-    if proc.returncode != 0 or not proc.stdout.strip():
+    lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+    if proc.returncode != 0 or not lines:
         raise ExecutionFailure(
             "SSH connectivity/home preflight failed",
             outcome="blocked",
             failure_class="transport_preflight",
         )
-    return proc.stdout.strip()
+    home = lines[-1]
+    if not home.startswith("/"):
+        raise ExecutionFailure(
+            f"edge HOME is not an absolute path: {home!r}",
+            outcome="blocked",
+            failure_class="transport_preflight",
+        )
+    return home
 
 
 def remote_run(
@@ -246,7 +254,7 @@ def worker_paths(
             or any(ch.isspace() for ch in value)
         ):
             raise ExecutionFailure(
-                f"edge repository path must be absolute and newline-free: {value!r}",
+                f"edge repository path must be absolute and whitespace-free: {value!r}",
                 outcome="failed",
                 failure_class="request_config",
             )
