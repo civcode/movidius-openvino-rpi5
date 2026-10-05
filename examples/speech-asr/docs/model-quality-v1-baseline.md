@@ -202,3 +202,51 @@ If a materially better epoch exists, subsequent work should retain
 metric-aligned checkpointing. If every epoch remains blank-collapsed, the next
 intervention should be training regularization/augmentation rather than a
 hardware-graph redesign.
+
+
+## CER-aligned checkpoint result
+
+The metric-aligned child completed as
+`exp-3c7727ca3f37ba2c/attempt-0001` and was accepted by the execution policy.
+
+The optimizer trajectory, manifests and inference graph were unchanged. Only
+checkpoint selection changed from validation CTC loss to validation greedy CER.
+
+Selection evidence:
+
+- minimum validation CTC loss: 4.798953 at epoch 11;
+- minimum validation CER: 0.866935 at epoch 21;
+- exported checkpoint: epoch 21.
+
+Physical held-out-speaker result:
+
+- CER improved from 0.980847 to 0.866935;
+- blank-frame fraction improved from 0.959331 to 0.613316;
+- empty hypotheses improved from 84/95 to 19/95;
+- emitted/reference character ratio improved from 0.025202 to 0.479839;
+- p95 MYRIAD latency remained effectively unchanged at 16.64 ms;
+- PyTorch/ONNX frame argmax agreement remained 1.0.
+
+WER worsened from 1.0 to 1.161417, so the model is still not a useful ASR
+system. The result nevertheless proves that CTC-loss checkpoint selection was a
+major contributor to blank collapse.
+
+## Next regularization diagnostic
+
+Retain CER-aligned checkpoint selection and the exact v3 graph. The next child
+adds deterministic training-only SpecAugment:
+
+- two frequency masks;
+- maximum frequency width 8 of 64 mel bins;
+- two time masks;
+- maximum time width 20 frontend frames;
+- each time mask additionally capped at 10% of the utterance's valid frontend
+  frames;
+- mask value 0, matching the mean value under the frozen per-mel-bin-mean
+  frontend normalization;
+- augmentation RNG seed = training seed + 1.
+
+Validation, checkpoint scoring, export and inference remain unaugmented.
+
+This isolates whether modest input regularization improves held-out emission
+without changing the OpenVINO 2020.3 / MA2450 graph.
