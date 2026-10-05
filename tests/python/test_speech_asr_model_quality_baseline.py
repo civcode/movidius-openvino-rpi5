@@ -58,6 +58,25 @@ class ModelQualityBaselineSourceTests(unittest.TestCase):
         self.assertIn("benchmark id mismatch", source)
         self.assertIn("benchmark manifest hash mismatch", source)
 
+    def test_cer_selection_experiment_keeps_graph_and_data_fixed(self):
+        source = (
+            SPEECH / "agent" / "init_cnn_ctc_v3_cer_selection.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('DEFAULT_PARENT = "exp-62a94f36aefddb58"', source)
+        self.assertIn('"checkpoint_selection": "validation_cer"', source)
+        self.assertIn('"model_id": "cnn_ctc_v3"', source)
+        self.assertIn('"max_wer": None', source)
+        self.assertIn('"max_cer": None', source)
+        self.assertIn('"max_realtime_factor": None', source)
+        self.assertIn(
+            "89a8624a5dc46ef28845f35591fc1e623dfbd3026d7a4729b7578153d03baf5a",
+            source,
+        )
+        self.assertIn(
+            "07ebc41041238c1ec374ad64eefe7209fd6c11d1050e8f6f72f0226d358c8923",
+            source,
+        )
+
     def test_v3_training_records_processed_audio_budget(self):
         source = (
             SPEECH / "training" / "train_cnn_ctc_v3.py"
