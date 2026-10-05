@@ -215,6 +215,17 @@ documents are managed with:
 ./scripts/python.sh examples/speech-asr/tools/manage_experiment.py --help
 ```
 
-Phase 10 will automate the accepted oberon -> edge SSH/rsync execution path
-using those experiment and deployment-manifest contracts; it must not change
-architecture, benchmark or acceptance policy implicitly.
+Phase 10 implements the accepted oberon -> edge SSH/rsync execution path
+using those experiment and deployment-manifest contracts. For the frozen
+`cnn_ctc_v1` baseline:
+
+```bash
+./scripts/init-cnn-ctc-v1-experiment.sh
+./scripts/run-speech-experiment.sh \
+  --experiment work/speech-asr/experiments/exp-... \
+  --worker edge
+```
+
+The executor rejects unknown architecture declarations rather than silently
+changing or ignoring them. Runtime-image rebuilds and benchmark/acceptance
+changes remain outside ordinary experiment execution.
