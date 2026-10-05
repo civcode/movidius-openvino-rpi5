@@ -16,6 +16,7 @@ from speech_asr.cnn_ctc import (
 from speech_asr.orchestration import (
     V3_ARCHITECTURE,
     compatibility_probe_command,
+    pretraining_myriad_compatibility,
     training_command,
     validate_model_executor_request,
 )
@@ -142,6 +143,32 @@ class CnnCtcV3ExecutorTests(unittest.TestCase):
         self.assertIsNotNone(command)
         assert command is not None
         self.assertEqual(command[0], "/repo/scripts/probe-cnn-ctc-v3.sh")
+
+
+class CnnCtcV3PretrainingGateTests(unittest.TestCase):
+    def test_low_argmax_agreement_can_pass_when_logits_are_numerically_close(self):
+        result = pretraining_myriad_compatibility(
+            {
+                "max_abs_error": 0.002,
+                "frame_argmax_agreement": 0.984375,
+                "frame_argmax_mismatches": 2,
+                "min_reference_top2_margin": 0.0001,
+            }
+        )
+        self.assertEqual(result["status"], "accepted")
+        self.assertEqual(result["frame_argmax_agreement"], 0.984375)
+
+    def test_large_numerical_error_still_fails_pretraining_gate(self):
+        result = pretraining_myriad_compatibility(
+            {
+                "max_abs_error": 0.011,
+                "frame_argmax_agreement": 1.0,
+                "frame_argmax_mismatches": 0,
+                "min_reference_top2_margin": 0.1,
+            }
+        )
+        self.assertEqual(result["status"], "rejected")
+        self.assertTrue(result["reasons"])
 
 
 class CnnCtcV3IrTests(unittest.TestCase):
