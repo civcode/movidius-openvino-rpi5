@@ -272,8 +272,8 @@ optimization-starved: only CER failed, while OpenVINO/MYRIAD compatibility and
 realtime performance retained large margin.
 
 `cnn_ctc_v3` keeps v2's 4x reduction, 96-channel residual stack, kernel
-schedule and 174,804,992 MAC envelope, but removes BatchNorm and zero-initializes
-each residual block's final 1x1 projection. Training is increased to 32 epochs
+schedule and 174,804,992 MAC envelope, but removes BatchNorm and small-initializes
+each residual block's final 1x1 projection with 1%-scaled Kaiming weights. Training is increased to 32 epochs
 with batch size 1, Adam at 3e-4, cosine decay to 3e-5, gradient clipping and
 best-validation-loss checkpoint selection.
 
