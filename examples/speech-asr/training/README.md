@@ -43,7 +43,8 @@ Prepare the isolated training environment:
 ./scripts/prepare-python-env.sh training
 ```
 
-Run the cheap graph/toolchain gate **before training**:
+Run the cheap graph/toolchain gate **before training**. The initialized-model
+probe is dataset-independent; it does not read or require an AMI manifest:
 
 ```bash
 # workstation: deterministic init -> ONNX -> ONNX Runtime -> MO FP16
@@ -61,7 +62,9 @@ same initialized-model probe on the physical stick:
 
 The probe spends no training budget. It records PyTorch-vs-ONNX and
 PyTorch-vs-MYRIAD numerical differences without applying an invented device
-tolerance.
+tolerance. The physical Pi 5/arm64 + MA2450 compatibility gate for this fixed
+graph passed on 2026-10-05; full trained-checkpoint evaluation remains the
+Milestone B acceptance step.
 
 Full skeleton training/export/conversion on a CUDA workstation:
 
