@@ -19,6 +19,7 @@ from speech_asr.orchestration import (
     pretraining_myriad_compatibility,
     training_command,
     validate_model_executor_request,
+    validate_training_device_evidence,
 )
 
 SPEC_PATH = SPEECH / "models" / "cnn_ctc_v3" / "model_spec.json"
@@ -143,6 +144,42 @@ class CnnCtcV3ExecutorTests(unittest.TestCase):
         self.assertIsNotNone(command)
         assert command is not None
         self.assertEqual(command[0], "/repo/scripts/probe-cnn-ctc-v3.sh")
+
+
+class CnnCtcV3DeviceEvidenceTests(unittest.TestCase):
+    def test_cuda_request_requires_cuda_model_logits_and_vram(self):
+        result = validate_training_device_evidence(
+            train_config=train_config(),
+            training_result={
+                "device_used": "cuda",
+                "model_device": "cuda:0",
+                "observed_logits_device": "cuda:0",
+                "ctc_loss_device": "cpu",
+                "cuda_available": True,
+                "cuda_device_name": "GPU",
+                "cuda_peak_memory_allocated_bytes": 123456,
+                "cuda_peak_memory_reserved_bytes": 234567,
+            },
+        )
+        self.assertEqual(result["model_device"], "cuda:0")
+        self.assertEqual(result["ctc_loss_device"], "cpu")
+        self.assertGreater(result["cuda_peak_memory_allocated_bytes"], 0)
+
+    def test_cuda_request_rejects_cpu_model(self):
+        with self.assertRaisesRegex(ValueError, "CUDA training requested"):
+            validate_training_device_evidence(
+                train_config=train_config(),
+                training_result={
+                    "device_used": "cpu",
+                    "model_device": "cpu",
+                    "observed_logits_device": "cpu",
+                    "ctc_loss_device": "cpu",
+                    "cuda_available": True,
+                    "cuda_device_name": "GPU",
+                    "cuda_peak_memory_allocated_bytes": 0,
+                    "cuda_peak_memory_reserved_bytes": 0,
+                },
+            )
 
 
 class CnnCtcV3PretrainingGateTests(unittest.TestCase):
