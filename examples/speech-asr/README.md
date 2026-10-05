@@ -314,3 +314,34 @@ speaker-disjoint model-quality manifests:
 Future custom-model evaluation results include per-sample CTC collapse and edit
 diagnostics so blank collapse or pathological emission can be distinguished
 from ordinary substitution/deletion errors.
+
+
+## Model-quality v1 baseline
+
+The post-Phase-11 data qualification is reviewed and accepted for the next
+controlled baseline. It uses the frozen ES2002a benchmark preparation but
+partitions by speaker:
+
+- train A/B/C: 125 eligible records, 219.998 seconds;
+- validation D: 95 eligible records, 122.52 seconds;
+- zero record and speaker overlap.
+
+This is intentionally an interim speaker-holdout benchmark, not cross-meeting
+generalization evidence.
+
+Provision the reviewed dataset once on edge, then run the frozen v3 baseline:
+
+```bash
+./scripts/provision-speech-model-data-edge.sh
+
+EXP="$(
+  ./scripts/init-cnn-ctc-v3-quality-baseline.sh |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
+)"
+./scripts/run-speech-experiment.sh --experiment "$EXP" --worker edge
+./scripts/review-speech-experiment.sh --experiment "$EXP"
+```
+
+The experiment keeps `cnn_ctc_v3` unchanged and removes smoke-derived WER/CER
+acceptance ceilings. It establishes the larger-data accuracy reference while
+retaining the proven OpenVINO/MYRIAD realtime gates.
