@@ -28,7 +28,7 @@ def load_spec(path: Path) -> dict:
     if value.get("version") != 1:
         raise ValueError("model spec version must be 1")
     model_id = value.get("id")
-    if model_id not in {"cnn_ctc_v1", "cnn_ctc_v2"}:
+    if model_id not in {"cnn_ctc_v1", "cnn_ctc_v2", "cnn_ctc_v3"}:
         raise ValueError("unsupported cnn_ctc model spec id")
 
     frontend = value.get("frontend")
@@ -66,22 +66,33 @@ def load_spec(path: Path) -> dict:
             if not isinstance(values, list) or len(values) != 3:
                 raise ValueError(f"cnn_ctc_v1 network.{key} must contain three values")
     else:
-        if network.get("kind") != "residual-temporal-v1":
-            raise ValueError("cnn_ctc_v2 network.kind must be residual-temporal-v1")
+        expected_kind = (
+            "residual-temporal-v1"
+            if model_id == "cnn_ctc_v2"
+            else "residual-temporal-v2"
+        )
+        if network.get("kind") != expected_kind:
+            raise ValueError(f"{model_id} network.kind must be {expected_kind}")
         stem = network.get("stem")
         blocks = network.get("residual_blocks")
         if not isinstance(stem, list) or len(stem) != 2:
-            raise ValueError("cnn_ctc_v2 network.stem must contain two layers")
+            raise ValueError(f"{model_id} network.stem must contain two layers")
         if not isinstance(blocks, list) or len(blocks) != 5:
-            raise ValueError("cnn_ctc_v2 residual_blocks must contain five blocks")
-        if network.get("normalization") != "batchnorm":
-            raise ValueError("cnn_ctc_v2 normalization must be batchnorm")
+            raise ValueError(f"{model_id} residual_blocks must contain five blocks")
+        expected_norm = "batchnorm" if model_id == "cnn_ctc_v2" else "none"
+        if network.get("normalization") != expected_norm:
+            raise ValueError(f"{model_id} normalization must be {expected_norm}")
         if network.get("activation") != "relu":
-            raise ValueError("cnn_ctc_v2 activation must be relu")
+            raise ValueError(f"{model_id} activation must be relu")
         if [int(block.get("kernel", 0)) for block in blocks] != [11, 19, 27, 35, 43]:
-            raise ValueError("cnn_ctc_v2 residual kernel schedule is frozen")
+            raise ValueError(f"{model_id} residual kernel schedule is frozen")
         if any(int(block.get("channels", 0)) != 96 for block in blocks):
-            raise ValueError("cnn_ctc_v2 residual channels must remain 96")
+            raise ValueError(f"{model_id} residual channels must remain 96")
+        if (
+            model_id == "cnn_ctc_v3"
+            and network.get("residual_projection_init") != "zeros"
+        ):
+            raise ValueError("cnn_ctc_v3 residual projection init must be zeros")
     return value
 
 
@@ -156,7 +167,7 @@ def conv1d_output_length(
 def acoustic_output_length(feature_frames: int, spec: dict) -> int:
     length = int(feature_frames)
     network = spec["network"]
-    if spec.get("id") == "cnn_ctc_v2":
+    if spec.get("id") in {"cnn_ctc_v2", "cnn_ctc_v3"}:
         layers = network["stem"]
         for layer in layers:
             length = conv1d_output_length(
@@ -183,8 +194,8 @@ def acoustic_output_length(feature_frames: int, spec: dict) -> int:
 
 def model_resource_estimate(spec: dict, vocab_size: int = 39) -> dict:
     """Return deterministic parameter/MAC/receptive-field estimates for fixed input."""
-    if spec.get("id") != "cnn_ctc_v2":
-        raise ValueError("resource estimator currently targets cnn_ctc_v2")
+    if spec.get("id") not in {"cnn_ctc_v2", "cnn_ctc_v3"}:
+        raise ValueError("resource estimator targets cnn_ctc_v2/v3")
 
     network = spec["network"]
     input_frames = int(spec["input_contract"]["shape"][2])
@@ -206,8 +217,12 @@ def model_resource_estimate(spec: dict, vocab_size: int = 39) -> dict:
             stride=stride,
             padding=padding,
         )
+        use_batchnorm = spec["network"]["normalization"] == "batchnorm"
         parameters += in_channels * out_channels * kernel
-        parameters += 2 * out_channels  # BatchNorm gamma/beta
+        if use_batchnorm:
+            parameters += 2 * out_channels  # BatchNorm gamma/beta
+        else:
+            parameters += out_channels  # Conv bias
         macs += in_channels * out_channels * kernel * out_length
         receptive_field += (kernel - 1) * jump
         jump *= stride
@@ -221,9 +236,9 @@ def model_resource_estimate(spec: dict, vocab_size: int = 39) -> dict:
         if channels != in_channels:
             raise ValueError("generation-1 residual block changes channel width")
         parameters += channels * channels * kernel
-        parameters += 2 * channels
+        parameters += 2 * channels if use_batchnorm else channels
         parameters += channels * channels * projection_kernel
-        parameters += 2 * channels
+        parameters += 2 * channels if use_batchnorm else channels
         macs += channels * channels * kernel * length
         macs += channels * channels * projection_kernel * length
         receptive_field += (kernel - 1) * jump
