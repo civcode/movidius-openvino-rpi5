@@ -244,3 +244,27 @@ from controller exit status:
 The review output includes threshold failures and candidate-vs-parent metric
 deltas. Future controller runs also print acceptance reasons and threshold
 checks directly in their terminal JSON.
+
+
+## Phase 11 generation 2
+
+Generation-1 review identified optimization quality rather than hardware
+compatibility as the active bottleneck. The reviewed generation-2 initializer is:
+
+```bash
+./scripts/init-cnn-ctc-v3-experiment.sh
+```
+
+It creates a child of `exp-1c682f4eda475a01` with the frozen
+normalization-free `cnn_ctc_v3` model declaration and 32-epoch/batch-1
+training request. The experiment keeps the v1 CER ceiling and tightens the
+hardware acceptance limits to RTF <= 0.01 and p95 <= 25 ms.
+
+After execution, use:
+
+```bash
+./scripts/review-speech-experiment.sh --experiment work/speech-asr/experiments/exp-...
+```
+
+The review output now includes optimizer-step count, selected best epoch and
+best validation loss for generation-2 training.
