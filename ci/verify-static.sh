@@ -256,6 +256,17 @@ if grep -Eq 'BatchNorm|groups=|MultiheadAttention|LayerNorm' examples/speech-asr
     fail 'cnn_ctc_v3 inference graph violated normalization/operator policy'
 fi
 
+# Post-Phase-11 model-quality data boundary.
+test -f examples/speech-asr/docs/phase11-final-review.md || fail 'Phase 11 final review missing'
+test -f examples/speech-asr/tools/qualify_model_quality_manifests.py || fail 'model-quality qualification tool missing'
+test -x scripts/qualify-speech-model-data.sh || fail 'model-quality qualification wrapper is not executable'
+grep -q 'train_speakers=("A", "B", "C")' examples/speech-asr/tools/qualify_model_quality_manifests.py || fail 'model-quality train speaker partition changed'
+grep -q 'validation_speakers=("D",)' examples/speech-asr/tools/qualify_model_quality_manifests.py || fail 'model-quality validation speaker partition changed'
+grep -q 'speaker_overlap' examples/speech-asr/tools/qualify_model_quality_manifests.py || fail 'model-quality speaker overlap evidence missing'
+grep -q 'greedy_decode_logits_diagnostics' examples/speech-asr/evaluation/evaluate_cnn_ctc_v3.py || fail 'v3 evaluator lacks decoder diagnostics'
+grep -q 'blank_frame_fraction' examples/speech-asr/python/speech_asr/cnn_ctc.py || fail 'CTC blank-collapse diagnostics missing'
+grep -q 'character_edits' examples/speech-asr/evaluation/evaluate_cnn_ctc_v3.py || fail 'v3 evaluator lacks per-sample character edits'
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
 for name in [
@@ -278,6 +289,7 @@ for name in [
     "examples/speech-asr/agent/edge_worker.py",
     "examples/speech-asr/tools/manage_experiment.py",
     "examples/speech-asr/tools/validate_contract.py",
+    "examples/speech-asr/tools/qualify_model_quality_manifests.py",
     "examples/speech-asr/training/cnn_ctc_v1.py",
     "examples/speech-asr/training/train_cnn_ctc_v1.py",
     "examples/speech-asr/training/export_cnn_ctc_v1.py",
