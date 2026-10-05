@@ -147,6 +147,38 @@ class CnnCtcV3ExecutorTests(unittest.TestCase):
         text = " ".join(command)
         self.assertIn("--checkpoint-selection validation_cer", text)
 
+    def test_training_command_propagates_specaugment_policy(self):
+        config = train_config()
+        config["checkpoint_selection"] = "validation_cer"
+        config["augmentation"] = {
+            "kind": "specaugment-v1",
+            "frequency_masks": 2,
+            "frequency_max_width": 8,
+            "time_masks": 2,
+            "time_max_width": 20,
+            "time_max_fraction": 0.1,
+            "mask_value": 0,
+            "seed_offset": 1,
+        }
+        command = training_command(
+            root=pathlib.Path("/repo"),
+            build_dir=pathlib.Path("/repo/work/attempt/cnn_ctc_v3"),
+            train_config=config,
+            model_spec=experiment_model_spec(),
+        )
+        text = " ".join(command)
+        for fragment in (
+            "--augmentation-kind specaugment-v1",
+            "--frequency-masks 2",
+            "--frequency-max-width 8",
+            "--time-masks 2",
+            "--time-max-width 20",
+            "--time-max-fraction 0.1",
+            "--augmentation-mask-value 0",
+            "--augmentation-seed-offset 1",
+        ):
+            self.assertIn(fragment, text)
+
     def test_v3_has_pretraining_compatibility_probe(self):
         command = compatibility_probe_command(
             root=pathlib.Path("/repo"),
@@ -279,6 +311,10 @@ class Phase11Generation2SourceTests(unittest.TestCase):
             '"validation_empty_hypothesis_fraction"',
             '"best_validation_cer"',
             'checkpoint_selection == "validation_loss"',
+            "apply_specaugment_v1",
+            '"augmentation": augmentation_policy',
+            '"augmentation_stats": augmentation_stats',
+            'batch["feature_lengths"]',
         ):
             self.assertIn(marker, source)
 
