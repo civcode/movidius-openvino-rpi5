@@ -1,6 +1,6 @@
 # Remote experiment orchestration specification
 
-Status: **draft for Phase 9 contract review**
+Status: **accepted for Phase 9/10 implementation**
 
 This document defines the multi-host execution architecture for speech-ASR
 experiments. It separates experiment control and model production on the CUDA
@@ -376,64 +376,47 @@ The intended final controller command shape is:
 The implementation should keep local training, remote deployment, remote
 execution and evidence collection as separable modules behind that command.
 
-## Open contract decisions
+## Frozen contract decisions
 
-The following choices affect experiment identity or reproducibility and should
-be frozen before the orchestration implementation is considered accepted.
+The following choices affect experiment identity or reproducibility and were
+accepted on 2026-10-05. They are normative for the orchestration implementation.
 
 ### D1. Worker source deployment
 
-**Recommended:** maintain a dedicated automation checkout/worktree on edge and
+**Decision:** maintain a dedicated automation checkout/worktree on edge and
 pin it to the exact requested commit. Do not mutate the human interactive
 checkout.
 
-Alternative: require an administrator/human to update edge out of band and
-refuse experiments until its checkout already matches.
-
 ### D2. Experiment/run identity
 
-**Recommended:** one immutable experiment ID identifies the declared model,
+**Decision:** one immutable experiment ID identifies the declared model,
 training config, benchmark, acceptance policy and source revision; repeated
 executions use explicit attempt IDs beneath that experiment.
 
-Alternative: every execution, even an exact retry, receives a new top-level
-experiment ID.
-
 ### D3. Deployment artifact scope
 
-**Recommended:** transfer a minimal hash-manifested deployment bundle
+**Decision:** transfer a minimal hash-manifested deployment bundle
 (OpenVINO XML/BIN plus model/benchmark metadata and any evaluator-required
 files), not the entire model work directory.
 
-Alternative: rsync the whole generated model directory for operational
-simplicity.
-
 ### D4. Dataset provisioning
 
-**Recommended:** datasets/manifests are provisioned independently on edge and
+**Decision:** datasets/manifests are provisioned independently on edge and
 verified by hash during each run. Experiment orchestration never silently syncs
 or prepares corpus data.
 
-Alternative: allow the orchestrator to provision a declared dataset bundle as
-a separate pre-execution stage.
-
 ### D5. Busy-worker behavior
 
-**Recommended:** fail/return `blocked: worker_busy` immediately and let the
+**Decision:** fail/return `blocked: worker_busy` immediately and let the
 controller/agent queue or retry according to policy.
-
-Alternative: have the SSH worker command block waiting for the device lock.
 
 ### D6. Code/runtime update authority
 
-**Recommended:** source checkout synchronization to an exact Git commit may be
+**Decision:** source checkout synchronization to an exact Git commit may be
 performed by the dedicated worker-management layer; rebuilding/updating the
 OpenVINO runtime image remains an explicit infrastructure operation and is not
 performed automatically by an ordinary model experiment.
 
-Alternative: permit experiments to rebuild the worker runtime when the requested
-revision changes.
-
-The first six decisions are intentionally explicit. Details such as rsync flags,
+These six decisions are intentionally explicit. Details such as rsync flags,
 temporary filenames, SSH ControlMaster use, compression and log formatting are
 implementation choices and do not belong in the experiment contract.
