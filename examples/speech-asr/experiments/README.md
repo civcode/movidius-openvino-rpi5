@@ -293,3 +293,33 @@ Do not create another model lineage from the smoke result. First run:
 and review the resulting
 `work/speech-asr/ami/model-quality-v1/qualification.json`. A later baseline
 experiment must bind the accepted train/validation manifest hashes explicitly.
+
+
+## Model-quality v1 baseline
+
+The reviewed post-Phase-11 qualification is accepted for an interim
+speaker-held-out baseline:
+
+- train: 125 eligible A/B/C records, 219.998 s,
+  SHA-256 `89a8624a5dc46ef28845f35591fc1e623dfbd3026d7a4729b7578153d03baf5a`;
+- validation: 95 eligible D records, 122.52 s,
+  SHA-256 `07ebc41041238c1ec374ad64eefe7209fd6c11d1050e8f6f72f0226d358c8923`.
+
+The first experiment keeps `cnn_ctc_v3` and its 32-epoch/batch-1 training
+policy unchanged. It is initialized with:
+
+```bash
+./scripts/init-cnn-ctc-v3-quality-baseline.sh
+```
+
+The validation manifest is also the hardware benchmark manifest. Provision it
+out-of-band before the experiment:
+
+```bash
+./scripts/provision-speech-model-data-edge.sh
+```
+
+The baseline has no numeric WER/CER acceptance threshold; its purpose is to
+establish those metrics on the reviewed validation population. Review tooling
+does not compute accuracy/RTF deltas against the smoke parent because benchmark
+manifest identities differ.
