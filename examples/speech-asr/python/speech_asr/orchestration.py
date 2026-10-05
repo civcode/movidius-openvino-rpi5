@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 import shlex
 from typing import Any, Mapping
 
@@ -14,6 +15,7 @@ SSH_OPTIONS = (
     "ConnectTimeout=10",
 )
 RSYNC_RSH = "ssh -o BatchMode=yes -o ConnectTimeout=10"
+_WORKER_RE = re.compile(r"^[A-Za-z0-9_.@-]+$")
 
 
 def validate_cnn_ctc_v1_executor_request(
@@ -209,9 +211,17 @@ def acceptance_evaluation(
     }
 
 
-def ssh_command(worker: str, remote_argv: list[str]) -> list[str]:
-    if not worker or any(ch in worker for ch in "\r\n"):
+def validate_worker_alias(worker: str) -> None:
+    if (
+        not worker
+        or worker.startswith("-")
+        or _WORKER_RE.fullmatch(worker) is None
+    ):
         raise ValueError("invalid SSH worker alias")
+
+
+def ssh_command(worker: str, remote_argv: list[str]) -> list[str]:
+    validate_worker_alias(worker)
     return ["ssh", *SSH_OPTIONS, worker, shlex.join(remote_argv)]
 
 
@@ -223,6 +233,7 @@ def rsync_push_command(
 ) -> list[str]:
     if not sources:
         raise ValueError("rsync push requires at least one source")
+    validate_worker_alias(worker)
     return [
         "rsync",
         "-a",
@@ -241,6 +252,7 @@ def rsync_pull_command(
     remote_dir: str,
     local_dir: pathlib.Path,
 ) -> list[str]:
+    validate_worker_alias(worker)
     return [
         "rsync",
         "-a",
