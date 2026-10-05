@@ -234,6 +234,8 @@ grep -q 'best_validation_loss' examples/speech-asr/training/train_cnn_ctc_v3.py 
 grep -q 'optimizer_steps' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'cnn_ctc_v3 optimizer-step evidence missing'
 grep -q '"event": "training_device"' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'cnn_ctc_v3 does not report training device'
 grep -q 'cuda_peak_memory_allocated_bytes' examples/speech-asr/training/train_cnn_ctc_v3.py || fail 'cnn_ctc_v3 does not report CUDA memory evidence'
+grep -q 'validate_training_device_evidence' examples/speech-asr/agent/run_experiment.py || fail 'controller does not enforce CUDA training evidence'
+grep -q 'training_device_evidence' examples/speech-asr/agent/run_experiment.py || fail 'controller does not surface CUDA training evidence'
 grep -q 'prepare-cnn-ctc-v3.sh' scripts/train-cnn-ctc-v3.sh || fail 'cnn_ctc_v3 full pipeline uses wrong conversion wrapper'
 if grep -q 'prepare-cnn-ctc-v2.sh' scripts/train-cnn-ctc-v3.sh; then
     fail 'cnn_ctc_v3 full pipeline must not invoke v2 conversion'
