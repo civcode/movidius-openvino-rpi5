@@ -11,7 +11,7 @@ import sys
 
 def validate(spec: dict, contract: dict) -> dict:
     model_id = spec.get("id")
-    if model_id not in {"cnn_ctc_v1", "cnn_ctc_v2", "cnn_ctc_v3"}:
+    if model_id not in {"cnn_ctc_v1", "cnn_ctc_v2", "cnn_ctc_v3", "cnn_ctc_v4"}:
         raise ValueError("unsupported cnn_ctc model spec id")
     if contract.get("schema") != "speech-asr/openvino-ir-contract":
         raise ValueError("unexpected IR contract schema")
