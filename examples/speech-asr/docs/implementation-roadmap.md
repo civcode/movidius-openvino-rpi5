@@ -982,29 +982,19 @@ reference:
 - emitted/reference characters: 47.98% -> 50.60% (better);
 - p95 MA2450 latency: 16.64 -> 16.63 ms.
 
-The next controlled change scales only this successful variable. The reviewed
-[`model-quality-v3`](adr/model-quality-v3-scaled-ami.md) boundary uses 4,429
-utterances / 7,150.12 seconds from ES2005a-d, ES2006a-d and ES2007a-d while
-keeping the same model and byte-identical ES2002a validation benchmark.
+The three-team data scale completed as
+`exp-87538823d2bf1562/attempt-0001`. It passed every gate and becomes the new
+quality reference:
 
-```bash
-./scripts/python.sh examples/speech-asr/datasets/ami/prepare_ami.py \
-  --spec examples/speech-asr/datasets/ami/splits/train-es2005-es2007-v1.json
-./scripts/qualify-speech-model-data-v3.sh
+- CER: 0.844758 -> 0.786290 (better);
+- WER: 1.043307 -> 1.070866 (slightly worse);
+- blank-frame fraction: 73.34% -> 63.82% (better);
+- empty hypotheses: 14/95 -> 12/95 (better);
+- emitted/reference characters: 50.60% -> 72.08% (better);
+- p95 MA2450 latency: 16.63 -> 16.63 ms.
 
-EXP="$(
-  ./scripts/init-cnn-ctc-v3-scaled-data.sh |
-  python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
-)"
-
-./scripts/run-speech-experiment.sh \
-  --experiment "$EXP" \
-  --worker edge
-
-./scripts/review-speech-experiment.sh \
-  --experiment "$EXP"
-```
-
-Edge dataset reprovisioning remains unnecessary because validation is
-unchanged. Results remain model-selection evidence rather than an unbiased
-final test.
+The primary CER and both under-emission measures improved materially, so accept
+this candidate despite the secondary WER regression. Do not make another model
+or data-selection decision from ES2002a before measuring this frozen checkpoint
+on a held-out official AMI scenario evaluation partition. Repeated experiments
+have made ES2002a model-selection evidence only; it is not an unbiased test.
