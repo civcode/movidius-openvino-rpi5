@@ -957,46 +957,31 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-The three-team scaled-data result
-`exp-87538823d2bf1562/attempt-0001` remains the frozen quality reference:
+The one-time sealed Full-corpus-ASR evaluation of
+`exp-87538823d2bf1562/attempt-0001` is complete. The corrected MA2450 result
+closely matches the frozen CPU/ONNX reference, which closes the deployment
+parity question. The sealed EN2002/ES2004/IS1009/TS3003 boundary is now
+consumed and must not participate in future model selection.
 
-- CER: 0.786290;
-- WER: 1.070866;
-- blank-frame fraction: 63.82%;
-- empty hypotheses: 12/95;
-- emitted/reference characters: 72.08%;
-- p95 MA2450 latency: 16.63 ms.
+The next controlled step is **model-quality-v4**: establish a fresh
+Full-corpus-ASR development boundary and rerun the unchanged `cnn_ctc_v3`
+baseline before designing another model intervention.
 
-ES2002a has been reused for checkpoint/model/data selection and is no longer an
-unbiased test. No further architecture, objective or training-data decision
-should be made from it before measuring the frozen reference once on an unseen
-official AMI ASR evaluation partition.
+The reviewed policy is:
 
-The held-out boundary is now implemented as AMI **Full-corpus-ASR** unseen
-scenario-component evaluation:
+- retire ES2002 from all new model/checkpoint selection;
+- train on Edinburgh Full-corpus-ASR training groups ES2003, ES2005-ES2010 and
+  ES2012-ES2016;
+- use ES2011a-d, an official Full-corpus-ASR development group, for fresh
+  checkpoint/model selection;
+- exclude the sealed EN2002, ES2004, IS1009 and TS3003 evaluation groups;
+- keep `cnn_ctc_v3`, `logmel-v1`, vocabulary, standard CTC, 32-epoch
+  optimizer schedule and validation-CER checkpoint selection unchanged for the
+  first baseline.
 
-- EN2002a-d;
-- ES2004a-d;
-- IS1009a-d;
-- TS3003a-d.
-
-The split pins official Mix-Headset source identities. Qualification applies
-the frozen v3 fixed-shape eligibility contract and requires zero record and
-meeting overlap with both model-quality-v3 training and the ES2002a
-checkpoint-selection manifest.
-
-This is a test-only boundary:
-
-- training is forbidden;
-- checkpoint selection is forbidden;
-- the source model is hard-bound to
-  `exp-87538823d2bf1562/attempt-0001`;
-- recorded checkpoint/ONNX/XML/BIN hashes are verified before use;
-- PyTorch and frozen ONNX are scored first and must retain exact frame-argmax
-  agreement;
-- only the already-recorded XML/BIN are deployed to MA2450;
-- a completed held-out result is sealed and refuses another run for model
-  selection.
+New AMI Mix-Headset sources are frozen on first official HTTPS acquisition.
+Previously pinned ES2005-ES2007 hashes are reused. Once the source lock exists,
+later runs are verification-only with respect to source identity.
 
 Run on oberon:
 
@@ -1005,32 +990,31 @@ git pull --ff-only
 ./ci/verify-static.sh
 ./scripts/test-speech-asr.sh
 
-./scripts/prepare-speech-heldout-eval.sh
-cat work/speech-asr/ami/heldout-eval-v1/qualification.json
+./scripts/prepare-speech-model-data-v4.sh
+./scripts/prepare-speech-model-data-v4.sh --verify-only
+
+cat work/speech-asr/ami/model-quality-v4-source-lock/source-lock.json
+cat work/speech-asr/ami/model-quality-v4/qualification.json
 ```
 
-Review that qualification before exposing the test partition to the frozen
-checkpoint. It must report `role: test_only`, all four overlap counts as zero,
-and the expected 16 official meetings.
+Review the qualification before starting training. It must show exact
+ES2011a-d validation, zero train/validation meeting overlap, no forbidden
+ES2002 or sealed-test meetings, and a training population larger than the
+model-quality-v3 4,429 records / 7,150.12 seconds.
 
-Then provision the already-reviewed test corpus once:
+Then provision validation to edge and execute the unchanged baseline:
 
 ```bash
-./scripts/provision-speech-heldout-eval-edge.sh
+./scripts/provision-speech-model-data-v4-edge.sh
+
+EXP="$(
+  ./scripts/init-cnn-ctc-v3-model-quality-v4.sh |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
+)"
+./scripts/run-speech-experiment.sh --experiment "$EXP" --worker edge
+./scripts/review-speech-experiment.sh --experiment "$EXP"
 ```
 
-Execute the single sealed evaluation:
-
-```bash
-./scripts/run-speech-heldout-eval.sh
-```
-
-Review without rerunning inference:
-
-```bash
-./scripts/review-speech-heldout-eval.sh
-```
-
-The next model-development decision is made only after this held-out result is
-reviewed. Do not use the test metrics to choose retrospectively among v3/v4/v5/
-v6 or prior training-objective variants.
+Only the new model-quality-v4 validation evidence may drive the next model
+development decision. The sealed held-out result remains final
+promotion/generalization evidence and must not be reopened.
