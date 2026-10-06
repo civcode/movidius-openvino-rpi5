@@ -1,6 +1,6 @@
 # ADR: cnn_ctc_v15 large-capacity BatchNorm conditioning
 
-Status: implemented; execution pending
+Status: completed; BatchNorm rejected
 Date: 2026-10-06
 Parent: `exp-1e2478b84317ab02/attempt-0001`
 
@@ -19,6 +19,24 @@ cnn_ctc_v10/v11 accuracy points while requiring about 104 ms p95 on MA2450.
 
 The v14 ADR closed further LR-only tuning and called for an architectural
 conditioning change.
+
+## Result
+
+`cnn_ctc_v15` completed as `exp-5d1209f5120388f8/attempt-0001`.
+
+- physical CER: `0.8428267004549905`;
+- physical WER: `0.9941697257611747`;
+- blank-frame fraction: `0.8668262967005881`;
+- emitted/reference characters: `0.3063986638253758`;
+- empty-hypothesis fraction: `0.29615082482325217`;
+- MA2450 p95: `103.8926016 ms`;
+- selected checkpoint: epoch 12;
+- best validation CER: `0.8425963255197835`.
+
+BatchNorm regressed CER relative to v14 and did not change the approximately
+104 ms hardware cost. The decision rule below therefore closes further
+optimizer/conditioning work on the v12-v15 graph. The successor is
+`cnn_ctc_v16`, a QuartzNet-15x5 architecture reset.
 
 ## Decision
 
