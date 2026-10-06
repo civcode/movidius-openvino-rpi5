@@ -622,23 +622,27 @@ Initialize with:
 The schedule is `3e-4 -> 1.2e-3 -> 3e-5` with a 30% OneCycle ramp.
 
 
-## v13 result and v14 cosine control
+## v13/v14 result and v15 BatchNorm conditioning
 
-`cnn_ctc_v13` completed as `exp-968150d44c4479ac/attempt-0001`.
-The physical graph remained stable at `103.9083748 ms` p95, but the
-OneCycle retry still under-emitted badly. Best validation CER
-`0.9755802568680527` occurred at epoch 1; emission deteriorated as LR rose
-and became fully blank by epoch 6.
+`cnn_ctc_v13` completed as `exp-968150d44c4479ac/attempt-0001`; its
+OneCycle trajectory returned to near-total blank emission.
 
-The active follow-up is `cnn_ctc_v14`, parented directly to v13. It preserves
-the exact inference architecture and changes only the optimizer trajectory to
-the historical stable cosine policy `3e-4 -> 3e-5`.
+`cnn_ctc_v14` completed as `exp-1e2478b84317ab02/attempt-0001` using the
+stable `3e-4 -> 3e-5` cosine schedule. It selected epoch 8 at validation CER
+`0.7898404653573691`, with deployed MA2450 p95 `103.8884392 ms`. The
+blank-collapse failure was solved, but validation loss diverged after the
+selected epoch while training loss kept falling. v14 also does not beat the
+small v10/v11 models on CER.
+
+The active follow-up is `cnn_ctc_v15`, parented directly to v14. It preserves
+the 448-channel, 16-block geometry and cosine optimizer policy, and adds
+BatchNorm as the single controlled architecture-conditioning change.
 
 Initialize with:
 
 ```bash
-./scripts/init-cnn-ctc-v14-cosine-control.sh
+./scripts/init-cnn-ctc-v15-batchnorm-conditioning.sh
 ```
 
-If v14 still collapses or remains far behind v10/v11, stop LR-only tuning and
-change architectural conditioning instead.
+See
+`../docs/adr/model-quality-v4-cnn-ctc-v15-batchnorm-conditioning.md`.

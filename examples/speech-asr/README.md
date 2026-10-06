@@ -526,32 +526,36 @@ The model-quality-v4 data are already provisioned if the v12 run was executed
 on the same edge worker.
 
 
-## v13 result and v14 cosine control
+## v13/v14 result and v15 BatchNorm conditioning
 
-`cnn_ctc_v13` completed as `exp-968150d44c4479ac/attempt-0001`.
-It avoided the catastrophic v12 optimizer explosion, but did not solve the
-large-model optimization problem:
+`cnn_ctc_v13` completed as `exp-968150d44c4479ac/attempt-0001` but
+under-emitted badly under OneCycle. The cosine-control `cnn_ctc_v14` then
+completed as `exp-1e2478b84317ab02/attempt-0001` and removed the blank
+collapse:
 
-- final deployed CER `0.975522663134251`;
-- WER `0.9922263010148996`;
-- blank frames `98.9225%`;
-- emitted/reference characters `3.1331%`;
-- empty hypotheses `78.8688%`;
-- MA2450 p95 `103.9083748 ms`;
-- best validation CER at epoch 1: `0.9755802568680527`.
+- deployed CER `0.7898404653573691`;
+- WER `1.007125890736342`;
+- blank frames `79.4535%`;
+- emitted/reference characters `46.6797%`;
+- empty hypotheses `18.2247%`;
+- MA2450 p95 `103.8884392 ms`;
+- best validation CER at epoch 8.
 
-Epoch 1 was the best point while LR was still close to the `3e-4` starting
-range. As OneCycle raised LR, emission deteriorated; validation became fully
-blank by epoch 6 and stayed blank through epoch 12.
+The cosine control exposed a different problem. From epoch 8 to epoch 12,
+training loss fell from about `2.1325` to `0.7465`, while validation loss
+rose from about `4.2863` to `7.1361` and validation CER worsened to
+`0.8242239244370213`. v14 is also essentially tied with the much smaller
+v10/v11 CER points while costing about 104 ms p95.
 
-The active candidate is `cnn_ctc_v14`, which keeps the exact 20M inference
-graph but restores the proven-stable Adam cosine schedule
-`3e-4 -> 3e-5` with no LR increase.
+The active candidate is `cnn_ctc_v15`. It keeps v14's exact width, depth,
+dilation/receptive-field geometry, data, decoder and cosine schedule, and makes
+one architecture-conditioning change: BatchNorm after the stem convolutions and
+inside every residual branch.
 
 Run:
 
 ```bash
-INIT_JSON="$(./scripts/init-cnn-ctc-v14-cosine-control.sh)"
+INIT_JSON="$(./scripts/init-cnn-ctc-v15-batchnorm-conditioning.sh)"
 EXP="$(printf '%s\n' "$INIT_JSON" |
   python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])')"
 
