@@ -35,6 +35,7 @@ def load_spec(path: Path) -> dict:
         "cnn_ctc_v4",
         "cnn_ctc_v5",
         "cnn_ctc_v6",
+        "cnn_ctc_v7",
     }:
         raise ValueError("unsupported cnn_ctc model spec id")
 
@@ -95,6 +96,7 @@ def load_spec(path: Path) -> dict:
             "cnn_ctc_v4": "residual-temporal-v2",
             "cnn_ctc_v5": "residual-temporal-v3",
             "cnn_ctc_v6": "residual-temporal-v4",
+            "cnn_ctc_v7": "residual-temporal-v2",
         }[model_id]
         if network.get("kind") != expected_kind:
             raise ValueError(f"{model_id} network.kind must be {expected_kind}")
@@ -116,7 +118,7 @@ def load_spec(path: Path) -> dict:
         )
         if [int(block.get("kernel", 0)) for block in blocks] != expected_kernels:
             raise ValueError(f"{model_id} residual kernel schedule is frozen")
-        expected_channels = 64 if model_id == "cnn_ctc_v5" else 96
+        expected_channels = 64 if model_id == "cnn_ctc_v5" else (112 if model_id == "cnn_ctc_v7" else 96)
         if any(
             int(block.get("channels", 0)) != expected_channels for block in blocks
         ):
@@ -129,6 +131,7 @@ def load_spec(path: Path) -> dict:
                 "cnn_ctc_v4",
                 "cnn_ctc_v5",
                 "cnn_ctc_v6",
+        "cnn_ctc_v7",
             }
             and network.get("residual_projection_init") != "kaiming_scaled_0.01"
         ):
@@ -303,6 +306,7 @@ def acoustic_output_length(feature_frames: int, spec: dict) -> int:
         "cnn_ctc_v4",
         "cnn_ctc_v5",
         "cnn_ctc_v6",
+        "cnn_ctc_v7",
     }:
         layers = network["stem"]
         for layer in layers:
@@ -336,8 +340,9 @@ def model_resource_estimate(spec: dict, vocab_size: int = 39) -> dict:
         "cnn_ctc_v4",
         "cnn_ctc_v5",
         "cnn_ctc_v6",
+        "cnn_ctc_v7",
     }:
-        raise ValueError("resource estimator targets cnn_ctc_v2/v3/v4/v5/v6")
+        raise ValueError("resource estimator targets cnn_ctc_v2/v3/v4/v5/v6/v7")
 
     network = spec["network"]
     input_frames = int(spec["input_contract"]["shape"][2])

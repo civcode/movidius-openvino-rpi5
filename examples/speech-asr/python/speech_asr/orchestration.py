@@ -69,6 +69,13 @@ V6_ARCHITECTURE = {
 }
 
 
+V7_ARCHITECTURE = {
+    **V3_ARCHITECTURE,
+    "stem_channels": [64, 112],
+    "residual_channels": 112,
+}
+
+
 def executor_model_basename(model_id: str) -> str:
     if model_id in {
         "cnn_ctc_v1",
@@ -77,6 +84,7 @@ def executor_model_basename(model_id: str) -> str:
         "cnn_ctc_v4",
         "cnn_ctc_v5",
         "cnn_ctc_v6",
+        "cnn_ctc_v7",
     }:
         return model_id
     raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
@@ -94,6 +102,7 @@ def validate_model_executor_request(
         "cnn_ctc_v4",
         "cnn_ctc_v5",
         "cnn_ctc_v6",
+        "cnn_ctc_v7",
     }:
         raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
     if model_spec.get("family") != "cnn_ctc":
@@ -114,6 +123,7 @@ def validate_model_executor_request(
         "cnn_ctc_v4": V4_ARCHITECTURE,
         "cnn_ctc_v5": V5_ARCHITECTURE,
         "cnn_ctc_v6": V6_ARCHITECTURE,
+        "cnn_ctc_v7": V7_ARCHITECTURE,
     }[model_id]
     if model_spec.get("architecture") != expected_architecture:
         raise ValueError(
@@ -202,6 +212,7 @@ def compatibility_probe_command(
         "cnn_ctc_v4",
         "cnn_ctc_v5",
         "cnn_ctc_v6",
+        "cnn_ctc_v7",
     }:
         return [
             str(root / "scripts" / f"probe-{model_id.replace('_', '-')}.sh"),
@@ -230,6 +241,7 @@ def training_command(
         "cnn_ctc_v4": "train-cnn-ctc-v4.sh",
         "cnn_ctc_v5": "train-cnn-ctc-v5.sh",
         "cnn_ctc_v6": "train-cnn-ctc-v6.sh",
+        "cnn_ctc_v7": "train-cnn-ctc-v7.sh",
     }.get(model_id)
     if executable is None:
         raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")

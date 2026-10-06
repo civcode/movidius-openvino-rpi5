@@ -421,3 +421,33 @@ A completed result is sealed. Read it with:
 
 Do not rerun the held-out corpus to choose among previously explored model or
 training variants.
+
+## Model-quality-v4 ES2011 baseline and width ablation
+
+The fresh Full-corpus-ASR development baseline completed as
+`exp-63fdb8d218673527/attempt-0001` with the unchanged `cnn_ctc_v3` graph.
+On the frozen ES2011 validation manifest it measured CER `0.758855`, WER
+`1.042755`, 69.07% blank frames, 15.79% empty hypotheses and 58.96%
+emitted/reference characters. MA2450 p95 remained `16.781 ms`.
+
+Because the parent scaled-data experiment used a different validation manifest,
+its CER/WER are not compared directly. This experiment is the new
+model-quality-v4 reference.
+
+The next child is `cnn_ctc_v7`, a width-only capacity ablation:
+
+- second stem/residual width: 96 -> 112;
+- parameters: 1,346,343 -> 1,818,183;
+- fixed-input MACs: 174,804,992 -> 235,177,984;
+- frontend, kernels, receptive field, CTC objective, decoder, data and training
+  schedule unchanged.
+
+Initialize with:
+
+```bash
+./scripts/init-cnn-ctc-v7-wide.sh
+```
+
+Its immutable CER acceptance ceiling is the v3 ES2011 baseline
+`0.7588550365720209`; physical p95 remains capped at 25 ms.
+

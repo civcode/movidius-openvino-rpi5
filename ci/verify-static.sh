@@ -621,6 +621,64 @@ if grep -q 'StrictHostKeyChecking=no' scripts/provision-speech-model-data-v4-edg
 fi
 grep -q -- '--verify-only' scripts/provision-speech-model-data-v4-edge.sh || fail 'model-quality-v4 provisioning does not verify the frozen boundary'
 
+# cnn_ctc_v7 width-only capacity ablation on the frozen model-quality-v4 boundary.
+for f in \
+    examples/speech-asr/models/cnn_ctc_v7/model_spec.json \
+    examples/speech-asr/models/cnn_ctc_v7/vocab.json \
+    examples/speech-asr/models/cnn_ctc_v7/README.md \
+    examples/speech-asr/training/cnn_ctc_v7.py \
+    examples/speech-asr/training/train_cnn_ctc_v7.py \
+    examples/speech-asr/training/export_cnn_ctc_v7.py \
+    examples/speech-asr/evaluation/compare_cnn_ctc_v7_onnx.py \
+    examples/speech-asr/evaluation/evaluate_cnn_ctc_v7.py \
+    examples/speech-asr/agent/init_cnn_ctc_v7_wide.py \
+    examples/speech-asr/docs/adr/model-quality-v4-cnn-ctc-v7-wide.md \
+    tests/python/test_speech_asr_cnn_ctc_v7.py; do
+    test -f "$f" || fail "cnn_ctc_v7 file missing: $f"
+done
+for f in \
+    scripts/init-cnn-ctc-v7-wide.sh \
+    scripts/train-cnn-ctc-v7.sh \
+    scripts/probe-cnn-ctc-v7.sh \
+    scripts/prepare-cnn-ctc-v7.sh \
+    scripts/evaluate-cnn-ctc-v7.sh; do
+    test -x "$f" || fail "cnn_ctc_v7 shell entry point is not executable: $f"
+done
+python3 - <<'PY_V7'
+import json
+from pathlib import Path
+spec=json.loads(Path("examples/speech-asr/models/cnn_ctc_v7/model_spec.json").read_text())
+assert spec["id"] == "cnn_ctc_v7"
+assert spec["frontend"]["kind"] == "logmel-v1"
+assert [x["channels"] for x in spec["network"]["stem"]] == [64, 112]
+assert [x["kernel"] for x in spec["network"]["residual_blocks"]] == [11,19,27,35,43]
+assert all(x["channels"] == 112 for x in spec["network"]["residual_blocks"])
+assert spec["network"]["estimated_parameters"] == 1818183
+assert spec["network"]["estimated_macs_fixed_input"] == 235177984
+assert spec["network"]["receptive_field_feature_frames"] == 533
+assert spec["input_contract"]["shape"] == [1,64,512]
+assert spec["output_contract"]["shape"] == [1,128,39]
+PY_V7
+grep -q 'V7_ARCHITECTURE' examples/speech-asr/python/speech_asr/orchestration.py || fail 'cnn_ctc_v7 architecture registration missing'
+grep -q '"cnn_ctc_v7": "train-cnn-ctc-v7.sh"' examples/speech-asr/python/speech_asr/orchestration.py || fail 'cnn_ctc_v7 training executor registration missing'
+grep -q '"cnn_ctc_v7": "evaluate-cnn-ctc-v7.sh"' examples/speech-asr/agent/edge_worker.py || fail 'cnn_ctc_v7 edge evaluator registration missing'
+grep -q '"cnn_ctc_v7"' examples/speech-asr/tools/validate_cnn_ctc_ir.py || fail 'cnn_ctc_v7 IR validation registration missing'
+grep -q 'DEFAULT_PARENT = "exp-63fdb8d218673527"' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 model-quality-v4 parent changed'
+grep -q 'MODEL_SPEC_SHA256 = "a4e53c89044dad473fb321e2187f5de598f8623b66de42d29e2c2c775c82ebc8"' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 reviewed model spec changed'
+grep -q 'PARENT_CER = 0.7588550365720209' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 parent CER changed'
+grep -q '"max_cer": PARENT_CER' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 CER decision gate missing'
+grep -q 'EXPECTED_PARAMETERS = 1818183' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 parameter count changed'
+grep -q 'EXPECTED_MACS = 235177984' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 MAC count changed'
+grep -q '"checkpoint_selection": "validation_cer"' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 checkpoint selection changed'
+if grep -q '"augmentation": {' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py; then
+    fail 'cnn_ctc_v7 capacity ablation must not add augmentation'
+fi
+if grep -q '"ctc_objective": {' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py; then
+    fail 'cnn_ctc_v7 capacity ablation must use standard CTC'
+fi
+grep -q '"event": "training_progress"' examples/speech-asr/training/train_cnn_ctc_v7.py || fail 'cnn_ctc_v7 live training progress missing'
+grep -q '"event": "validation_progress"' examples/speech-asr/training/train_cnn_ctc_v7.py || fail 'cnn_ctc_v7 validation progress missing'
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
 for name in [
@@ -648,6 +706,7 @@ for name in [
     "examples/speech-asr/agent/init_cnn_ctc_v3_expanded_data.py",
     "examples/speech-asr/agent/init_cnn_ctc_v3_scaled_data.py",
     "examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py",
+    "examples/speech-asr/agent/init_cnn_ctc_v7_wide.py",
     "examples/speech-asr/agent/run_frozen_heldout_evaluation.py",
     "examples/speech-asr/agent/review_heldout_evaluation.py",
     "examples/speech-asr/agent/review_experiment.py",
@@ -675,6 +734,9 @@ for name in [
     "examples/speech-asr/training/cnn_ctc_v6.py",
     "examples/speech-asr/training/train_cnn_ctc_v6.py",
     "examples/speech-asr/training/export_cnn_ctc_v6.py",
+    "examples/speech-asr/training/cnn_ctc_v7.py",
+    "examples/speech-asr/training/train_cnn_ctc_v7.py",
+    "examples/speech-asr/training/export_cnn_ctc_v7.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v1_onnx.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v1_tensor.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v1.py",
@@ -689,6 +751,8 @@ for name in [
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v5.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v6_onnx.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v6.py",
+    "examples/speech-asr/evaluation/compare_cnn_ctc_v7_onnx.py",
+    "examples/speech-asr/evaluation/evaluate_cnn_ctc_v7.py",
     "examples/speech-asr/evaluation/evaluate_frozen_cnn_ctc_v3_reference.py",
 ]:
     src = Path(name).read_text()

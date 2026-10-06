@@ -379,41 +379,49 @@ future model, objective, decoder, threshold, hyperparameter, or data selection.
 
 ## Model-quality v4 fresh development boundary
 
-The next development cycle retires ES2002 from selection and establishes a
-larger fresh train/validation boundary from the official Full-corpus-ASR
-partition:
+The fresh Full-corpus-ASR development boundary is now frozen:
 
-- training: Edinburgh scenario groups ES2003, ES2005-ES2010 and ES2012-ES2016;
-- validation: fresh official development group ES2011a-d;
-- sealed test exclusions: EN2002, ES2004, IS1009 and TS3003.
+- training: 15,738 eligible utterances / 25,846.327 s;
+- validation: 1,273 eligible ES2011 utterances / 2,279.385 s;
+- zero train/validation meeting or record overlap;
+- ES2002 retired from new model selection;
+- sealed EN2002/ES2004/IS1009/TS3003 held-out meetings excluded.
 
-The first experiment on this boundary keeps `cnn_ctc_v3`, `logmel-v1`,
-standard CTC, training schedule, vocabulary and greedy decoder unchanged. This
-isolates the effect of the new data boundary before another architecture
-decision.
+The unchanged `cnn_ctc_v3` baseline completed as
+`exp-63fdb8d218673527/attempt-0001`:
 
-Prepare and verify the new boundary on oberon:
+- CER `0.7588550365720209`;
+- WER `1.0427553444180522`;
+- blank frames `69.07%`;
+- empty hypotheses `15.79%`;
+- emitted/reference characters `58.96%`;
+- MA2450 p95 `16.7812226 ms`;
+- 32-epoch training wall time about 56.4 minutes.
 
-```bash
-./scripts/prepare-speech-model-data-v4.sh
-./scripts/prepare-speech-model-data-v4.sh --verify-only
-cat work/speech-asr/ami/model-quality-v4-source-lock/source-lock.json
-cat work/speech-asr/ami/model-quality-v4/qualification.json
-```
+That establishes the direct-comparison ES2011 baseline. The next controlled
+candidate is `cnn_ctc_v7`: the same v3 topology widened from 96 to 112
+channels in the second stem and five residual blocks. Everything else remains
+fixed.
 
-After reviewing qualification, provision the fresh validation population to
-edge and run the unchanged v3 baseline:
+Run:
 
 ```bash
 ./scripts/provision-speech-model-data-v4-edge.sh
 
 EXP="$(
-  ./scripts/init-cnn-ctc-v3-model-quality-v4.sh |
+  ./scripts/init-cnn-ctc-v7-wide.sh |
   python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
 )"
 ./scripts/run-speech-experiment.sh --experiment "$EXP" --worker edge
 ./scripts/review-speech-experiment.sh --experiment "$EXP"
 ```
 
-See `docs/adr/model-quality-v4-fresh-development.md` for the reviewed data
-policy, first-acquisition source locking, and selection boundary.
+The controller performs an initialized ONNX/OpenVINO/physical-MYRIAD
+compatibility probe before training. The v7 decision gate requires ES2011 CER
+no worse than the v3 baseline and MA2450 p95 no greater than 25 ms.
+
+See `docs/adr/model-quality-v4-fresh-development.md` and
+`docs/adr/model-quality-v4-cnn-ctc-v7-wide.md`.
+
+The sealed held-out benchmark remains consumed and must not be used for this
+architecture decision.

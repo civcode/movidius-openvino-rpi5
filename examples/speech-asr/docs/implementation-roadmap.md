@@ -957,64 +957,52 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-The one-time sealed Full-corpus-ASR evaluation of
-`exp-87538823d2bf1562/attempt-0001` is complete. The corrected MA2450 result
-closely matches the frozen CPU/ONNX reference, which closes the deployment
-parity question. The sealed EN2002/ES2004/IS1009/TS3003 boundary is now
-consumed and must not participate in future model selection.
+The model-quality-v4 development boundary is frozen and the unchanged
+`cnn_ctc_v3` baseline has completed on ES2011 as
+`exp-63fdb8d218673527/attempt-0001`.
 
-The next controlled step is **model-quality-v4**: establish a fresh
-Full-corpus-ASR development boundary and rerun the unchanged `cnn_ctc_v3`
-baseline before designing another model intervention.
+The new direct-comparison baseline is:
 
-The reviewed policy is:
+- CER `0.7588550365720209`;
+- WER `1.0427553444180522`;
+- blank frames `69.07%`;
+- empty hypotheses `15.79%`;
+- emitted/reference characters `58.96%`;
+- MA2450 p95 `16.7812226 ms`;
+- training wall time about `56.4 minutes`.
 
-- retire ES2002 from all new model/checkpoint selection;
-- train on Edinburgh Full-corpus-ASR training groups ES2003, ES2005-ES2010 and
-  ES2012-ES2016;
-- use ES2011a-d, an official Full-corpus-ASR development group, for fresh
-  checkpoint/model selection;
-- exclude the sealed EN2002, ES2004, IS1009 and TS3003 evaluation groups;
-- keep `cnn_ctc_v3`, `logmel-v1`, vocabulary, standard CTC, 32-epoch
-  optimizer schedule and validation-CER checkpoint selection unchanged for the
-  first baseline.
+The next controlled step is **cnn_ctc_v7**, a width-only capacity ablation.
+It keeps the exact frozen model-quality-v4 train/ES2011 manifests, frontend,
+CTC objective, decoder, optimizer schedule, temporal kernels and receptive
+field, and changes only the second stem/residual width from 96 to 112 channels.
 
-New AMI Mix-Headset sources are frozen on first official HTTPS acquisition.
-Previously pinned ES2005-ES2007 hashes are reused. Once the source lock exists,
-later runs are verification-only with respect to source identity.
+This moves the deployed graph from 1,346,343 parameters / 174,804,992 MACs to
+1,818,183 parameters / 235,177,984 MACs while retaining the same
+`[1,64,512] -> [1,128,39]` tensor contract.
 
-Run on oberon:
+Run:
 
 ```bash
 git pull --ff-only
 ./ci/verify-static.sh
 ./scripts/test-speech-asr.sh
 
-./scripts/prepare-speech-model-data-v4.sh
-./scripts/prepare-speech-model-data-v4.sh --verify-only
-
-cat work/speech-asr/ami/model-quality-v4-source-lock/source-lock.json
-cat work/speech-asr/ami/model-quality-v4/qualification.json
-```
-
-Review the qualification before starting training. It must show exact
-ES2011a-d validation, zero train/validation meeting overlap, no forbidden
-ES2002 or sealed-test meetings, and a training population larger than the
-model-quality-v3 4,429 records / 7,150.12 seconds.
-
-Then provision validation to edge and execute the unchanged baseline:
-
-```bash
 ./scripts/provision-speech-model-data-v4-edge.sh
 
 EXP="$(
-  ./scripts/init-cnn-ctc-v3-model-quality-v4.sh |
+  ./scripts/init-cnn-ctc-v7-wide.sh |
   python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
 )"
+echo "$EXP"
+
 ./scripts/run-speech-experiment.sh --experiment "$EXP" --worker edge
 ./scripts/review-speech-experiment.sh --experiment "$EXP"
 ```
 
-Only the new model-quality-v4 validation evidence may drive the next model
-development decision. The sealed held-out result remains final
-promotion/generalization evidence and must not be reopened.
+The initialized v7 graph is converted and physically probed on MA2450 before
+training. The child must keep CER at or below the v3 ES2011 baseline and p95
+latency at or below 25 ms. WER and decoder-emission diagnostics are reviewed as
+secondary evidence.
+
+The sealed held-out benchmark remains consumed and must not be reopened for
+this architecture decision.

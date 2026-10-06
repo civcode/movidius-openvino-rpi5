@@ -1,6 +1,6 @@
 # ADR: model-quality-v4 fresh Full-corpus-ASR development boundary
 
-Status: qualified and frozen; baseline execution pending
+Status: qualified and frozen; baseline executed
 Date: 2026-10-06
 Model baseline: `cnn_ctc_v3`
 Parent quality reference: `exp-87538823d2bf1562/attempt-0001`
@@ -147,6 +147,31 @@ model-quality-v4, qualification is stricter:
 
 This preserves every valid ES2011 segment unchanged while making the single
 source annotation defect explicit and auditable.
+
+## Baseline result
+
+The unchanged `cnn_ctc_v3` baseline completed as
+`exp-63fdb8d218673527/attempt-0001` on the frozen ES2011 validation manifest.
+
+Results:
+
+- hardware CER: `0.7588550365720209`;
+- hardware WER: `1.0427553444180522`;
+- blank-frame fraction: `0.6907285467798162`;
+- empty-hypothesis fraction: `0.15789473684210525`;
+- emitted/reference character ratio: `0.5895870529286413`;
+- MA2450 p50/p95: `16.725008 / 16.7812226 ms`;
+- inference-only RTF: `0.00934408802856912`;
+- selected checkpoint: epoch 27 by validation CER;
+- 32-epoch training duration: `3384.302443212 s` (about 56.4 minutes);
+- optimizer steps: `503616`.
+
+Because the parent scaled-data experiment used a different validation manifest,
+its CER/WER are not directly comparable. This result is the accuracy reference
+for subsequent model-quality-v4 experiments.
+
+The next controlled child is the width-only `cnn_ctc_v7` capacity ablation
+described in `model-quality-v4-cnn-ctc-v7-wide.md`.
 
 ## Baseline experiment
 
