@@ -95,9 +95,11 @@ rose to `0.4818867707193457` and empty hypotheses fell to
 
 v10 does not meet the stronger promotion threshold of
 `0.7744692737430167`. Because its best CER is still at epoch 12 and the
-96 -> 112 width step improved the same frozen topology, the next screen
-direction is one final width-only step to 128 channels before changing topology
-or training policy. See `model-quality-v4-cnn-ctc-v10-screen.md`.
+96 -> 112 width step improved the same frozen topology, the active fourth
+candidate is `cnn_ctc_v11`: one final width-only step from 112 to 128
+channels before changing topology or training policy. Its frozen estimate is
+1,117,287 parameters and 145,342,464 fixed-input MACs. See
+`model-quality-v4-cnn-ctc-v11-screen.md`.
 
 ## Commands
 

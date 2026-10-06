@@ -545,3 +545,18 @@ promotion CER `0.7744692737430167`. The 96 -> 112 width step improved CER
 while retaining ample latency headroom, so the next screen keeps all v10
 temporal geometry and tests one final width increase to 128 channels.
 
+## v11 active screen candidate
+
+`cnn_ctc_v11` keeps the complete v10 temporal geometry and changes only the
+second stem and residual width from 112 to 128 channels. Its frozen estimate is
+1,117,287 parameters and 145,342,464 fixed-input MACs.
+
+Initialize with:
+
+```bash
+./scripts/init-cnn-ctc-v11-architecture-screen.sh
+```
+
+It remains parented to the frozen v3 architecture-screen control, with the same
+CER acceptance gate and `0.7744692737430167` larger-budget promotion threshold.
+

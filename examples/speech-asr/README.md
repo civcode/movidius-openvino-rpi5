@@ -472,10 +472,23 @@ and MA2450 p95 `13.6566998 ms`. That is about a 1.20% relative CER
 improvement over the v3 screen control, but it does not reach the 3% relative
 promotion threshold `0.7744692737430167`.
 
-The next direction is a final width-only screen in the same v9/v10 temporal
-family, increasing the second stem and residual width from 112 to 128 channels.
-No topology, data, objective, decoder or training-budget change is justified
-yet.
+The active candidate is `cnn_ctc_v11`: the exact v10 temporal geometry with
+the second stem and residual width increased from 112 to 128 channels. Its
+frozen estimate is 1,117,287 parameters and 145,342,464 fixed-input MACs.
+
+Run it with:
+
+```bash
+./scripts/provision-speech-model-data-v4-edge.sh
+INIT_JSON="$(./scripts/init-cnn-ctc-v11-architecture-screen.sh)"
+EXP="$(printf '%s\n' "$INIT_JSON" |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])')"
+./scripts/run-speech-experiment.sh --experiment "$EXP" --worker edge
+./scripts/review-speech-experiment.sh --experiment "$EXP"
+```
+
+No topology, data, objective, decoder or training-budget change is included in
+v11.
 
 Screen results rank architecture directions only; they do not replace the
 larger-budget confirmation and full model-quality-v4 evaluation needed before
