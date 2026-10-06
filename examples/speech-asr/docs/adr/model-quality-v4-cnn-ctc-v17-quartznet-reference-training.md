@@ -50,3 +50,15 @@ If v17 remains far behind v11/v14 after the aligned training recipe, stop
 spending screen budget on QuartzNet-from-scratch with this small AMI training
 set and move to pretrained transfer/fine-tuning rather than another optimizer
 or architecture micro-tweak.
+
+## Sources
+
+- NVIDIA NeMo ASR configuration guide: QuartzNet-15x5 uses 64 mel bins,
+  repeat 5, separable convolutions and dropout 0.0:
+  https://docs.nvidia.com/nemo-framework/user-guide/24.09/nemotoolkit/asr/configs.html
+- NVIDIA ASR training configuration: NovoGrad LR 0.01, betas 0.8/0.5,
+  weight decay 0.001, cosine scheduling:
+  https://docs.nvidia.com/tao/tao-toolkit-archive/tao-40-1/text/asr/speech_recognition.html
+- NVIDIA QuartzNet transfer-learning experiments: cosine scheduling with a
+  12% warmup ratio for stable from-scratch/fine-tuning experiments:
+  https://developer.nvidia.com/blog/jump-start-training-for-speech-recognition-models-with-nemo/
