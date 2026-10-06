@@ -121,6 +121,27 @@ def validate_qualification() -> dict:
         raise ValueError("model-quality-v4 validation must allow checkpoint selection")
     if boundary.get("heldout_metrics_allowed_for_model_selection") is not False:
         raise ValueError("sealed held-out metrics must remain forbidden for selection")
+    source_exclusions = boundary.get("source_exclusions")
+    if not isinstance(source_exclusions, dict):
+        raise ValueError("model-quality-v4 source exclusion provenance is missing")
+    if source_exclusions.get("train") != []:
+        raise ValueError("model-quality-v4 training source exclusions are not allowed")
+    validation_exclusions = source_exclusions.get("validation")
+    if not isinstance(validation_exclusions, list) or len(validation_exclusions) != 1:
+        raise ValueError(
+            "model-quality-v4 requires exactly one reviewed validation exclusion"
+        )
+    reviewed_exclusion = validation_exclusions[0]
+    for key, expected in {
+        "meeting": "ES2011c",
+        "reason": "non_positive_annotated_segment_interval",
+        "source_start_sample": 1249952,
+        "source_end_sample": 1248016,
+    }.items():
+        if reviewed_exclusion.get(key) != expected:
+            raise ValueError(
+                f"model-quality-v4 validation exclusion mismatch for {key}"
+            )
 
     if qualification.get("model", {}).get("spec_sha256") != MODEL_SPEC_SHA256:
         raise ValueError("model-quality-v4 model spec hash mismatch")
