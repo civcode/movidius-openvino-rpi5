@@ -45,8 +45,8 @@ class ResidualTemporalBlockV15(nn.Module):
             mode="fan_out",
             nonlinearity="relu",
         )
-        with torch.no_grad():
-            self.projection.weight.mul_(0.01)
+        nn.init.constant_(self.bn2.weight, 0.01)
+        nn.init.zeros_(self.bn2.bias)
 
     def forward(self, features):
         residual = features

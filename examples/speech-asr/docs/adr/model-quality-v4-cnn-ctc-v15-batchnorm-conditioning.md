@@ -31,6 +31,8 @@ Introduce `cnn_ctc_v15` as a single controlled BatchNorm experiment:
 - add BatchNorm after each stem convolution;
 - add BatchNorm after each residual temporal convolution and residual projection;
 - omit convolution bias terms where BatchNorm immediately follows;
+- replace v14's 0.01 residual projection-weight scale with a 0.01 final-BN
+  gamma, preserving a small residual branch despite BatchNorm normalization;
 - keep the final CTC projection bias-bearing;
 - add no augmentation, auxiliary CTC loss, blank penalty, decoder change or
   additional capacity.

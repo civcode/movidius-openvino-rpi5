@@ -159,6 +159,7 @@ V15_ARCHITECTURE = {
     **V12_ARCHITECTURE,
     "kind": "residual-temporal-v10",
     "normalization": "batchnorm",
+    "residual_projection_init": "kaiming_bn_gamma_0.01",
 }
 
 

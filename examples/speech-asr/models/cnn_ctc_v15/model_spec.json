@@ -161,7 +161,7 @@
     "normalization": "batchnorm",
     "activation": "relu",
     "dropout": 0.1,
-    "residual_projection_init": "kaiming_scaled_0.01",
+    "residual_projection_init": "kaiming_bn_gamma_0.01",
     "projection_kernel": 1,
     "estimated_parameters": 19642599,
     "estimated_macs_fixed_input": 2515673088,

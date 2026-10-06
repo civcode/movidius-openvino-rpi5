@@ -17,8 +17,10 @@ schedule unchanged:
 
 The single controlled change is BatchNorm after both stem convolutions and after
 the temporal and projection convolutions in every residual branch. Convolutions
-covered by BatchNorm omit their bias terms. The final CTC projection remains
-bias-bearing.
+covered by BatchNorm omit their bias terms. Because BatchNorm would cancel the
+old 0.01 projection-weight scale during training, the residual near-identity
+scale is applied as a 0.01 gamma on each block's final BatchNorm instead. The
+final CTC projection remains bias-bearing.
 
 The deterministic resource estimate is 19,642,599 trainable parameters. The
 receptive field and fixed output geometry remain unchanged.

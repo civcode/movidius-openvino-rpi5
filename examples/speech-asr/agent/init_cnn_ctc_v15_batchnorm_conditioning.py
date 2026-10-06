@@ -36,7 +36,7 @@ VALIDATION_MANIFEST = (
     ROOT / "work" / "speech-asr" / "ami" / "model-quality-v4" / "validation.manifest.jsonl"
 )
 
-MODEL_SPEC_SHA256 = "5499104e97b3164f6a020c51ab8506a3545b2e9f9a25223b32bdb1bb22d8ba27"
+MODEL_SPEC_SHA256 = "de7da3031f5d576a6635c4a91e1cb80105e44b65b5ef561e0f93c236b597e145"
 VOCAB_SHA256 = "79f4dc2b628f5f61b3d5361ca67fadff044a91569c24e0af3916786fd8ddce4f"
 SCREEN_MANIFEST_SHA256 = "0528db59eec36d00d710b3090b0c6404dbdbf548ae7e13d3daf3d5152eacfc8b"
 VALIDATION_MANIFEST_SHA256 = "fbd72a648826b2e200f9244b4dc73be425cada2e304be92d513f7033a8de4088"
@@ -201,6 +201,7 @@ def validate_model() -> dict:
     expected_network = dict(base["network"])
     expected_network["kind"] = "residual-temporal-v10"
     expected_network["normalization"] = "batchnorm"
+    expected_network["residual_projection_init"] = "kaiming_bn_gamma_0.01"
     expected_network["estimated_parameters"] = EXPECTED_PARAMETERS
     if package["network"] != expected_network:
         raise ValueError(
@@ -291,6 +292,7 @@ def main() -> int:
                 "add BatchNorm after both stem convolutions",
                 "add BatchNorm after temporal and projection convolutions in each residual branch",
                 "remove redundant convolution biases where BatchNorm follows the convolution",
+                "move the residual 1% near-identity scale to the final BatchNorm gamma",
                 "use no augmentation, blank penalty, InterCTC or decoder change",
                 "record physical latency without a numeric rejection threshold",
             ],
@@ -418,16 +420,20 @@ def main() -> int:
         return 2
 
     output = json.loads(proc.stdout)
-    output["cosine_control_reference"] = {
+    output["batchnorm_conditioning_reference"] = {
         "parent": DEFAULT_PARENT,
         "attempt": PARENT_ATTEMPT,
         "cer": parent["metrics"]["cer"],
         "wer": parent["metrics"]["wer"],
         "latency_p95_ms": parent["metrics"]["inference_latency_p95_ms"],
-        "v13_cer": 0.975522663134251,
-        "v13_latency_p95_ms": 103.9083748,
-        "v13_rtf": 0.05803508522474269,
-        "v13_blank_frame_fraction": 0.9892249727103067,
+        "v14_best_epoch": 8,
+        "v14_best_validation_cer": 0.7898404653573691,
+        "v14_epoch8_train_loss": 2.1324998962205934,
+        "v14_epoch8_validation_loss": 4.286300847754488,
+        "v14_last_validation_cer": 0.8242239244370213,
+        "v14_last_validation_loss": 7.136095111423204,
+        "v11_cer": 0.7865576225306686,
+        "v11_latency_p95_ms": 14.9809824,
         "latency_rejection_threshold_ms": None,
         "train_records": screen["train"]["stats"]["records"],
         "train_audio_seconds": screen["train"]["stats"]["audio_seconds"],

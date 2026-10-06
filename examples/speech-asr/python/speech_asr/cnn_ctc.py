@@ -194,27 +194,31 @@ def load_spec(path: Path) -> dict:
             raise ValueError(
                 f"{model_id} residual channels must remain {expected_channels}"
             )
-        if (
-            model_id in {
-                "cnn_ctc_v3",
-                "cnn_ctc_v4",
-                "cnn_ctc_v5",
-                "cnn_ctc_v6",
-                "cnn_ctc_v7",
-                "cnn_ctc_v8",
-        "cnn_ctc_v9",
-        "cnn_ctc_v10",
-        "cnn_ctc_v11",
-        "cnn_ctc_v12",
-        "cnn_ctc_v13",
-        "cnn_ctc_v14",
-        "cnn_ctc_v15",
-            }
-            and network.get("residual_projection_init") != "kaiming_scaled_0.01"
-        ):
-            raise ValueError(
-                f"{model_id} residual projection init must be kaiming_scaled_0.01"
+        if model_id in {
+            "cnn_ctc_v3",
+            "cnn_ctc_v4",
+            "cnn_ctc_v5",
+            "cnn_ctc_v6",
+            "cnn_ctc_v7",
+            "cnn_ctc_v8",
+            "cnn_ctc_v9",
+            "cnn_ctc_v10",
+            "cnn_ctc_v11",
+            "cnn_ctc_v12",
+            "cnn_ctc_v13",
+            "cnn_ctc_v14",
+            "cnn_ctc_v15",
+        }:
+            expected_residual_init = (
+                "kaiming_bn_gamma_0.01"
+                if model_id == "cnn_ctc_v15"
+                else "kaiming_scaled_0.01"
             )
+            if network.get("residual_projection_init") != expected_residual_init:
+                raise ValueError(
+                    f"{model_id} residual projection init must be "
+                    f"{expected_residual_init}"
+                )
         if model_id == "cnn_ctc_v8":
             expected_strides = [1, 2]
             if [int(layer.get("stride", 0)) for layer in stem] != expected_strides:

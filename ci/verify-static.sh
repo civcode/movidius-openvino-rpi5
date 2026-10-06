@@ -1162,11 +1162,12 @@ spec = json.loads(Path("examples/speech-asr/models/cnn_ctc_v15/model_spec.json")
 canonical = hashlib.sha256(
     json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 ).hexdigest()
-assert canonical == "5499104e97b3164f6a020c51ab8506a3545b2e9f9a25223b32bdb1bb22d8ba27"
+assert canonical == "de7da3031f5d576a6635c4a91e1cb80105e44b65b5ef561e0f93c236b597e145"
 assert spec["input_contract"]["shape"] == [1,64,512]
 assert spec["output_contract"]["shape"] == [1,128,39]
 assert spec["network"]["kind"] == "residual-temporal-v10"
 assert spec["network"]["normalization"] == "batchnorm"
+assert spec["network"]["residual_projection_init"] == "kaiming_bn_gamma_0.01"
 assert [x["channels"] for x in spec["network"]["stem"]] == [128,448]
 assert [x["stride"] for x in spec["network"]["stem"]] == [2,2]
 assert len(spec["network"]["residual_blocks"]) == 16
@@ -1183,7 +1184,7 @@ grep -q 'V15_ARCHITECTURE' examples/speech-asr/python/speech_asr/orchestration.p
 grep -q '"cnn_ctc_v15": "train-cnn-ctc-v15.sh"' examples/speech-asr/python/speech_asr/orchestration.py || fail 'cnn_ctc_v15 training registration missing'
 grep -q '"cnn_ctc_v15": "evaluate-cnn-ctc-v15.sh"' examples/speech-asr/agent/edge_worker.py || fail 'cnn_ctc_v15 edge evaluator registration missing'
 grep -q 'DEFAULT_PARENT = "exp-1e2478b84317ab02"' examples/speech-asr/agent/init_cnn_ctc_v15_batchnorm_conditioning.py || fail 'cnn_ctc_v15 parent changed'
-grep -q 'MODEL_SPEC_SHA256 = "5499104e97b3164f6a020c51ab8506a3545b2e9f9a25223b32bdb1bb22d8ba27"' examples/speech-asr/agent/init_cnn_ctc_v15_batchnorm_conditioning.py || fail 'cnn_ctc_v15 model identity changed'
+grep -q 'MODEL_SPEC_SHA256 = "de7da3031f5d576a6635c4a91e1cb80105e44b65b5ef561e0f93c236b597e145"' examples/speech-asr/agent/init_cnn_ctc_v15_batchnorm_conditioning.py || fail 'cnn_ctc_v15 model identity changed'
 grep -q '"max_cer": None' examples/speech-asr/agent/init_cnn_ctc_v15_batchnorm_conditioning.py || fail 'cnn_ctc_v15 CER must be measured, not gated'
 grep -q '"max_latency_p95_ms": None' examples/speech-asr/agent/init_cnn_ctc_v15_batchnorm_conditioning.py || fail 'cnn_ctc_v15 latency must be measured, not gated'
 grep -q 'BatchNorm1d' examples/speech-asr/training/cnn_ctc_v15.py || fail 'cnn_ctc_v15 BatchNorm conditioning missing'
