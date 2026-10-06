@@ -526,39 +526,53 @@ The model-quality-v4 data are already provisioned if the v12 run was executed
 on the same edge worker.
 
 
-## v13/v14 result and v15 BatchNorm conditioning
+## v13-v15 result and v16 QuartzNet-15x5 reset
 
 `cnn_ctc_v13` completed as `exp-968150d44c4479ac/attempt-0001` but
 under-emitted badly under OneCycle. The cosine-control `cnn_ctc_v14` then
-completed as `exp-1e2478b84317ab02/attempt-0001` and removed the blank
-collapse:
+completed as `exp-1e2478b84317ab02/attempt-0001` and removed the catastrophic
+blank collapse, reaching deployed CER `0.7898404653573691`.
 
-- deployed CER `0.7898404653573691`;
-- WER `1.007125890736342`;
-- blank frames `79.4535%`;
-- emitted/reference characters `46.6797%`;
-- empty hypotheses `18.2247%`;
-- MA2450 p95 `103.8884392 ms`;
-- best validation CER at epoch 8.
+`cnn_ctc_v15` completed as `exp-5d1209f5120388f8/attempt-0001`. BatchNorm
+did not improve the large home-grown residual graph:
 
-The cosine control exposed a different problem. From epoch 8 to epoch 12,
-training loss fell from about `2.1325` to `0.7465`, while validation loss
-rose from about `4.2863` to `7.1361` and validation CER worsened to
-`0.8242239244370213`. v14 is also essentially tied with the much smaller
-v10/v11 CER points while costing about 104 ms p95.
+- deployed CER `0.8428267004549905`;
+- WER `0.9941697257611747`;
+- blank frames `86.6826%`;
+- emitted/reference characters `30.6399%`;
+- empty hypotheses `29.6151%`;
+- MA2450 p95 `103.8926016 ms`;
+- best validation CER at epoch 12.
 
-The active candidate is `cnn_ctc_v15`. It keeps v14's exact width, depth,
-dilation/receptive-field geometry, data, decoder and cosine schedule, and makes
-one architecture-conditioning change: BatchNorm after the stem convolutions and
-inside every residual branch.
+That closes local tuning of the v12-v15 20M residual family. It remains slower
+and less accurate than the 1.1M-parameter `cnn_ctc_v11` Pareto point
+(CER `0.7865576225306686`, MA2450 p95 `14.9809824 ms`).
+
+The active candidate is `cnn_ctc_v16`, an architecture reset to the published
+QuartzNet-15x5 CTC encoder. It uses the QuartzNet 15x5 time-channel-separable
+block schedule at about the same parameter scale as v15 (18.93M trainable
+parameters here), while keeping the project's frozen 64-bin frontend and
+39-token CTC vocabulary.
+
+The deployment boundary is explicit: QuartzNet through CTC logits runs on the
+VPU; decoding stays on the Raspberry Pi CPU. The first v16 screen still uses
+greedy CTC so acoustic quality remains comparable with earlier experiments.
+CTC prefix-beam search plus a language model is the next isolated system layer
+if the acoustic model earns it.
+
+v16 produces `[1,256,39]` logits because QuartzNet downsamples time once at
+C1. Its initialized graph must pass ONNX, OpenVINO 2020.3 and physical MYRIAD
+compatibility before training begins.
 
 Run:
 
 ```bash
-INIT_JSON="$(./scripts/init-cnn-ctc-v15-batchnorm-conditioning.sh)"
+INIT_JSON="$(./scripts/init-cnn-ctc-v16-quartznet.sh)"
 EXP="$(printf '%s\n' "$INIT_JSON" |
   python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])')"
 
 ./scripts/run-speech-experiment.sh --experiment "$EXP" --worker edge
 ./scripts/review-speech-experiment.sh --experiment "$EXP"
 ```
+
+See `docs/adr/model-quality-v4-cnn-ctc-v16-quartznet.md`.
