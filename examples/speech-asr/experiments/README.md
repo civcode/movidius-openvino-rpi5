@@ -582,3 +582,26 @@ Initialize with:
 
 See
 `../docs/adr/model-quality-v4-cnn-ctc-v12-capacity-probe.md`.
+
+
+## v12 capacity result
+
+`cnn_ctc_v12` completed as `exp-4e16fd348004571b/attempt-0001`.
+
+Hardware feasibility was established:
+
+- 19,627,687 parameters;
+- 2,515,673,088 fixed-input MACs;
+- MA2450 p95 `103.8896558 ms`;
+- RTF `0.058019043467865204`;
+- valid FP16 IR;
+- final PyTorch/ONNX frame-argmax agreement `1.0`.
+
+The training attempt collapsed to the CTC blank solution. CER/WER were both
+`1.0`, blank fraction was `1.0`, and all 1,273 hypotheses were empty.
+The `3e-3` OneCycle peak was reached too quickly: epoch 2 recorded a raw
+pre-clip gradient norm of `36,104,904` and mean train loss `90.963`.
+
+The next experiment retains the exact v12 inference graph and changes only the
+learning-rate trajectory to `3e-4 -> 1.2e-3 -> 3e-5`, with a 30% OneCycle
+ramp.

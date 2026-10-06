@@ -478,40 +478,22 @@ The final small-width candidate, `cnn_ctc_v11`, completed as
 frozen v3-screen CER gate, but the 112 -> 128 width step only slightly
 improves v10. The small width sweep is closed.
 
-## v12 large-capacity probe
+## v12 large-capacity result
 
-The active candidate is `cnn_ctc_v12`, a deliberate jump into a capacity
-regime that may be too slow for final deployment:
+`cnn_ctc_v12` completed as `exp-4e16fd348004571b/attempt-0001`.
+The capacity result is positive: the 19,627,687-parameter,
+2,515,673,088-MAC graph converted and ran physically on MA2450 at
+`103.8896558 ms` p95 and RTF `0.058019043467865204`.
 
-- 19,627,687 parameters;
-- 2,515,673,088 fixed-input MACs;
-- stems 128 -> 448 channels;
-- sixteen 448-channel kernel-5 residual blocks;
-- 128 CTC output frames;
-- about 39.3 MB of FP16 weights.
+The quality result is not usable because the aggressive `3e-3`, 10%-warmup
+OneCycle schedule drove training into permanent CTC blank collapse. CER and
+WER were both `1.0`, all 56,798 validation argmax frames were blank, and all
+1,273 validation hypotheses were empty. Epoch 2 reached a raw pre-clip
+gradient norm of about 36.1 million and mean train loss `90.963`.
 
-The frontend, vocabulary, greedy CTC decoder, architecture-screen data and
-12-epoch ranking budget remain frozen. v12 deliberately does not preserve the
-small-model learning-rate ceiling: Adam now uses OneCycle from `3e-4` to a
-`3e-3` peak and down to `3e-5`, with the peak reached in the first 10% of
-optimizer steps. Unlike the small-model screen, v12 has no numeric CER, WER,
-RTF or p95 rejection threshold. The initialized graph is
-converted and physically probed on MYRIAD before training. If it cannot run,
-that is capacity-boundary evidence; if it runs, quality and measured latency
-are reviewed afterward.
-
-Run it with:
-
-```bash
-./scripts/provision-speech-model-data-v4-edge.sh
-
-INIT_JSON="$(./scripts/init-cnn-ctc-v12-capacity-probe.sh)"
-EXP="$(printf '%s\n' "$INIT_JSON" |
-  python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])')"
-
-./scripts/run-speech-experiment.sh --experiment "$EXP" --worker edge
-./scripts/review-speech-experiment.sh --experiment "$EXP"
-```
-
-The sealed held-out benchmark remains unavailable for selection.
+The architecture is retained. The next experiment keeps the same 20M model and
+changes only optimization: OneCycle `3e-4 -> 1.2e-3 -> 3e-5`, with the peak
+moved to 30% of optimizer steps. This is still a 4x higher peak LR than the
+historical small-model schedule, but avoids reaching the maximum during the
+second epoch.
 
