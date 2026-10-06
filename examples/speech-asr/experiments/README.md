@@ -528,3 +528,20 @@ Initialize with:
 ./scripts/init-cnn-ctc-v10-architecture-screen.sh
 ```
 
+## v10 screen pass and next width step
+
+`cnn_ctc_v10` completed as `exp-884807b8e192aa9c/attempt-0001`:
+
+- CER `0.7888613718827392` vs v3-screen `0.7984219316938317`;
+- WER `1.0308788598574823`;
+- emitted/reference characters `0.4818867707193457`;
+- empty-hypothesis fraction `0.24509033778476041`;
+- MA2450 p95 `13.6566998 ms`;
+- final PyTorch/ONNX argmax agreement `1.0`;
+- selected checkpoint epoch 12.
+
+The candidate passes the frozen screen acceptance gate but misses the stronger
+promotion CER `0.7744692737430167`. The 96 -> 112 width step improved CER
+while retaining ample latency headroom, so the next screen keeps all v10
+temporal geometry and tests one final width increase to 128 channels.
+

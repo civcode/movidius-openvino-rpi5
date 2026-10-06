@@ -86,11 +86,18 @@ The second candidate, `cnn_ctc_v9`, restored healthy 128-frame emission
 behavior and reduced MA2450 p95 to `12.0927212 ms`, but missed the v3-screen
 CER gate by about 0.61% relative. It is retained as an efficiency Pareto point.
 
-The active third candidate is `cnn_ctc_v10`: identical v9 temporal geometry,
-but with the second stem and residual width increased from 96 to 112 channels.
-This isolates whether v9's slight CER deficit is a capacity limitation while
-retaining substantial latency headroom. See
-`model-quality-v4-cnn-ctc-v10-screen.md`.
+The third candidate, `cnn_ctc_v10`, widened the v9 family from 96 to 112
+channels. It passed the screen gate at CER `0.7888613718827392` and MA2450
+p95 `13.6566998 ms`, improving CER by about 1.20% relative to the v3 screen
+control while preserving large hardware headroom. Emitted/reference characters
+rose to `0.4818867707193457` and empty hypotheses fell to
+`0.24509033778476041`.
+
+v10 does not meet the stronger promotion threshold of
+`0.7744692737430167`. Because its best CER is still at epoch 12 and the
+96 -> 112 width step improved the same frozen topology, the next screen
+direction is one final width-only step to 128 channels before changing topology
+or training policy. See `model-quality-v4-cnn-ctc-v10-screen.md`.
 
 ## Commands
 

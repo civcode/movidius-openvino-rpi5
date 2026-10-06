@@ -1,6 +1,6 @@
 # ADR: cnn_ctc_v10 wider deep-dilated architecture screen
 
-Status: implemented; execution pending
+Status: completed; screen accepted; promotion threshold not met
 Date: 2026-10-06
 Parent: `exp-00e6b1e434d187d8/attempt-0001`
 
@@ -62,6 +62,34 @@ Screen acceptance requires:
 
 Promotion to a larger-budget confirmation requires CER <=
 `0.7744692737430167` plus healthy emission diagnostics.
+
+## Result
+
+`cnn_ctc_v10` completed as `exp-884807b8e192aa9c/attempt-0001` and
+passed every frozen screen acceptance gate:
+
+- physical CER: `0.7888613718827392`;
+- v3-screen CER: `0.7984219316938317`;
+- relative CER ratio: `0.9880256798672726` (about 1.20% better);
+- physical WER: `1.0308788598574823`;
+- emitted/reference characters: `0.4818867707193457`;
+- empty-hypothesis fraction: `0.24509033778476041`;
+- blank-frame fraction: `0.7500616218880947`;
+- MA2450 p95: `13.6566998 ms`;
+- final PyTorch/ONNX frame-argmax agreement: `1.0`;
+- training duration: `671.3644759650015 s`;
+- selected checkpoint: epoch 12;
+- best validation CER: `0.7887461844151357`.
+
+The width increase from 96 to 112 channels therefore recovered the v9 CER
+deficit and retained substantial latency headroom. It does not meet the 3%
+relative promotion threshold (`0.7744692737430167`), so v10 is screen-accepted
+but is not promoted to a larger-budget confirmation.
+
+The best CER remains at the final screen epoch and train loss continues to
+fall. A final width-only screen at 128 channels is justified before changing
+topology or training policy. The temporal geometry, data, objective, decoder
+and 12-epoch budget remain frozen.
 
 ## Commands
 
