@@ -53,16 +53,16 @@ def train_config():
     }
 
 
-class CnnCtcV11Tests(unittest.TestCase):
+class CnnCtcV12Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.spec = load_spec(SPEC)
 
-    def test_wider_deep_dilated_resource_contract(self):
+    def test_large_capacity_resource_contract(self):
         estimate = model_resource_estimate(self.spec)
         self.assertEqual([x["channels"] for x in self.spec["network"]["stem"]], [128, 448])
         self.assertEqual([x["stride"] for x in self.spec["network"]["stem"]], [2, 2])
-        self.assertEqual(len(self.spec["network"]["residual_blocks"]), 8)
+        self.assertEqual(len(self.spec["network"]["residual_blocks"]), 16)
         self.assertEqual(
             [x["kernel"] for x in self.spec["network"]["residual_blocks"]],
             [5] * 16,
@@ -74,6 +74,7 @@ class CnnCtcV11Tests(unittest.TestCase):
         self.assertEqual(estimate["parameters"], 19627687)
         self.assertEqual(estimate["macs_fixed_input"], 2515673088)
         self.assertEqual(estimate["receptive_field_feature_frames"], 653)
+        self.assertEqual(estimate["fp16_weight_bytes"], 39255374)
         self.assertEqual(estimate["output_frames"], 128)
         self.assertEqual(self.spec["output_contract"]["shape"], [1, 128, 39])
 
@@ -102,11 +103,13 @@ class CnnCtcV11Tests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn('DEFAULT_PARENT = "exp-00e6b1e434d187d8"', source)
         self.assertIn('SCREEN_MANIFEST_SHA256 = "0528db59eec36d00d710b3090b0c6404dbdbf548ae7e13d3daf3d5152eacfc8b"', source)
-        self.assertIn('MODEL_SPEC_SHA256 = "0a63c74a2414a26a04bf06da1cc8493b2886257077b451281e0d1da2b107f73a"', source)
+        self.assertIn('MODEL_SPEC_SHA256 = "8fcac3a58eb1f22a82ec9b4d9811e93bcc0b8d853e409c001c850ea7508eb36f"', source)
         self.assertIn('SCREEN_EPOCHS = 12', source)
         self.assertIn('PARENT_CER = 0.7984219316938317', source)
-        self.assertIn('PROMOTION_CER = 0.7744692737430167', source)
-        self.assertIn('"max_cer": PARENT_CER', source)
+        self.assertIn('"max_cer": None', source)
+        self.assertIn('"max_realtime_factor": None', source)
+        self.assertIn('"max_latency_p95_ms": None', source)
+        self.assertNotIn('"max_latency_p95_ms": 25.0', source)
         self.assertIn('"model_id": "cnn_ctc_v12"', source)
         self.assertNotIn('"augmentation": {', source)
         self.assertNotIn('"ctc_objective": {', source)

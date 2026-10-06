@@ -136,6 +136,21 @@ V11_ARCHITECTURE = {
 }
 
 
+V12_ARCHITECTURE = {
+    "kind": "residual-temporal-v9",
+    "stem_channels": [128, 448],
+    "stem_kernels": [5, 5],
+    "stem_strides": [2, 2],
+    "residual_channels": 448,
+    "residual_kernels": [5] * 16,
+    "residual_dilations": [1, 2, 3, 4, 4, 3, 2, 1] * 2,
+    "normalization": "none",
+    "activation": "relu",
+    "dropout": 0.1,
+    "residual_projection_init": "kaiming_scaled_0.01",
+}
+
+
 def executor_model_basename(model_id: str) -> str:
     if model_id in {
         "cnn_ctc_v1",
@@ -149,6 +164,7 @@ def executor_model_basename(model_id: str) -> str:
         "cnn_ctc_v9",
         "cnn_ctc_v10",
         "cnn_ctc_v11",
+        "cnn_ctc_v12",
     }:
         return model_id
     raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
@@ -171,6 +187,7 @@ def validate_model_executor_request(
         "cnn_ctc_v9",
         "cnn_ctc_v10",
         "cnn_ctc_v11",
+        "cnn_ctc_v12",
     }:
         raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
     if model_spec.get("family") != "cnn_ctc":
@@ -196,6 +213,7 @@ def validate_model_executor_request(
         "cnn_ctc_v9": V9_ARCHITECTURE,
         "cnn_ctc_v10": V10_ARCHITECTURE,
         "cnn_ctc_v11": V11_ARCHITECTURE,
+        "cnn_ctc_v12": V12_ARCHITECTURE,
     }[model_id]
     if model_spec.get("architecture") != expected_architecture:
         raise ValueError(
@@ -289,6 +307,7 @@ def compatibility_probe_command(
         "cnn_ctc_v9",
         "cnn_ctc_v10",
         "cnn_ctc_v11",
+        "cnn_ctc_v12",
     }:
         return [
             str(root / "scripts" / f"probe-{model_id.replace('_', '-')}.sh"),
@@ -322,6 +341,7 @@ def training_command(
         "cnn_ctc_v9": "train-cnn-ctc-v9.sh",
         "cnn_ctc_v10": "train-cnn-ctc-v10.sh",
         "cnn_ctc_v11": "train-cnn-ctc-v11.sh",
+        "cnn_ctc_v12": "train-cnn-ctc-v12.sh",
     }.get(model_id)
     if executable is None:
         raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
