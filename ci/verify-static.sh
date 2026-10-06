@@ -698,6 +698,39 @@ fi
 grep -q '"event": "training_progress"' examples/speech-asr/training/train_cnn_ctc_v7.py || fail 'cnn_ctc_v7 live training progress missing'
 grep -q '"event": "validation_progress"' examples/speech-asr/training/train_cnn_ctc_v7.py || fail 'cnn_ctc_v7 validation progress missing'
 
+# Fast deterministic architecture-screen-v1 on the frozen model-quality-v4 boundary.
+for f in \
+    examples/speech-asr/tools/prepare_architecture_screen_v1.py \
+    examples/speech-asr/agent/init_cnn_ctc_v3_architecture_screen.py \
+    examples/speech-asr/docs/adr/model-quality-v4-architecture-screen-v1.md \
+    tests/python/test_speech_asr_architecture_screen.py; do
+    test -f "$f" || fail "architecture-screen-v1 file missing: $f"
+done
+for f in \
+    scripts/prepare-speech-architecture-screen-v1.sh \
+    scripts/init-cnn-ctc-v3-architecture-screen.sh; do
+    test -x "$f" || fail "architecture-screen-v1 shell entry point is not executable: $f"
+done
+grep -q 'RULE_ID = "sha256-id-first-u64-be-mod4-eq0-v1"' examples/speech-asr/tools/prepare_architecture_screen_v1.py || fail 'architecture-screen selection rule changed'
+grep -q 'MODULUS = 4' examples/speech-asr/tools/prepare_architecture_screen_v1.py || fail 'architecture-screen fraction changed'
+grep -q 'REMAINDER = 0' examples/speech-asr/tools/prepare_architecture_screen_v1.py || fail 'architecture-screen hash bucket changed'
+grep -q 'SCREEN_EPOCHS = 12' examples/speech-asr/tools/prepare_architecture_screen_v1.py || fail 'architecture-screen epoch budget changed'
+grep -q 'len(selected) / len(train)' examples/speech-asr/tools/prepare_architecture_screen_v1.py || fail 'architecture-screen does not verify selected fraction'
+grep -q 'meetings != EXPECTED_MEETINGS' examples/speech-asr/tools/prepare_architecture_screen_v1.py || fail 'architecture-screen does not preserve all train meetings'
+grep -q 'VALIDATION_SHA256 = "fbd72a648826b2e200f9244b4dc73be425cada2e304be92d513f7033a8de4088"' examples/speech-asr/tools/prepare_architecture_screen_v1.py || fail 'architecture-screen validation boundary changed'
+grep -q 'SOURCE_TRAIN_SHA256 = "6025d17f08c1815d1710c3ab56cea51a34365f398e9877b4aefec234e64e4096"' examples/speech-asr/tools/prepare_architecture_screen_v1.py || fail 'architecture-screen source training boundary changed'
+grep -q 'DEFAULT_PARENT = "exp-63fdb8d218673527"' examples/speech-asr/agent/init_cnn_ctc_v3_architecture_screen.py || fail 'architecture-screen v3 control parent changed'
+grep -q '"model_id": "cnn_ctc_v3"' examples/speech-asr/agent/init_cnn_ctc_v3_architecture_screen.py || fail 'architecture-screen control changed model'
+grep -q '"epochs": SCREEN_EPOCHS' examples/speech-asr/agent/init_cnn_ctc_v3_architecture_screen.py || fail 'architecture-screen control does not use screen epoch budget'
+grep -q '"checkpoint_selection": "validation_cer"' examples/speech-asr/agent/init_cnn_ctc_v3_architecture_screen.py || fail 'architecture-screen checkpoint selection changed'
+grep -q '"max_cer": None' examples/speech-asr/agent/init_cnn_ctc_v3_architecture_screen.py || fail 'architecture-screen v3 control must establish the proxy CER baseline'
+if grep -q '"augmentation": {' examples/speech-asr/agent/init_cnn_ctc_v3_architecture_screen.py; then
+    fail 'architecture-screen v3 control must not add augmentation'
+fi
+if grep -q '"ctc_objective": {' examples/speech-asr/agent/init_cnn_ctc_v3_architecture_screen.py; then
+    fail 'architecture-screen v3 control must use standard CTC'
+fi
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
 for name in [
@@ -726,6 +759,7 @@ for name in [
     "examples/speech-asr/agent/init_cnn_ctc_v3_scaled_data.py",
     "examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py",
     "examples/speech-asr/agent/init_cnn_ctc_v7_wide.py",
+    "examples/speech-asr/agent/init_cnn_ctc_v3_architecture_screen.py",
     "examples/speech-asr/agent/run_frozen_heldout_evaluation.py",
     "examples/speech-asr/agent/review_heldout_evaluation.py",
     "examples/speech-asr/agent/review_experiment.py",
@@ -737,6 +771,7 @@ for name in [
     "examples/speech-asr/tools/qualify_expanded_model_quality_manifests.py",
     "examples/speech-asr/tools/qualify_heldout_evaluation_manifest.py",
     "examples/speech-asr/tools/qualify_model_quality_v4.py",
+    "examples/speech-asr/tools/prepare_architecture_screen_v1.py",
     "examples/speech-asr/datasets/ami/freeze_model_quality_v4_sources.py",
     "examples/speech-asr/training/cnn_ctc_v1.py",
     "examples/speech-asr/training/train_cnn_ctc_v1.py",

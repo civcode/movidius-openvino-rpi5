@@ -425,3 +425,34 @@ See `docs/adr/model-quality-v4-fresh-development.md` and
 
 The sealed held-out benchmark remains consumed and must not be used for this
 architecture decision.
+
+## Fast architecture screen
+
+Full model-quality-v4 architecture runs are now preceded by
+`architecture-screen-v1`. It deterministically selects about 25% of the
+frozen qualified training manifest by sample-ID hash, requires representation
+from all 48 training meetings, trains for 12 epochs, and keeps the full frozen
+ES2011 validation set.
+
+Prepare and verify it with:
+
+```bash
+./scripts/prepare-speech-architecture-screen-v1.sh
+./scripts/prepare-speech-architecture-screen-v1.sh --verify-only
+```
+
+Establish the proxy reference with unchanged `cnn_ctc_v3`:
+
+```bash
+EXP="$(
+  ./scripts/init-cnn-ctc-v3-architecture-screen.sh |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
+)"
+./scripts/run-speech-experiment.sh --experiment "$EXP" --worker edge
+./scripts/review-speech-experiment.sh --experiment "$EXP"
+```
+
+Screen results rank architecture directions only; they do not replace the
+larger-budget confirmation and full model-quality-v4 evaluation needed before
+promotion. The sealed held-out benchmark remains unavailable for selection.
+

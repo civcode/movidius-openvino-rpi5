@@ -957,52 +957,49 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-The model-quality-v4 development boundary is frozen and the unchanged
-`cnn_ctc_v3` baseline has completed on ES2011 as
-`exp-63fdb8d218673527/attempt-0001`.
+The full model-quality-v4 v3 baseline remains the direct ES2011 reference at
+CER `0.7588550365720209`. The 112-channel `cnn_ctc_v7` capacity ablation
+was rejected at CER `0.7670333467718712` and MA2450 p95 `19.7972674 ms`.
+Do not continue the width sweep.
 
-The new direct-comparison baseline is:
+Architecture iteration now uses **architecture-screen-v1** before paying the
+full 32-epoch / 100%-data cost.
 
-- CER `0.7588550365720209`;
-- WER `1.0427553444180522`;
-- blank frames `69.07%`;
-- empty hypotheses `15.79%`;
-- emitted/reference characters `58.96%`;
-- MA2450 p95 `16.7812226 ms`;
-- training wall time about `56.4 minutes`.
+The screen:
 
-The next controlled step is **cnn_ctc_v7**, a width-only capacity ablation.
-It keeps the exact frozen model-quality-v4 train/ES2011 manifests, frontend,
-CTC objective, decoder, optimizer schedule, temporal kernels and receptive
-field, and changes only the second stem/residual width from 96 to 112 channels.
+- derives an approximately 25% training subset from the frozen qualified v4
+  training manifest using
+  `u64_be(sha256(sample_id)[0:8]) % 4 == 0`;
+- requires all 48 training meetings to remain represented;
+- keeps the full frozen 1,273-record ES2011 validation manifest;
+- trains for 12 epochs with validation-CER checkpoint selection;
+- forbids sealed held-out evidence;
+- treats screen results as ranking evidence only.
 
-This moves the deployed graph from 1,346,343 parameters / 174,804,992 MACs to
-1,818,183 parameters / 235,177,984 MACs while retaining the same
-`[1,64,512] -> [1,128,39]` tensor contract.
-
-Run:
+Establish the v3 screen control first:
 
 ```bash
 git pull --ff-only
 ./ci/verify-static.sh
 ./scripts/test-speech-asr.sh
 
-./scripts/provision-speech-model-data-v4-edge.sh
+./scripts/prepare-speech-architecture-screen-v1.sh
+./scripts/prepare-speech-architecture-screen-v1.sh --verify-only
+cat work/speech-asr/ami/model-quality-v4-architecture-screen-v1/screen.json
 
 EXP="$(
-  ./scripts/init-cnn-ctc-v7-wide.sh |
+  ./scripts/init-cnn-ctc-v3-architecture-screen.sh |
   python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
 )"
-echo "$EXP"
-
 ./scripts/run-speech-experiment.sh --experiment "$EXP" --worker edge
 ./scripts/review-speech-experiment.sh --experiment "$EXP"
 ```
 
-The initialized v7 graph is converted and physically probed on MA2450 before
-training. The child must keep CER at or below the v3 ES2011 baseline and p95
-latency at or below 25 ms. WER and decoder-emission diagnostics are reviewed as
-secondary evidence.
+Once the v3 proxy CER/trajectory is known, new architectures are ranked only
+against that control under the exact same subset, epoch budget and ES2011
+validation set. Promising candidates then advance to a larger-budget
+confirmation before any full-budget run.
 
-The sealed held-out benchmark remains consumed and must not be reopened for
-this architecture decision.
+The next architecture hypothesis after the control is a higher-temporal-
+resolution, narrower dilated residual CNN; its screen experiment must not be
+initialized until the v3 proxy baseline is recorded.

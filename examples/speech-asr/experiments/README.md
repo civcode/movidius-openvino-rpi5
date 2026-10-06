@@ -451,3 +451,31 @@ Initialize with:
 Its immutable CER acceptance ceiling is the v3 ES2011 baseline
 `0.7588550365720209`; physical p95 remains capped at 25 ms.
 
+## v7 rejection and architecture-screen-v1
+
+The 112-channel `cnn_ctc_v7` experiment
+`exp-ed00410b3da5d26c/attempt-0001` completed but was rejected on the exact
+same ES2011 validation manifest as its v3 parent:
+
+- v3 CER: `0.7588550365720209`;
+- v7 CER: `0.7670333467718712`;
+- v7 WER: `1.0462103217447636`;
+- v7 MA2450 p95: `19.7972674 ms`.
+
+Widening the full-context v3 graph therefore increased cost without improving
+quality.
+
+Subsequent architecture ideas first use `architecture-screen-v1`: an
+approximately 25% deterministic hash-bucket subset of the frozen v4 training
+manifest, 12 epochs, and the full ES2011 validation manifest. The first screen
+experiment is an unchanged v3 control initialized with:
+
+```bash
+./scripts/prepare-speech-architecture-screen-v1.sh
+./scripts/init-cnn-ctc-v3-architecture-screen.sh
+```
+
+Later screen candidates must use the exact derived screen manifest and budget
+and should parent the recorded v3 screen control so review metrics are directly
+comparable.
+

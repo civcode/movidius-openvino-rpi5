@@ -1,6 +1,6 @@
 # ADR: model-quality-v4 cnn_ctc_v7 112-channel capacity ablation
 
-Status: implemented; execution pending
+Status: executed; rejected
 Date: 2026-10-06
 Parent: `exp-63fdb8d218673527/attempt-0001`
 Parent model: `cnn_ctc_v3`
@@ -75,6 +75,29 @@ than trading one collapse mode for another.
 
 The initialized graph is physically probed on MA2450 before the full training
 run.
+
+## Result
+
+`exp-ed00410b3da5d26c/attempt-0001` completed normally but failed the
+same-manifest CER gate.
+
+Selected-checkpoint / hardware evidence:
+
+- best validation-CER epoch: 25;
+- training validation CER at the selected epoch: `0.7669181593042677`;
+- physical evaluation CER: `0.7670333467718712`;
+- physical evaluation WER: `1.0462103217447636`;
+- MA2450 p95: `19.7972674 ms`;
+- PyTorch/ONNX frame-argmax agreement: `1.0`;
+- total 32-epoch training duration: `3442.081941446 s`.
+
+The candidate is rejected because CER is worse than the frozen v3 ES2011
+baseline `0.7588550365720209`. Width increased hardware cost without fixing
+the under-emission/generalization problem. Do not continue a width sweep from
+v7.
+
+The next development step is a deterministic reduced-budget architecture
+screen, documented in `model-quality-v4-architecture-screen-v1.md`.
 
 ## Commands
 
