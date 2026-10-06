@@ -622,27 +622,44 @@ Initialize with:
 The schedule is `3e-4 -> 1.2e-3 -> 3e-5` with a 30% OneCycle ramp.
 
 
-## v13/v14 result and v15 BatchNorm conditioning
+## v13-v15 result and v16 QuartzNet architecture reset
 
 `cnn_ctc_v13` completed as `exp-968150d44c4479ac/attempt-0001`; its
 OneCycle trajectory returned to near-total blank emission.
 
 `cnn_ctc_v14` completed as `exp-1e2478b84317ab02/attempt-0001` using the
 stable `3e-4 -> 3e-5` cosine schedule. It selected epoch 8 at validation CER
-`0.7898404653573691`, with deployed MA2450 p95 `103.8884392 ms`. The
-blank-collapse failure was solved, but validation loss diverged after the
-selected epoch while training loss kept falling. v14 also does not beat the
-small v10/v11 models on CER.
+`0.7898404653573691`, with deployed MA2450 p95 `103.8884392 ms`.
 
-The active follow-up is `cnn_ctc_v15`, parented directly to v14. It preserves
-the 448-channel, 16-block geometry and cosine optimizer policy, and adds
-BatchNorm as the single controlled architecture-conditioning change.
+`cnn_ctc_v15` completed as `exp-5d1209f5120388f8/attempt-0001` at deployed
+CER `0.8428267004549905`, WER `0.9941697257611747`, blank-frame fraction
+`0.8668262967005881`, and MA2450 p95 `103.8926016 ms`. BatchNorm therefore
+failed the v15 decision rule: it regressed against v14 and remained behind the
+much smaller v11 accuracy/latency point. Further local tuning of the v12-v15
+large residual topology is closed.
+
+The active follow-up is `cnn_ctc_v16`, parented to completed v15 evidence but
+replacing its acoustic graph with the published QuartzNet-15x5 topology:
+
+- C1 256 channels, kernel 33, stride 2;
+- B1-B5 kernels `33/39/51/63/75`, each block type repeated 3 times and each
+  block containing 5 time-channel-separable modules;
+- channels `256/256/512/512/512`;
+- projected residuals with BatchNorm/ReLU/dropout;
+- C2 512 channels, kernel 87, dilation 2;
+- C3 1024 channels, kernel 1;
+- project to the frozen 39-token character CTC vocabulary;
+- 18,934,631 trainable parameters and `[1,256,39]` output.
+
+The VPU boundary ends at CTC logits. Greedy decoding remains the architecture
+screen decoder; CPU prefix-beam search and language-model scoring are deferred
+to the next isolated system experiment if v16 improves acoustic quality.
 
 Initialize with:
 
 ```bash
-./scripts/init-cnn-ctc-v15-batchnorm-conditioning.sh
+./scripts/init-cnn-ctc-v16-quartznet.sh
 ```
 
 See
-`../docs/adr/model-quality-v4-cnn-ctc-v15-batchnorm-conditioning.md`.
+`../docs/adr/model-quality-v4-cnn-ctc-v16-quartznet.md`.
