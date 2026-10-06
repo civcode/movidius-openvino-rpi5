@@ -175,6 +175,50 @@ class AmiPreparationTests(unittest.TestCase):
                 record["metadata"]["normalized_audio_sha256"],
             )
 
+    def test_non_positive_segment_interval_is_excluded_with_provenance(self):
+        with tempfile.TemporaryDirectory() as tmp_name:
+            tmp = pathlib.Path(tmp_name)
+            audio, archive = make_fixture(tmp)
+            reversed_segments = SEGMENTS.replace(
+                b'transcriber_start="0.650" transcriber_end="0.900"',
+                b'transcriber_start="0.900" transcriber_end="0.800"',
+            )
+            with zipfile.ZipFile(archive, "w") as zf:
+                zf.writestr(
+                    "segments/TEST.A.segments.xml",
+                    reversed_segments,
+                )
+                zf.writestr("words/TEST.A.words.xml", WORDS)
+            spec = make_spec(
+                audio,
+                archive,
+                {"speaker": "A", "all_segments": True},
+            )
+
+            output = tmp / "out"
+            provenance = prepare_from_spec(
+                spec=spec,
+                annotation_zip_path=archive,
+                audio_paths={"TEST": audio},
+                output_dir=output,
+            )
+            self.assertEqual(provenance["records"], 1)
+            self.assertEqual(len(provenance["excluded_segments"]), 1)
+            excluded = provenance["excluded_segments"][0]
+            self.assertEqual(excluded["id"], "ami-TEST-A-2")
+            self.assertEqual(
+                excluded["reason"],
+                "non_positive_annotated_segment_interval",
+            )
+            self.assertGreater(
+                excluded["source_start_sample"],
+                excluded["source_end_sample"],
+            )
+
+            verified = verify_prepared_dataset(spec=spec, output_dir=output)
+            self.assertEqual(verified["records"], 1)
+            self.assertEqual(verified["excluded_segments"], 1)
+
     def test_stereo_mix_is_deterministically_downmixed_to_mono(self):
         with tempfile.TemporaryDirectory() as tmp_name:
             tmp = pathlib.Path(tmp_name)
