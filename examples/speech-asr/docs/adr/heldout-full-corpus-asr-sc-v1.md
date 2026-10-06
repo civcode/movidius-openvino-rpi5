@@ -1,7 +1,8 @@
 # ADR: sealed held-out AMI Full-corpus-ASR evaluation
 
-Status: implemented, awaiting physical evaluation
+Status: completed and sealed
 Date: 2026-10-05
+Physical evaluation completed: 2026-10-06
 Frozen source checkpoint: `exp-87538823d2bf1562/attempt-0001`
 
 ## Context
@@ -173,6 +174,53 @@ the v2 single-shot/persistent parity gate before sealing.
 The result records both the original training commit and the evaluation-code
 commit so model weights and evaluation implementation remain independently
 auditable.
+
+## Final sealed outcome
+
+The corrective physical evaluation completed on 2026-10-06 at evaluation
+commit `db0e1465f0e3641891a45fe10a86d99a57dd5a82` and sealed the replacement
+result for manifest
+`b304a6e064b6e014bc7b1029b21202dbefbc7be2813a5b7b7dfd7847df887315`.
+
+The frozen CPU/ONNX reference result is:
+
+- WER: `1.0544630762763323`;
+- CER: `0.8215929990002099`;
+- blank-frame fraction: `0.6846211673964842`;
+- empty-hypothesis fraction: `0.1932932616260677`;
+- emitted/reference character ratio: `0.5857165780021477`;
+- PyTorch/ONNX valid-frame argmax agreement: `1.0`.
+
+The corrected MA2450/OpenVINO 2020.3.2 result is:
+
+- WER: `1.0540426923256574`;
+- CER: `0.8217904884160114`;
+- blank-frame fraction: `0.6846721342807511`;
+- empty-hypothesis fraction: `0.19297690604239165`;
+- emitted/reference character ratio: `0.585642519471222`;
+- inference-only RTF: `0.011201942869795709`;
+- steady-state latency p50/p95: `16.7213195 / 16.7796900 ms`;
+- evaluated samples: `6322 / 6322`;
+- persistent server sessions: `1`;
+- hardware failures: `0`.
+
+The cross-runtime deltas are small: WER `-0.0004203839506748963`,
+CER `+0.000197489415801555`, blank-frame fraction
+`+0.000050966884266978596`, and empty-hypothesis fraction
+`-0.00031635558367604233`. The physical first-sample parity gate also
+produced byte-identical single-shot and persistent logits
+(`valid_argmax_agreement=1.0`, `max_abs_error=0.0`).
+
+These results establish that the MA2450/OpenVINO execution path is not the
+material source of the ASR quality gap. The poor held-out recognition quality
+is therefore model/data/decoder generalization evidence for the frozen
+checkpoint, not a VPU transport or numerical-parity failure.
+
+This held-out boundary is now consumed. It must not be rerun or used to choose
+future model architectures, objectives, decoder variants, thresholds,
+hyperparameters, or training-data decisions. Further ASR development must use
+training/validation evidence only; this sealed result remains final
+promotion/generalization evidence for the frozen checkpoint.
 
 ## Commands
 
