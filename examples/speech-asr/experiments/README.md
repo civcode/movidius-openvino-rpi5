@@ -479,3 +479,28 @@ Later screen candidates must use the exact derived screen manifest and budget
 and should parent the recorded v3 screen control so review metrics are directly
 comparable.
 
+## v8 screen rejection and v9
+
+`cnn_ctc_v8` completed as `exp-aa5f9f4edd71919b/attempt-0001`. Runtime
+compatibility was clean, but the screen rejected the architecture:
+
+- CER `0.8442089500662328` vs v3-screen `0.7984219316938317`;
+- emitted/reference characters `0.2442550250532742`;
+- empty-hypothesis fraction `0.3307148468185389`;
+- MA2450 p95 `26.6580554 ms`;
+- final PyTorch/ONNX argmax agreement `1.0`.
+
+The 256-frame output increased hardware cost and worsened under-emission. Do
+not give v8 extra epochs under the architecture screen.
+
+The next candidate is `cnn_ctc_v9`, still parented to the v3 screen control.
+It returns to 128 CTC frames and 96 channels while replacing five large
+residual kernels with eight kernel-7 blocks at dilations
+`[1,2,3,4,4,3,2,1]`.
+
+Initialize with:
+
+```bash
+./scripts/init-cnn-ctc-v9-architecture-screen.sh
+```
+

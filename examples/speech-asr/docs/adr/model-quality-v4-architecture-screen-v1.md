@@ -78,8 +78,14 @@ acceptance gate. Promotion to a larger-budget confirmation requires a stronger
 3% relative CER improvement, i.e. CER <= `0.7744692737430167`, together with
 healthy emission diagnostics.
 
-The first candidate under this frozen screen is `cnn_ctc_v8`, documented in
-`model-quality-v4-cnn-ctc-v8-screen.md`.
+The first candidate, `cnn_ctc_v8`, was rejected at CER
+`0.8442089500662328` and MA2450 p95 `26.6580554 ms`. Its 256-frame CTC
+output also worsened under-emission. That direction is retired.
+
+The active second candidate is `cnn_ctc_v9`, which restores v3's 128-frame
+CTC rate and 96-channel width and replaces the five large residual kernels with
+eight kernel-7 dilated blocks. See
+`model-quality-v4-cnn-ctc-v9-screen.md`.
 
 ## Commands
 

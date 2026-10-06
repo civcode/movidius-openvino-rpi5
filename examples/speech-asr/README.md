@@ -453,16 +453,23 @@ EXP="$(
 ```
 
 The v3 proxy completed as `exp-00e6b1e434d187d8/attempt-0001` with
-CER `0.7984219316938317` in about 6.75 minutes of training. The first
-architecture candidate is `cnn_ctc_v8`, which doubles the CTC time axis to
-256 frames while narrowing the encoder to 72 channels and using dilated
-residual context.
+CER `0.7984219316938317` in about 6.75 minutes of training.
+
+The first candidate, `cnn_ctc_v8`, was rejected: CER regressed to
+`0.8442089500662328`, emitted/reference characters fell to `0.244255`,
+empty hypotheses rose to `0.330715`, and MA2450 p95 rose to `26.6580554
+ms`. The 256-frame CTC direction is retired.
+
+The active candidate is `cnn_ctc_v9`: v3's 128-frame CTC rate and 96-channel
+width with eight kernel-7 residual blocks and dilations
+`[1,2,3,4,4,3,2,1]`. Its frozen estimate is 646,503 parameters and
+85,151,744 MACs.
 
 Run it with:
 
 ```bash
 ./scripts/provision-speech-model-data-v4-edge.sh
-INIT_JSON="$(./scripts/init-cnn-ctc-v8-architecture-screen.sh)"
+INIT_JSON="$(./scripts/init-cnn-ctc-v9-architecture-screen.sh)"
 EXP="$(printf '%s\n' "$INIT_JSON" |
   python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])')"
 ./scripts/run-speech-experiment.sh --experiment "$EXP" --worker edge

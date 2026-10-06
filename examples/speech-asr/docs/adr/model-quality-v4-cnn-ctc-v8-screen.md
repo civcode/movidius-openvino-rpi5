@@ -1,6 +1,6 @@
 # ADR: cnn_ctc_v8 high-resolution dilated architecture screen
 
-Status: implemented; execution pending
+Status: executed; rejected
 Date: 2026-10-06
 Parent: `exp-00e6b1e434d187d8/attempt-0001`
 
@@ -71,6 +71,34 @@ directly comparable with v3 and is not a promotion criterion.
 The initialized v8 graph is converted and physically probed before training.
 This is important because OpenVINO 2020.3/MYRIAD compatibility of the dilated
 Conv1D pattern is not assumed.
+
+## Result
+
+`exp-aa5f9f4edd71919b/attempt-0001` completed normally but failed both
+screen CER and p95 latency gates.
+
+Observed evidence:
+
+- selected checkpoint: epoch 12;
+- training validation CER: `0.8446121062028451`;
+- physical CER: `0.8442089500662328`;
+- physical WER: `0.9784063917080544`;
+- emitted/reference characters: `0.2442550250532742`;
+- empty-hypothesis fraction: `0.3307148468185389`;
+- MA2450 p95: `26.6580554 ms`;
+- PyTorch/ONNX frame-argmax agreement: `1.0`;
+- initialized MYRIAD frame-argmax agreement: `1.0`;
+- training duration: `522.7922753729981 s`.
+
+The candidate is rejected. Relative to the v3 screen control, CER regressed
+from `0.7984219316938317`, emitted/reference characters fell sharply, empty
+hypotheses increased, and latency crossed the 25 ms ceiling. The clean
+numerical parity and zero hardware failures make this architecture evidence,
+not a runtime failure.
+
+Do not continue the 256-frame CTC direction. The next candidate is
+`cnn_ctc_v9`, which restores the 128-frame CTC rate and 96-channel width and
+tests deeper small-kernel dilated temporal modeling.
 
 ## Commands
 
