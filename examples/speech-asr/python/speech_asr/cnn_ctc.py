@@ -83,7 +83,11 @@ def load_spec(path: Path) -> dict:
     if not isinstance(input_contract, dict) or input_contract.get("shape") != [1, 64, 512]:
         raise ValueError(f"{model_id} input shape must be [1,64,512]")
     output_contract = value.get("output_contract")
-    expected_output_shape = [1, 256, 39] if model_id == "cnn_ctc_v8" else [1, 128, 39]
+    expected_output_shape = (
+        [1, 256, 39]
+        if model_id in {"cnn_ctc_v8", "cnn_ctc_v16"}
+        else [1, 128, 39]
+    )
     if not isinstance(output_contract, dict) or output_contract.get("shape") != expected_output_shape:
         raise ValueError(f"{model_id} output shape must be {expected_output_shape}")
     export = value.get("export")
