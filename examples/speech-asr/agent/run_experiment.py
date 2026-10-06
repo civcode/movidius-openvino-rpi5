@@ -71,20 +71,49 @@ def run_process(
     log_path: pathlib.Path | None = None,
     input_text: str | None = None,
     cwd: pathlib.Path = ROOT,
+    stream_output: bool = False,
 ) -> subprocess.CompletedProcess[str]:
-    proc = subprocess.run(
+    if not stream_output:
+        proc = subprocess.run(
+            command,
+            cwd=cwd,
+            text=True,
+            input=input_text,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+        if log_path is not None:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_path.write_text(proc.stdout, encoding="utf-8")
+        return proc
+
+    if input_text is not None:
+        raise ValueError("stream_output does not support input_text")
+    process = subprocess.Popen(
         command,
         cwd=cwd,
         text=True,
-        input=input_text,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        check=False,
+        bufsize=1,
     )
+    lines: list[str] = []
+    assert process.stdout is not None
+    for line in process.stdout:
+        lines.append(line)
+        print(line, end="", flush=True)
+    returncode = process.wait()
+    output = "".join(lines)
     if log_path is not None:
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        log_path.write_text(proc.stdout, encoding="utf-8")
-    return proc
+        log_path.write_text(output, encoding="utf-8")
+    return subprocess.CompletedProcess(
+        command,
+        returncode,
+        stdout=output,
+        stderr=None,
+    )
 
 
 def manager(*args: str) -> dict[str, Any]:
@@ -537,6 +566,7 @@ def execute_local(
     proc = run_process(
         command,
         log_path=logs_dir / "controller-training.log",
+        stream_output=True,
     )
     if proc.returncode != 0:
         raise ExecutionFailure(
