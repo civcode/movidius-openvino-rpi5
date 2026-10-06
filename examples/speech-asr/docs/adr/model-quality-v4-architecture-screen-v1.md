@@ -111,6 +111,21 @@ inherited 25 ms p95 value is no longer used as a rejection threshold for that
 probe. See `model-quality-v4-cnn-ctc-v11-screen.md` for the transition
 rationale.
 
+## Large-capacity transition
+
+The active follow-up is `cnn_ctc_v12`, a capacity-boundary probe rather than
+another incremental width screen. It uses 19,627,687 parameters and
+2,515,673,088 fixed-input MACs with sixteen 448-channel residual blocks.
+
+For this probe the inherited 25 ms p95 threshold is retired as a rejection
+gate. CER, WER, RTF and p95 are all measured without numeric acceptance
+ceilings. The graph must still convert, pass PyTorch/ONNX numerical agreement,
+and execute physically on MYRIAD. The exact screen training manifest, full
+ES2011 validation manifest, decoder and 12-epoch budget remain frozen so the
+quality result stays comparable.
+
+See `model-quality-v4-cnn-ctc-v12-capacity-probe.md`.
+
 ## Commands
 
 ```bash

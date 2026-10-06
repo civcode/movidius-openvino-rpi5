@@ -561,3 +561,24 @@ The 128-channel result closes the small width sweep. The next model moves
 directly to a large capacity regime, with latency recorded but no longer
 rejected against the inherited 25 ms architecture-screen threshold.
 
+
+## v12 large-capacity probe
+
+The active model is `cnn_ctc_v12`. It intentionally leaves the small-model
+regime at 19,627,687 parameters and 2,515,673,088 fixed-input MACs, using two
+stride-2 stems and sixteen 448-channel kernel-5 residual blocks.
+
+The experiment reuses the exact architecture-screen training and ES2011
+validation manifests. It keeps the 12-epoch validation-CER-selected ranking
+budget, but removes numeric CER/WER/RTF/p95 rejection thresholds. OpenVINO
+conversion, numerical compatibility and physical MYRIAD execution are the
+capacity feasibility gates.
+
+Initialize with:
+
+```bash
+./scripts/init-cnn-ctc-v12-capacity-probe.sh
+```
+
+See
+`../docs/adr/model-quality-v4-cnn-ctc-v12-capacity-probe.md`.

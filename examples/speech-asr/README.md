@@ -472,40 +472,43 @@ and MA2450 p95 `13.6566998 ms`. That is about a 1.20% relative CER
 improvement over the v3 screen control, but it does not reach the 3% relative
 promotion threshold `0.7744692737430167`.
 
-The active candidate is `cnn_ctc_v11`: the exact v10 temporal geometry with
-the second stem and residual width increased from 112 to 128 channels. Its
-frozen estimate is 1,117,287 parameters and 145,342,464 fixed-input MACs.
+The final small-width candidate, `cnn_ctc_v11`, completed as
+`exp-4fb0f93165d0f76d/attempt-0001` with CER
+`0.7865576225306686` and MA2450 p95 `14.9809824 ms`. It passes the
+frozen v3-screen CER gate, but the 112 -> 128 width step only slightly
+improves v10. The small width sweep is closed.
+
+## v12 large-capacity probe
+
+The active candidate is `cnn_ctc_v12`, a deliberate jump into a capacity
+regime that may be too slow for final deployment:
+
+- 19,627,687 parameters;
+- 2,515,673,088 fixed-input MACs;
+- stems 128 -> 448 channels;
+- sixteen 448-channel kernel-5 residual blocks;
+- 128 CTC output frames;
+- about 39.3 MB of FP16 weights.
+
+The frontend, vocabulary, greedy CTC decoder, architecture-screen data and
+12-epoch ranking budget remain frozen. Unlike the small-model screen, v12 has
+no numeric CER, WER, RTF or p95 rejection threshold. The initialized graph is
+converted and physically probed on MYRIAD before training. If it cannot run,
+that is capacity-boundary evidence; if it runs, quality and measured latency
+are reviewed afterward.
 
 Run it with:
 
 ```bash
 ./scripts/provision-speech-model-data-v4-edge.sh
-INIT_JSON="$(./scripts/init-cnn-ctc-v11-architecture-screen.sh)"
+
+INIT_JSON="$(./scripts/init-cnn-ctc-v12-capacity-probe.sh)"
 EXP="$(printf '%s\n' "$INIT_JSON" |
   python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])')"
+
 ./scripts/run-speech-experiment.sh --experiment "$EXP" --worker edge
 ./scripts/review-speech-experiment.sh --experiment "$EXP"
 ```
 
-No topology, data, objective, decoder or training-budget change is included in
-v11.
+The sealed held-out benchmark remains unavailable for selection.
 
-Screen results rank architecture directions only; they do not replace the
-larger-budget confirmation and full model-quality-v4 evaluation needed before
-promotion. The sealed held-out benchmark remains unavailable for selection.
-
-
-
-## v11 result and large-capacity transition
-
-`cnn_ctc_v11` completed as `exp-4fb0f93165d0f76d/attempt-0001` with CER
-`0.7865576225306686`, WER `1.0205139278773483`, emitted/reference
-characters `0.4790646777630594`, empty-hypothesis fraction
-`0.22152395915161036`, and MA2450 p95 `14.9809824 ms`. The selected
-checkpoint was epoch 12.
-
-v11 passes the frozen architecture-screen CER gate but misses the stronger
-promotion target. The project will not continue with small width increments.
-The next candidate is a large-capacity MYRIAD feasibility/quality probe, and
-its latency is measured rather than rejected against the inherited 25 ms
-screen threshold.
