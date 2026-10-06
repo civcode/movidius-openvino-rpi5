@@ -524,3 +524,37 @@ EXP="$(printf '%s\n' "$INIT_JSON" |
 
 The model-quality-v4 data are already provisioned if the v12 run was executed
 on the same edge worker.
+
+
+## v13 result and v14 cosine control
+
+`cnn_ctc_v13` completed as `exp-968150d44c4479ac/attempt-0001`.
+It avoided the catastrophic v12 optimizer explosion, but did not solve the
+large-model optimization problem:
+
+- final deployed CER `0.975522663134251`;
+- WER `0.9922263010148996`;
+- blank frames `98.9225%`;
+- emitted/reference characters `3.1331%`;
+- empty hypotheses `78.8688%`;
+- MA2450 p95 `103.9083748 ms`;
+- best validation CER at epoch 1: `0.9755802568680527`.
+
+Epoch 1 was the best point while LR was still close to the `3e-4` starting
+range. As OneCycle raised LR, emission deteriorated; validation became fully
+blank by epoch 6 and stayed blank through epoch 12.
+
+The active candidate is `cnn_ctc_v14`, which keeps the exact 20M inference
+graph but restores the proven-stable Adam cosine schedule
+`3e-4 -> 3e-5` with no LR increase.
+
+Run:
+
+```bash
+INIT_JSON="$(./scripts/init-cnn-ctc-v14-cosine-control.sh)"
+EXP="$(printf '%s\n' "$INIT_JSON" |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])')"
+
+./scripts/run-speech-experiment.sh --experiment "$EXP" --worker edge
+./scripts/review-speech-experiment.sh --experiment "$EXP"
+```

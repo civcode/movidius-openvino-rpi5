@@ -620,3 +620,25 @@ Initialize with:
 ```
 
 The schedule is `3e-4 -> 1.2e-3 -> 3e-5` with a 30% OneCycle ramp.
+
+
+## v13 result and v14 cosine control
+
+`cnn_ctc_v13` completed as `exp-968150d44c4479ac/attempt-0001`.
+The physical graph remained stable at `103.9083748 ms` p95, but the
+OneCycle retry still under-emitted badly. Best validation CER
+`0.9755802568680527` occurred at epoch 1; emission deteriorated as LR rose
+and became fully blank by epoch 6.
+
+The active follow-up is `cnn_ctc_v14`, parented directly to v13. It preserves
+the exact inference architecture and changes only the optimizer trajectory to
+the historical stable cosine policy `3e-4 -> 3e-5`.
+
+Initialize with:
+
+```bash
+./scripts/init-cnn-ctc-v14-cosine-control.sh
+```
+
+If v14 still collapses or remains far behind v10/v11, stop LR-only tuning and
+change architectural conditioning instead.

@@ -1074,6 +1074,63 @@ grep -q '"max_latency_p95_ms": None' examples/speech-asr/agent/init_cnn_ctc_v13_
 grep -q 'OneCycleLR' examples/speech-asr/training/train_cnn_ctc_v13.py || fail 'cnn_ctc_v13 OneCycle schedule missing'
 grep -q 'scheduler.step()' examples/speech-asr/training/train_cnn_ctc_v13.py || fail 'cnn_ctc_v13 per-step LR schedule missing'
 
+
+# cnn_ctc_v14 large-capacity cosine-control retry.
+for f in \
+    examples/speech-asr/models/cnn_ctc_v14/model_spec.json \
+    examples/speech-asr/models/cnn_ctc_v14/vocab.json \
+    examples/speech-asr/models/cnn_ctc_v14/README.md \
+    examples/speech-asr/training/cnn_ctc_v14.py \
+    examples/speech-asr/training/train_cnn_ctc_v14.py \
+    examples/speech-asr/training/export_cnn_ctc_v14.py \
+    examples/speech-asr/evaluation/compare_cnn_ctc_v14_onnx.py \
+    examples/speech-asr/evaluation/evaluate_cnn_ctc_v14.py \
+    examples/speech-asr/agent/init_cnn_ctc_v14_cosine_control.py \
+    examples/speech-asr/docs/adr/model-quality-v4-cnn-ctc-v14-cosine-control.md \
+    tests/python/test_speech_asr_cnn_ctc_v14.py; do
+    test -f "$f" || fail "cnn_ctc_v14 file missing: $f"
+done
+for f in \
+    scripts/init-cnn-ctc-v14-cosine-control.sh \
+    scripts/train-cnn-ctc-v14.sh \
+    scripts/probe-cnn-ctc-v14.sh \
+    scripts/prepare-cnn-ctc-v14.sh \
+    scripts/evaluate-cnn-ctc-v14.sh; do
+    test -x "$f" || fail "cnn_ctc_v14 shell entry point is not executable: $f"
+done
+python3 - <<'PY_V14'
+import hashlib
+import json
+from pathlib import Path
+spec = json.loads(Path("examples/speech-asr/models/cnn_ctc_v14/model_spec.json").read_text())
+canonical = hashlib.sha256(
+    json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+).hexdigest()
+assert canonical == "2974ff5f4777803e1e1049296147aab75993dbd8c6d0f7c0c20ec5aa0c884067"
+assert spec["input_contract"]["shape"] == [1,64,512]
+assert spec["output_contract"]["shape"] == [1,128,39]
+assert [x["channels"] for x in spec["network"]["stem"]] == [128,448]
+assert [x["stride"] for x in spec["network"]["stem"]] == [2,2]
+assert len(spec["network"]["residual_blocks"]) == 16
+assert [x["kernel"] for x in spec["network"]["residual_blocks"]] == [5] * 16
+assert [x["dilation"] for x in spec["network"]["residual_blocks"]] == [1,2,3,4,4,3,2,1] * 2
+assert spec["network"]["estimated_parameters"] == 19627687
+assert spec["network"]["estimated_macs_fixed_input"] == 2515673088
+assert spec["network"]["receptive_field_feature_frames"] == 653
+assert spec["training"]["learning_rate"] == 0.0003
+assert spec["training"]["lr_schedule"] == "cosine"
+assert spec["training"]["min_learning_rate"] == 0.00003
+assert "onecycle_pct_start" not in spec["training"]
+PY_V14
+grep -q 'V14_ARCHITECTURE' examples/speech-asr/python/speech_asr/orchestration.py || fail 'cnn_ctc_v14 architecture registration missing'
+grep -q '"cnn_ctc_v14": "train-cnn-ctc-v14.sh"' examples/speech-asr/python/speech_asr/orchestration.py || fail 'cnn_ctc_v14 training registration missing'
+grep -q '"cnn_ctc_v14": "evaluate-cnn-ctc-v14.sh"' examples/speech-asr/agent/edge_worker.py || fail 'cnn_ctc_v14 edge evaluator registration missing'
+grep -q 'DEFAULT_PARENT = "exp-968150d44c4479ac"' examples/speech-asr/agent/init_cnn_ctc_v14_cosine_control.py || fail 'cnn_ctc_v14 parent changed'
+grep -q 'MODEL_SPEC_SHA256 = "2974ff5f4777803e1e1049296147aab75993dbd8c6d0f7c0c20ec5aa0c884067"' examples/speech-asr/agent/init_cnn_ctc_v14_cosine_control.py || fail 'cnn_ctc_v14 model identity changed'
+grep -q '"max_cer": None' examples/speech-asr/agent/init_cnn_ctc_v14_cosine_control.py || fail 'cnn_ctc_v14 CER must be measured, not gated'
+grep -q '"max_latency_p95_ms": None' examples/speech-asr/agent/init_cnn_ctc_v14_cosine_control.py || fail 'cnn_ctc_v14 latency must be measured, not gated'
+grep -q 'CosineAnnealingLR' examples/speech-asr/training/train_cnn_ctc_v14.py || fail 'cnn_ctc_v14 cosine schedule missing'
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
 for name in [
@@ -1109,6 +1166,7 @@ for name in [
     "examples/speech-asr/agent/init_cnn_ctc_v11_architecture_screen.py",
     "examples/speech-asr/agent/init_cnn_ctc_v12_capacity_probe.py",
     "examples/speech-asr/agent/init_cnn_ctc_v13_stabilized_lr.py",
+    "examples/speech-asr/agent/init_cnn_ctc_v14_cosine_control.py",
     "examples/speech-asr/agent/run_frozen_heldout_evaluation.py",
     "examples/speech-asr/agent/review_heldout_evaluation.py",
     "examples/speech-asr/agent/review_experiment.py",
@@ -1150,14 +1208,17 @@ for name in [
     "examples/speech-asr/training/cnn_ctc_v11.py",
     "examples/speech-asr/training/cnn_ctc_v12.py",
     "examples/speech-asr/training/cnn_ctc_v13.py",
+    "examples/speech-asr/training/cnn_ctc_v14.py",
     "examples/speech-asr/training/train_cnn_ctc_v10.py",
     "examples/speech-asr/training/train_cnn_ctc_v11.py",
     "examples/speech-asr/training/train_cnn_ctc_v12.py",
     "examples/speech-asr/training/train_cnn_ctc_v13.py",
+    "examples/speech-asr/training/train_cnn_ctc_v14.py",
     "examples/speech-asr/training/export_cnn_ctc_v10.py",
     "examples/speech-asr/training/export_cnn_ctc_v11.py",
     "examples/speech-asr/training/export_cnn_ctc_v12.py",
     "examples/speech-asr/training/export_cnn_ctc_v13.py",
+    "examples/speech-asr/training/export_cnn_ctc_v14.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v1_onnx.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v1_tensor.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v1.py",
@@ -1182,10 +1243,12 @@ for name in [
     "examples/speech-asr/evaluation/compare_cnn_ctc_v11_onnx.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v12_onnx.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v13_onnx.py",
+    "examples/speech-asr/evaluation/compare_cnn_ctc_v14_onnx.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v10.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v11.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v12.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v13.py",
+    "examples/speech-asr/evaluation/evaluate_cnn_ctc_v14.py",
     "examples/speech-asr/evaluation/evaluate_frozen_cnn_ctc_v3_reference.py",
 ]:
     src = Path(name).read_text()

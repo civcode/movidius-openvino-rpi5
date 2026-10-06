@@ -42,6 +42,7 @@ def load_spec(path: Path) -> dict:
         "cnn_ctc_v11",
         "cnn_ctc_v12",
         "cnn_ctc_v13",
+        "cnn_ctc_v14",
     }:
         raise ValueError("unsupported cnn_ctc model spec id")
 
@@ -110,6 +111,7 @@ def load_spec(path: Path) -> dict:
             "cnn_ctc_v11": "residual-temporal-v8",
             "cnn_ctc_v12": "residual-temporal-v9",
             "cnn_ctc_v13": "residual-temporal-v9",
+            "cnn_ctc_v14": "residual-temporal-v9",
         }[model_id]
         if network.get("kind") != expected_kind:
             raise ValueError(f"{model_id} network.kind must be {expected_kind}")
@@ -119,7 +121,7 @@ def load_spec(path: Path) -> dict:
             raise ValueError(f"{model_id} network.stem must contain two layers")
         expected_block_count = (
             16
-            if model_id in {"cnn_ctc_v12", "cnn_ctc_v13"}
+            if model_id in {"cnn_ctc_v12", "cnn_ctc_v13", "cnn_ctc_v14"}
             else (8 if model_id in {"cnn_ctc_v9", "cnn_ctc_v10", "cnn_ctc_v11"} else 5)
         )
         if not isinstance(blocks, list) or len(blocks) != expected_block_count:
@@ -131,7 +133,7 @@ def load_spec(path: Path) -> dict:
             if model_id == "cnn_ctc_v5"
             else (
                 [128, 448]
-                if model_id in {"cnn_ctc_v12", "cnn_ctc_v13"}
+                if model_id in {"cnn_ctc_v12", "cnn_ctc_v13", "cnn_ctc_v14"}
                 else (
                     [64, 128]
                     if model_id == "cnn_ctc_v11"
@@ -157,7 +159,7 @@ def load_spec(path: Path) -> dict:
             if model_id == "cnn_ctc_v5"
             else (
                 [5] * 16
-                if model_id in {"cnn_ctc_v12", "cnn_ctc_v13"}
+                if model_id in {"cnn_ctc_v12", "cnn_ctc_v13", "cnn_ctc_v14"}
                 else (
                     [7] * 8
                     if model_id in {"cnn_ctc_v9", "cnn_ctc_v10", "cnn_ctc_v11"}
@@ -172,7 +174,7 @@ def load_spec(path: Path) -> dict:
             if model_id == "cnn_ctc_v5"
             else (
                 448
-                if model_id in {"cnn_ctc_v12", "cnn_ctc_v13"}
+                if model_id in {"cnn_ctc_v12", "cnn_ctc_v13", "cnn_ctc_v14"}
                 else (
                     128
                     if model_id == "cnn_ctc_v11"
@@ -203,6 +205,7 @@ def load_spec(path: Path) -> dict:
         "cnn_ctc_v11",
         "cnn_ctc_v12",
         "cnn_ctc_v13",
+        "cnn_ctc_v14",
             }
             and network.get("residual_projection_init") != "kaiming_scaled_0.01"
         ):
@@ -249,7 +252,7 @@ def load_spec(path: Path) -> dict:
             expected_paddings = [3, 6, 9, 12, 12, 9, 6, 3]
             if [int(block.get("padding", -1)) for block in blocks] != expected_paddings:
                 raise ValueError("cnn_ctc_v11 residual padding schedule is frozen")
-        if model_id in {"cnn_ctc_v12", "cnn_ctc_v13"}:
+        if model_id in {"cnn_ctc_v12", "cnn_ctc_v13", "cnn_ctc_v14"}:
             expected_strides = [2, 2]
             if [int(layer.get("stride", 0)) for layer in stem] != expected_strides:
                 raise ValueError(f"{model_id} stem strides must remain [2,2]")
@@ -434,6 +437,7 @@ def acoustic_output_length(feature_frames: int, spec: dict) -> int:
         "cnn_ctc_v11",
         "cnn_ctc_v12",
         "cnn_ctc_v13",
+        "cnn_ctc_v14",
     }:
         layers = network["stem"]
         for layer in layers:
@@ -475,8 +479,9 @@ def model_resource_estimate(spec: dict, vocab_size: int = 39) -> dict:
         "cnn_ctc_v11",
         "cnn_ctc_v12",
         "cnn_ctc_v13",
+        "cnn_ctc_v14",
     }:
-        raise ValueError("resource estimator targets cnn_ctc_v2/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13")
+        raise ValueError("resource estimator targets cnn_ctc_v2/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13/v14")
 
     network = spec["network"]
     input_frames = int(spec["input_contract"]["shape"][2])
