@@ -45,6 +45,7 @@ def load_spec(path: Path) -> dict:
         "cnn_ctc_v14",
         "cnn_ctc_v15",
         "cnn_ctc_v16",
+        "cnn_ctc_v17",
     }:
         raise ValueError("unsupported cnn_ctc model spec id")
 
@@ -86,7 +87,7 @@ def load_spec(path: Path) -> dict:
     output_contract = value.get("output_contract")
     expected_output_shape = (
         [1, 256, 39]
-        if model_id in {"cnn_ctc_v8", "cnn_ctc_v16"}
+        if model_id in {"cnn_ctc_v8", "cnn_ctc_v16", "cnn_ctc_v17"}
         else [1, 128, 39]
     )
     if not isinstance(output_contract, dict) or output_contract.get("shape") != expected_output_shape:
@@ -103,17 +104,18 @@ def load_spec(path: Path) -> dict:
             values = network.get(key)
             if not isinstance(values, list) or len(values) != 3:
                 raise ValueError(f"cnn_ctc_v1 network.{key} must contain three values")
-    elif model_id == "cnn_ctc_v16":
+    elif model_id in {"cnn_ctc_v16", "cnn_ctc_v17"}:
         if network.get("kind") != "quartznet-15x5-v1":
-            raise ValueError("cnn_ctc_v16 network.kind must be quartznet-15x5-v1")
+            raise ValueError(f"{model_id} network.kind must be quartznet-15x5-v1")
         if network.get("normalization") != "batchnorm":
-            raise ValueError("cnn_ctc_v16 normalization must be batchnorm")
+            raise ValueError(f"{model_id} normalization must be batchnorm")
         if network.get("activation") != "relu":
-            raise ValueError("cnn_ctc_v16 activation must be relu")
-        if network.get("dropout") != 0.2:
-            raise ValueError("cnn_ctc_v16 dropout must be 0.2")
+            raise ValueError(f"{model_id} activation must be relu")
+        expected_dropout = 0.2 if model_id == "cnn_ctc_v16" else 0.0
+        if network.get("dropout") != expected_dropout:
+            raise ValueError(f"{model_id} dropout must be {expected_dropout}")
         if network.get("separable_convolution") != "depthwise-pointwise":
-            raise ValueError("cnn_ctc_v16 must use depthwise-pointwise convolutions")
+            raise ValueError(f"{model_id} must use depthwise-pointwise convolutions")
         if network.get("prologue") != {
             "name": "C1",
             "channels": 256,
@@ -123,7 +125,7 @@ def load_spec(path: Path) -> dict:
             "padding": 16,
             "separable": True,
         }:
-            raise ValueError("cnn_ctc_v16 QuartzNet C1 contract changed")
+            raise ValueError(f"{model_id} QuartzNet C1 contract changed")
         groups = network.get("block_groups")
         expected_groups = [
             ("B1", 256, 33, 16),
@@ -133,7 +135,7 @@ def load_spec(path: Path) -> dict:
             ("B5", 512, 75, 37),
         ]
         if not isinstance(groups, list) or len(groups) != len(expected_groups):
-            raise ValueError("cnn_ctc_v16 must contain five QuartzNet block groups")
+            raise ValueError(f"{model_id} must contain five QuartzNet block groups")
         for group, (name, channels, kernel, padding) in zip(groups, expected_groups):
             expected_group = {
                 "name": name,
@@ -146,9 +148,9 @@ def load_spec(path: Path) -> dict:
                 "padding": padding,
             }
             if group != expected_group:
-                raise ValueError(f"cnn_ctc_v16 QuartzNet group {name} changed")
+                raise ValueError(f"{model_id} QuartzNet group {name} changed")
         if network.get("residual_projection") != "pointwise-conv-batchnorm":
-            raise ValueError("cnn_ctc_v16 residual projection contract changed")
+            raise ValueError(f"{model_id} residual projection contract changed")
         if network.get("epilogue") != [
             {
                 "name": "C2",
@@ -169,9 +171,9 @@ def load_spec(path: Path) -> dict:
                 "separable": False,
             },
         ]:
-            raise ValueError("cnn_ctc_v16 QuartzNet epilogue changed")
+            raise ValueError(f"{model_id} QuartzNet epilogue changed")
         if network.get("projection_kernel") != 1:
-            raise ValueError("cnn_ctc_v16 CTC projection must remain pointwise")
+            raise ValueError(f"{model_id} CTC projection must remain pointwise")
     else:
         expected_kind = {
             "cnn_ctc_v2": "residual-temporal-v1",
@@ -532,7 +534,7 @@ def acoustic_output_length(feature_frames: int, spec: dict) -> int:
             )
         return length
 
-    if spec.get("id") == "cnn_ctc_v16":
+    if spec.get("id") in {"cnn_ctc_v16", "cnn_ctc_v17"}:
         layer = network["prologue"]
         return conv1d_output_length(
             length,
@@ -574,8 +576,9 @@ def model_resource_estimate(spec: dict, vocab_size: int = 39) -> dict:
         "cnn_ctc_v14",
         "cnn_ctc_v15",
         "cnn_ctc_v16",
+        "cnn_ctc_v17",
     }:
-        raise ValueError("resource estimator targets cnn_ctc_v2 through cnn_ctc_v16")
+        raise ValueError("resource estimator targets cnn_ctc_v2 through cnn_ctc_v17")
 
     network = spec["network"]
     input_frames = int(spec["input_contract"]["shape"][2])
@@ -586,7 +589,7 @@ def model_resource_estimate(spec: dict, vocab_size: int = 39) -> dict:
     parameters = 0
     macs = 0
 
-    if spec.get("id") == "cnn_ctc_v16":
+    if spec.get("id") in {"cnn_ctc_v16", "cnn_ctc_v17"}:
         def add_tcs(in_ch: int, out_ch: int, layer: dict) -> None:
             nonlocal length, receptive_field, jump, parameters, macs
             kernel = int(layer["kernel"])
