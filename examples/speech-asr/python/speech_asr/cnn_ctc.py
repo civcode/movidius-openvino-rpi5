@@ -44,6 +44,7 @@ def load_spec(path: Path) -> dict:
         "cnn_ctc_v13",
         "cnn_ctc_v14",
         "cnn_ctc_v15",
+        "cnn_ctc_v16",
     }:
         raise ValueError("unsupported cnn_ctc model spec id")
 
@@ -102,6 +103,75 @@ def load_spec(path: Path) -> dict:
             values = network.get(key)
             if not isinstance(values, list) or len(values) != 3:
                 raise ValueError(f"cnn_ctc_v1 network.{key} must contain three values")
+    elif model_id == "cnn_ctc_v16":
+        if network.get("kind") != "quartznet-15x5-v1":
+            raise ValueError("cnn_ctc_v16 network.kind must be quartznet-15x5-v1")
+        if network.get("normalization") != "batchnorm":
+            raise ValueError("cnn_ctc_v16 normalization must be batchnorm")
+        if network.get("activation") != "relu":
+            raise ValueError("cnn_ctc_v16 activation must be relu")
+        if network.get("dropout") != 0.2:
+            raise ValueError("cnn_ctc_v16 dropout must be 0.2")
+        if network.get("separable_convolution") != "depthwise-pointwise":
+            raise ValueError("cnn_ctc_v16 must use depthwise-pointwise convolutions")
+        if network.get("prologue") != {
+            "name": "C1",
+            "channels": 256,
+            "kernel": 33,
+            "stride": 2,
+            "dilation": 1,
+            "padding": 16,
+            "separable": True,
+        }:
+            raise ValueError("cnn_ctc_v16 QuartzNet C1 contract changed")
+        groups = network.get("block_groups")
+        expected_groups = [
+            ("B1", 256, 33, 16),
+            ("B2", 256, 39, 19),
+            ("B3", 512, 51, 25),
+            ("B4", 512, 63, 31),
+            ("B5", 512, 75, 37),
+        ]
+        if not isinstance(groups, list) or len(groups) != len(expected_groups):
+            raise ValueError("cnn_ctc_v16 must contain five QuartzNet block groups")
+        for group, (name, channels, kernel, padding) in zip(groups, expected_groups):
+            expected_group = {
+                "name": name,
+                "channels": channels,
+                "kernel": kernel,
+                "block_repeats": 3,
+                "module_repeats": 5,
+                "stride": 1,
+                "dilation": 1,
+                "padding": padding,
+            }
+            if group != expected_group:
+                raise ValueError(f"cnn_ctc_v16 QuartzNet group {name} changed")
+        if network.get("residual_projection") != "pointwise-conv-batchnorm":
+            raise ValueError("cnn_ctc_v16 residual projection contract changed")
+        if network.get("epilogue") != [
+            {
+                "name": "C2",
+                "channels": 512,
+                "kernel": 87,
+                "stride": 1,
+                "dilation": 2,
+                "padding": 86,
+                "separable": True,
+            },
+            {
+                "name": "C3",
+                "channels": 1024,
+                "kernel": 1,
+                "stride": 1,
+                "dilation": 1,
+                "padding": 0,
+                "separable": False,
+            },
+        ]:
+            raise ValueError("cnn_ctc_v16 QuartzNet epilogue changed")
+        if network.get("projection_kernel") != 1:
+            raise ValueError("cnn_ctc_v16 CTC projection must remain pointwise")
     else:
         expected_kind = {
             "cnn_ctc_v2": "residual-temporal-v1",
@@ -462,6 +532,16 @@ def acoustic_output_length(feature_frames: int, spec: dict) -> int:
             )
         return length
 
+    if spec.get("id") == "cnn_ctc_v16":
+        layer = network["prologue"]
+        return conv1d_output_length(
+            length,
+            kernel=int(layer["kernel"]),
+            stride=int(layer["stride"]),
+            padding=int(layer["padding"]),
+            dilation=int(layer.get("dilation", 1)),
+        )
+
     for kernel, stride, padding in zip(
         network["kernels"],
         network["strides"],
@@ -493,8 +573,9 @@ def model_resource_estimate(spec: dict, vocab_size: int = 39) -> dict:
         "cnn_ctc_v13",
         "cnn_ctc_v14",
         "cnn_ctc_v15",
+        "cnn_ctc_v16",
     }:
-        raise ValueError("resource estimator targets cnn_ctc_v2/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13/v14/v15")
+        raise ValueError("resource estimator targets cnn_ctc_v2 through cnn_ctc_v16")
 
     network = spec["network"]
     input_frames = int(spec["input_contract"]["shape"][2])
@@ -504,6 +585,65 @@ def model_resource_estimate(spec: dict, vocab_size: int = 39) -> dict:
     jump = 1
     parameters = 0
     macs = 0
+
+    if spec.get("id") == "cnn_ctc_v16":
+        def add_tcs(in_ch: int, out_ch: int, layer: dict) -> None:
+            nonlocal length, receptive_field, jump, parameters, macs
+            kernel = int(layer["kernel"])
+            stride = int(layer.get("stride", 1))
+            dilation = int(layer.get("dilation", 1))
+            padding = int(layer["padding"])
+            out_length = conv1d_output_length(
+                length,
+                kernel=kernel,
+                stride=stride,
+                padding=padding,
+                dilation=dilation,
+            )
+            parameters += in_ch * kernel
+            parameters += in_ch * out_ch
+            parameters += 2 * out_ch
+            macs += in_ch * kernel * out_length
+            macs += in_ch * out_ch * out_length
+            receptive_field += (kernel - 1) * dilation * jump
+            jump *= stride
+            length = out_length
+
+        prologue = network["prologue"]
+        out_channels = int(prologue["channels"])
+        add_tcs(in_channels, out_channels, prologue)
+        in_channels = out_channels
+
+        for group in network["block_groups"]:
+            out_channels = int(group["channels"])
+            for _ in range(int(group["block_repeats"])):
+                parameters += in_channels * out_channels + 2 * out_channels
+                macs += in_channels * out_channels * length
+                for repeat_index in range(int(group["module_repeats"])):
+                    module_in = in_channels if repeat_index == 0 else out_channels
+                    add_tcs(module_in, out_channels, group)
+                in_channels = out_channels
+
+        c2, c3 = network["epilogue"]
+        c2_channels = int(c2["channels"])
+        add_tcs(in_channels, c2_channels, c2)
+        in_channels = c2_channels
+
+        c3_channels = int(c3["channels"])
+        parameters += in_channels * c3_channels + 2 * c3_channels
+        macs += in_channels * c3_channels * length
+        in_channels = c3_channels
+
+        projection_kernel = int(network["projection_kernel"])
+        parameters += in_channels * vocab_size * projection_kernel + vocab_size
+        macs += in_channels * vocab_size * projection_kernel * length
+        return {
+            "parameters": parameters,
+            "macs_fixed_input": macs,
+            "receptive_field_feature_frames": receptive_field,
+            "output_frames": length,
+            "fp16_weight_bytes": parameters * 2,
+        }
 
     for layer in network["stem"]:
         out_channels = int(layer["channels"])
