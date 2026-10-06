@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import pathlib
+import shutil
 import subprocess
 import sys
 from typing import Any
@@ -31,6 +32,8 @@ from speech_asr.orchestration import (  # noqa: E402
 SOURCE_EXPERIMENT_ID = "exp-87538823d2bf1562"
 SOURCE_ATTEMPT_ID = "attempt-0001"
 BENCHMARK_ID = "ami-full-corpus-asr-sc-heldout-v1"
+KNOWN_BAD_V1_EVALUATION_COMMIT = "f5c059d2028d215777b28c1fc971b2f482185a05"
+INVALIDATION_DEFECT_ID = "persistent-tensor-stream-v1-stdout-banner"
 DEFAULT_EXPERIMENT = (
     ROOT / "work" / "speech-asr" / "experiments" / SOURCE_EXPERIMENT_ID
 )
@@ -311,6 +314,175 @@ def validate_qualification(
     return qualification
 
 
+def validate_known_bad_v1_result(
+    path: pathlib.Path,
+    *,
+    manifest_sha: str,
+) -> dict[str, Any]:
+    result = load_json(path)
+    if result.get("schema") != "speech-asr/heldout-evaluation-result":
+        raise ValueError("existing held-out result schema mismatch")
+    if result.get("status") != "completed" or result.get("sealed") is not True:
+        raise ValueError("existing held-out result is not a completed seal")
+    if result.get("role") != "test_only":
+        raise ValueError("existing held-out result role mismatch")
+    source = result.get("source", {})
+    if source.get("experiment_id") != SOURCE_EXPERIMENT_ID:
+        raise ValueError("existing held-out result source experiment mismatch")
+    if source.get("attempt_id") != SOURCE_ATTEMPT_ID:
+        raise ValueError("existing held-out result source attempt mismatch")
+    evaluation = result.get("evaluation", {})
+    if evaluation.get("benchmark_id") != BENCHMARK_ID:
+        raise ValueError("existing held-out result benchmark mismatch")
+    if evaluation.get("manifest_sha256") != manifest_sha:
+        raise ValueError("existing held-out result manifest mismatch")
+    if evaluation.get("repo_commit") != KNOWN_BAD_V1_EVALUATION_COMMIT:
+        raise ValueError(
+            "existing seal is not the known defective v1 evaluation commit"
+        )
+    reference_metrics = result.get("reference", {}).get("metrics", {})
+    hardware_metrics = result.get("hardware", {}).get("metrics", {})
+    hardware_execution = hardware_metrics.get("hardware_execution", {})
+    if hardware_execution.get("mode") != "persistent-tensor-stream-v1":
+        raise ValueError(
+            "existing seal does not use the defective persistent tensor-stream-v1 mode"
+        )
+    hardware_decoder = hardware_metrics.get("decoder", {})
+    reference_decoder = reference_metrics.get("decoder", {})
+    if hardware_decoder.get("blank_frame_fraction") != 0.0:
+        raise ValueError(
+            "existing seal does not have the known zero-blank corruption signature"
+        )
+    if not isinstance(reference_decoder.get("blank_frame_fraction"), (int, float)):
+        raise ValueError("existing seal lacks reference blank-frame diagnostics")
+    if reference_decoder["blank_frame_fraction"] <= 0.0:
+        raise ValueError(
+            "existing seal lacks the reference/nonblank contrast needed to identify "
+            "the known transport defect"
+        )
+    return result
+
+
+def prepare_corrective_rerun(
+    *,
+    output_dir: pathlib.Path,
+    final_path: pathlib.Path,
+    manifest_sha: str,
+    correcting_commit: str,
+) -> dict[str, Any]:
+    invalidation_path = output_dir / "invalidated-v1-transport.json"
+    archive_dir = output_dir / "invalidated" / INVALIDATION_DEFECT_ID
+    archived_result = archive_dir / "result.json"
+    archived_hardware = archive_dir / "hardware.json"
+
+    if invalidation_path.exists():
+        record = load_json(invalidation_path)
+        if record.get("schema") != "speech-asr/heldout-evaluation-invalidation":
+            raise ValueError("held-out invalidation record schema mismatch")
+        if record.get("defect_id") != INVALIDATION_DEFECT_ID:
+            raise ValueError("held-out invalidation defect id mismatch")
+        if record.get("manifest_sha256") != manifest_sha:
+            raise ValueError("held-out invalidation manifest mismatch")
+        result_ref = record.get("invalidated_result", {})
+        if not archived_result.is_file():
+            raise ValueError("archived invalidated held-out result is missing")
+        if sha256_path(archived_result) != result_ref.get("sha256"):
+            raise ValueError("archived invalidated held-out result hash mismatch")
+        hardware_ref = record.get("invalidated_hardware", {})
+        if not archived_hardware.is_file():
+            raise ValueError("archived invalidated hardware result is missing")
+        if sha256_path(archived_hardware) != hardware_ref.get("sha256"):
+            raise ValueError("archived invalidated hardware result hash mismatch")
+        if final_path.exists():
+            raise ValueError(
+                "a replacement held-out result is already sealed; corrective rerun "
+                "cannot be repeated"
+            )
+        return record
+
+    if not final_path.is_file():
+        raise ValueError(
+            "corrective rerun requested but no defective sealed result exists"
+        )
+
+    bad_result = validate_known_bad_v1_result(
+        final_path,
+        manifest_sha=manifest_sha,
+    )
+    bad_result_sha = sha256_path(final_path)
+    hardware_path = output_dir / "edge" / "hardware.json"
+    expected_hardware_sha = bad_result.get("hardware", {}).get("sha256")
+    if not hardware_path.is_file():
+        raise ValueError("defective held-out hardware result is missing")
+    actual_hardware_sha = sha256_path(hardware_path)
+    if actual_hardware_sha != expected_hardware_sha:
+        raise ValueError(
+            "defective held-out hardware result hash mismatch: "
+            f"{actual_hardware_sha} != {expected_hardware_sha}"
+        )
+
+    archive_dir.mkdir(parents=True, exist_ok=False)
+    shutil.copy2(final_path, archived_result)
+    shutil.copy2(hardware_path, archived_hardware)
+    if sha256_path(archived_result) != bad_result_sha:
+        raise ValueError("archived invalidated result copy hash mismatch")
+    if sha256_path(archived_hardware) != actual_hardware_sha:
+        raise ValueError("archived invalidated hardware copy hash mismatch")
+
+    record = {
+        "schema": "speech-asr/heldout-evaluation-invalidation",
+        "version": 1,
+        "status": "invalidated",
+        "defect_id": INVALIDATION_DEFECT_ID,
+        "reason": (
+            "container-entry stdout banner polluted the binary logits stream in "
+            "persistent-tensor-stream-v1"
+        ),
+        "manifest_sha256": manifest_sha,
+        "source_experiment_id": SOURCE_EXPERIMENT_ID,
+        "source_attempt_id": SOURCE_ATTEMPT_ID,
+        "defective_evaluation_commit": KNOWN_BAD_V1_EVALUATION_COMMIT,
+        "correcting_commit": correcting_commit,
+        "invalidated_result": {
+            "original_path": str(final_path),
+            "archived_path": str(archived_result),
+            "sha256": bad_result_sha,
+        },
+        "invalidated_hardware": {
+            "original_path": str(hardware_path),
+            "archived_path": str(archived_hardware),
+            "sha256": actual_hardware_sha,
+        },
+        "defect_signature": {
+            "execution_mode": "persistent-tensor-stream-v1",
+            "hardware_blank_frame_fraction": bad_result["hardware"]["metrics"][
+                "decoder"
+            ]["blank_frame_fraction"],
+            "reference_blank_frame_fraction": bad_result["reference"]["metrics"][
+                "decoder"
+            ]["blank_frame_fraction"],
+        },
+        "corrective_rerun_policy": {
+            "same_frozen_source_required": True,
+            "same_manifest_required": True,
+            "reference_reuse_allowed": True,
+            "model_selection_allowed": False,
+            "maximum_replacement_seals": 1,
+        },
+    }
+    write_json(invalidation_path, record)
+
+    # Only remove the canonical seal after both invalidated artifacts and the
+    # invalidation record are durable and hash-verified.
+    final_path.unlink()
+    print(
+        "held-out seal invalidated for known v1 transport defect: "
+        f"{invalidation_path}",
+        flush=True,
+    )
+    return record
+
+
 def make_deployment(
     *,
     source: dict[str, Any],
@@ -383,6 +555,14 @@ def main() -> int:
         action="store_true",
         help="reuse an existing validated reference.json after a retryable edge failure",
     )
+    parser.add_argument(
+        "--correct-invalid-v1-transport-result",
+        action="store_true",
+        help=(
+            "archive and supersede only the known sealed tensor-stream-v1 stdout "
+            "transport defect; never permits model reselection"
+        ),
+    )
     args = parser.parse_args()
 
     try:
@@ -408,10 +588,21 @@ def main() -> int:
             / manifest_sha[:16]
         )
         final_path = output_dir / "result.json"
-        if final_path.exists():
+        invalidation_path = output_dir / "invalidated-v1-transport.json"
+        if final_path.exists() and not args.correct_invalid_v1_transport_result:
             raise ValueError(
                 "held-out evaluation is already sealed at "
                 f"{final_path}; do not rerun it for model selection"
+            )
+        if (
+            invalidation_path.exists()
+            and not final_path.exists()
+            and not args.correct_invalid_v1_transport_result
+        ):
+            raise ValueError(
+                "held-out v1 seal was invalidated for a transport defect; "
+                "the corrective rerun requires "
+                "--correct-invalid-v1-transport-result"
             )
         output_dir.mkdir(parents=True, exist_ok=True)
         logs_dir = output_dir / "logs"
@@ -437,6 +628,14 @@ def main() -> int:
         )
         source = source_state(args.experiment)
         repo_commit = git_head()
+        correction = None
+        if args.correct_invalid_v1_transport_result:
+            correction = prepare_corrective_rerun(
+                output_dir=output_dir,
+                final_path=final_path,
+                manifest_sha=manifest_sha,
+                correcting_commit=repo_commit,
+            )
 
         reference_path = output_dir / "reference.json"
         if args.reuse_reference:
@@ -620,6 +819,25 @@ def main() -> int:
             source["artifacts"]["openvino_bin"]["sha256"]
         ):
             raise ValueError("held-out hardware BIN provenance mismatch")
+        hardware_execution = hardware.get("metrics", {}).get(
+            "hardware_execution", {}
+        )
+        if hardware_execution.get("mode") != "persistent-tensor-stream-v2":
+            raise ValueError(
+                "held-out hardware result did not use persistent-tensor-stream-v2"
+            )
+        parity = hardware_execution.get("persistent_parity_gate")
+        if not isinstance(parity, dict):
+            raise ValueError("held-out hardware result lacks persistent parity gate")
+        if parity.get("valid_argmax_agreement") != 1.0:
+            raise ValueError(
+                "held-out hardware persistent parity gate is not exact"
+            )
+        max_abs_error = parity.get("max_abs_error")
+        if not isinstance(max_abs_error, (int, float)) or max_abs_error > 0.01:
+            raise ValueError(
+                "held-out hardware persistent parity error exceeds threshold"
+            )
 
         pytorch_metrics = reference["metrics"]["pytorch"]
         hardware_metrics = hardware["metrics"]
@@ -680,6 +898,21 @@ def main() -> int:
                 ),
             },
             "qualification": qualification,
+            "supersedes": (
+                {
+                    "invalidation_path": str(invalidation_path),
+                    "defect_id": correction["defect_id"],
+                    "invalidated_result_sha256": correction[
+                        "invalidated_result"
+                    ]["sha256"],
+                    "invalidated_hardware_sha256": correction[
+                        "invalidated_hardware"
+                    ]["sha256"],
+                    "model_selection_allowed": False,
+                }
+                if correction is not None
+                else None
+            ),
         }
         write_json(final_path, result)
     except Exception as exc:
