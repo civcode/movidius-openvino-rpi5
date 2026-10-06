@@ -101,6 +101,12 @@ class ModelQualityV4ImplementationTests(unittest.TestCase):
         self.assertIn("training duration did not expand beyond v3", source)
         self.assertIn('"heldout_metrics_allowed_for_model_selection": False', source)
         self.assertIn("source_lock_sha256", source)
+        self.assertIn("EXPECTED_VALIDATION_INVALID_INTERVAL", source)
+        self.assertIn('"meeting": "ES2011c"', source)
+        self.assertIn('"source_start_sample": 1249952', source)
+        self.assertIn('"source_end_sample": 1248016', source)
+        self.assertIn("if train_exclusions:", source)
+        self.assertIn("len(validation_exclusions) != 1", source)
 
     def test_baseline_changes_data_only(self):
         source = (
@@ -115,6 +121,9 @@ class ModelQualityV4ImplementationTests(unittest.TestCase):
         self.assertNotIn('"augmentation": {', source)
         self.assertNotIn('"ctc_objective": {', source)
         self.assertIn("sealed held-out metrics must remain forbidden", source)
+        self.assertIn("training source exclusions are not allowed", source)
+        self.assertIn("exactly one reviewed validation exclusion", source)
+        self.assertIn('"meeting": "ES2011c"', source)
 
     def test_shell_entrypoints_exist(self):
         for relative in (
