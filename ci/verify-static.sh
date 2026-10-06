@@ -493,6 +493,7 @@ grep -q 'frame_argmax_agreement' examples/speech-asr/evaluation/evaluate_frozen_
 grep -q 'persistent-tensor-stream-v2' examples/speech-asr/evaluation/evaluate_cnn_ctc_v3.py || fail 'held-out hardware evaluator lacks persistent execution contract'
 grep -q 'class PersistentMyriadServer' examples/speech-asr/evaluation/evaluate_cnn_ctc_v3.py || fail 'held-out hardware evaluator lacks persistent server client'
 grep -q 'CACHE_VERSION = 3' examples/speech-asr/evaluation/evaluate_cnn_ctc_v3.py || fail 'held-out persistent cache version changed'
+grep -q 'if not parity_checked:' examples/speech-asr/evaluation/evaluate_cnn_ctc_v3.py || fail 'held-out evaluator may reuse caches before reproving parity'
 grep -q 'custom-server)' run.sh || fail 'runtime launcher lacks persistent custom server mode'
 grep -q 'OV_QUIET=1' run.sh || fail 'persistent tensor server does not suppress container stdout banner'
 grep -q 'def run_single_shot_parity' examples/speech-asr/evaluation/evaluate_cnn_ctc_v3.py || fail 'held-out hardware evaluator lacks single-shot parity gate'
