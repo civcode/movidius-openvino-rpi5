@@ -367,20 +367,53 @@ Run the reviewed child with:
 
 ## Held-out promotion boundary
 
-The current quality reference is the scaled-data `cnn_ctc_v3` checkpoint
-`exp-87538823d2bf1562/attempt-0001`. Before another model-development
-decision, it must be measured once on the sealed AMI Full-corpus-ASR unseen
-scenario-component evaluation boundary.
+The frozen scaled-data `cnn_ctc_v3` checkpoint
+`exp-87538823d2bf1562/attempt-0001` has now completed its one-time sealed AMI
+Full-corpus-ASR unseen scenario-component evaluation. The corrected
+`tensor-stream-v2` MA2450 path tracked the CPU/ONNX reference closely, so the
+remaining recognition gap is model/data generalization evidence rather than a
+VPU transport problem.
 
-The workflow is:
+That held-out boundary is consumed. Do not rerun it or use its metrics for
+future model, objective, decoder, threshold, hyperparameter, or data selection.
+
+## Model-quality v4 fresh development boundary
+
+The next development cycle retires ES2002 from selection and establishes a
+larger fresh train/validation boundary from the official Full-corpus-ASR
+partition:
+
+- training: Edinburgh scenario groups ES2003, ES2005-ES2010 and ES2012-ES2016;
+- validation: fresh official development group ES2011a-d;
+- sealed test exclusions: EN2002, ES2004, IS1009 and TS3003.
+
+The first experiment on this boundary keeps `cnn_ctc_v3`, `logmel-v1`,
+standard CTC, training schedule, vocabulary and greedy decoder unchanged. This
+isolates the effect of the new data boundary before another architecture
+decision.
+
+Prepare and verify the new boundary on oberon:
 
 ```bash
-./scripts/prepare-speech-heldout-eval.sh
-./scripts/provision-speech-heldout-eval-edge.sh
-./scripts/run-speech-heldout-eval.sh
-./scripts/review-speech-heldout-eval.sh
+./scripts/prepare-speech-model-data-v4.sh
+./scripts/prepare-speech-model-data-v4.sh --verify-only
+cat work/speech-asr/ami/model-quality-v4-source-lock/source-lock.json
+cat work/speech-asr/ami/model-quality-v4/qualification.json
 ```
 
-This path performs no training and no checkpoint selection. It verifies and
-reuses the exact recorded checkpoint/ONNX/OpenVINO artifacts from the accepted
-source experiment.
+After reviewing qualification, provision the fresh validation population to
+edge and run the unchanged v3 baseline:
+
+```bash
+./scripts/provision-speech-model-data-v4-edge.sh
+
+EXP="$(
+  ./scripts/init-cnn-ctc-v3-model-quality-v4.sh |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
+)"
+./scripts/run-speech-experiment.sh --experiment "$EXP" --worker edge
+./scripts/review-speech-experiment.sh --experiment "$EXP"
+```
+
+See `docs/adr/model-quality-v4-fresh-development.md` for the reviewed data
+policy, first-acquisition source locking, and selection boundary.
