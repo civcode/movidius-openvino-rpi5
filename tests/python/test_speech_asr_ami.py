@@ -56,6 +56,19 @@ def write_test_wav(path):
         wav.writeframes(bytes(frames))
 
 
+def write_test_stereo_wav(path):
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(2)
+        wav.setsampwidth(2)
+        wav.setframerate(16000)
+        frames = bytearray()
+        for i in range(16000):
+            left = (i % 2000) - 1000
+            right = 1000 - (i % 2000)
+            frames += struct.pack("<hh", left, right)
+        wav.writeframes(bytes(frames))
+
+
 def make_fixture(tmp):
     audio = tmp / "TEST.wav"
     write_test_wav(audio)
@@ -161,6 +174,42 @@ class AmiPreparationTests(unittest.TestCase):
                 hashlib.sha256(f32).hexdigest(),
                 record["metadata"]["normalized_audio_sha256"],
             )
+
+    def test_stereo_mix_is_deterministically_downmixed_to_mono(self):
+        with tempfile.TemporaryDirectory() as tmp_name:
+            tmp = pathlib.Path(tmp_name)
+            audio, archive = make_fixture(tmp)
+            write_test_stereo_wav(audio)
+            spec = make_spec(
+                audio,
+                archive,
+                {"speaker": "A", "segments": ["TEST.sync.1"]},
+            )
+
+            output = tmp / "out"
+            prepare_from_spec(
+                spec=spec,
+                annotation_zip_path=archive,
+                audio_paths={"TEST": audio},
+                output_dir=output,
+            )
+
+            record = json.loads((output / "manifest.jsonl").read_text().strip())
+            self.assertEqual(record["audio"]["channels"], 1)
+            self.assertEqual(record["audio"]["end_sample"], 8000)
+            self.assertEqual(record["metadata"]["source_audio_channels"], 2)
+            self.assertEqual(
+                record["metadata"]["channel_normalization"],
+                "stereo-average-v1",
+            )
+
+            payload = (output / record["audio"]["path"]).read_bytes()
+            self.assertEqual(len(payload), 8000 * 4)
+            samples = struct.unpack("<8000f", payload)
+            self.assertTrue(all(sample == 0.0 for sample in samples))
+
+            verified = verify_prepared_dataset(spec=spec, output_dir=output)
+            self.assertEqual(verified["records"], 1)
 
     def test_all_segments_selection_uses_annotation_order(self):
         with tempfile.TemporaryDirectory() as tmp_name:
