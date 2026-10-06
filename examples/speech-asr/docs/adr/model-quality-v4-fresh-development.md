@@ -1,6 +1,6 @@
 # ADR: model-quality-v4 fresh Full-corpus-ASR development boundary
 
-Status: implemented; awaiting first source freeze and baseline execution
+Status: qualified and frozen; baseline execution pending
 Date: 2026-10-06
 Model baseline: `cnn_ctc_v3`
 Parent quality reference: `exp-87538823d2bf1562/attempt-0001`
@@ -96,6 +96,37 @@ to training and validation. Qualification requires:
 
 The qualification records the policy hash, source-lock hash and both frozen
 split-spec hashes.
+
+The reviewed qualification completed with:
+
+- raw training source: 20,426 segments;
+- eligible training set: 15,738 records, 25,846.327 seconds, 54,826 words;
+- training exclusions: 4,547 too-long inputs and 141 CTC targets longer than
+  the available output frames;
+- raw validation source: 1,631 segments after the reviewed ES2011c source
+  exclusion;
+- eligible validation set: 1,273 records, 2,279.385 seconds, 4,631 words;
+- validation exclusions: 351 too-long inputs and 7 CTC targets longer than the
+  available output frames;
+- train/validation record overlap: 0;
+- train/validation meeting overlap: 0.
+
+The qualified manifests are frozen as:
+
+- training SHA-256:
+  `6025d17f08c1815d1710c3ab56cea51a34365f398e9877b4aefec234e64e4096`;
+- validation SHA-256:
+  `fbd72a648826b2e200f9244b4dc73be425cada2e304be92d513f7033a8de4088`.
+
+The source manifests are:
+
+- training:
+  `89d82a09adedd3c1acd2f6749936c4cba8ebfed117b8c7eb190e27838e95b538`;
+- validation:
+  `f6d39166944c01de3b3db3d68e3c3442a1a9cae33a050e2720edefe33fe196ba`.
+
+The baseline initializer rejects any later change to these reviewed hashes,
+record counts, durations, or eligibility-exclusion counts.
 
 ### Reviewed ES2011c annotation anomaly
 
