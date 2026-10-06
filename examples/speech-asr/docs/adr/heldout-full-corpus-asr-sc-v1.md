@@ -117,7 +117,7 @@ aggregation. Model-load time is recorded separately per persistent session.
 Hardware execution is resumable after transport/device failures. A reusable
 sample result is accepted only when its cache entry is bound to:
 
-- execution mode `persistent-tensor-stream-v1`;
+- execution mode `persistent-tensor-stream-v2`;
 - sample feature SHA-256;
 - exact frozen XML and BIN SHA-256;
 - evaluator source SHA-256;
@@ -137,6 +137,38 @@ when execution resumes.
 The runtime image must contain the tensor-stream-capable `hello_myriad`. The
 evaluator checks that capability before touching the held-out hardware path and
 fails with an explicit rebuild instruction if the image predates the protocol.
+
+Before the full hardware pass proceeds, the evaluator runs the first uncached
+eligible feature tensor once through the trusted single-shot MYRIAD path and
+once through the persistent server. It requires exact valid-frame argmax
+agreement and a maximum absolute logit error no greater than 0.01. This parity
+gate prevents binary framing, launcher stdout pollution, or persistent-runtime
+I/O defects from reaching corpus scoring or sealing.
+
+### Corrective rerun after the v1 transport defect
+
+The first physical persistent evaluation was sealed under evaluation commit
+`f5c059d2028d215777b28c1fc971b2f482185a05` before a launcher defect was
+identified. `custom-server` had not set `OV_QUIET=1`, so the container
+entrypoint wrote its text banner to stdout ahead of the binary logits stream.
+That shifted every fixed-size client read and corrupted the hardware logits.
+The defect signature was zero blank argmax frames on hardware while the frozen
+reference had nonzero blank occupancy. A one-sample diagnostic subsequently
+showed 0% argmax agreement and a 200-byte excess in the stream output.
+
+The corrected `tensor-stream-v2` launcher suppresses the banner and a
+one-sample physical comparison produced byte-for-byte identical logits between
+the single-shot and persistent paths.
+
+A corrective held-out execution is permitted only with
+`--correct-invalid-v1-transport-result`. The controller accepts that flag only
+when the existing seal matches the exact frozen source, benchmark manifest,
+known defective evaluation commit, v1 execution mode, and zero-blank corruption
+signature. It archives and hash-verifies both the old sealed result and old
+hardware result, writes an explicit invalidation record, and allows at most one
+replacement seal. The replacement remains test-only, cannot be used for model
+selection, must use the same frozen checkpoint/manifest/reference, and must pass
+the v2 single-shot/persistent parity gate before sealing.
 
 The result records both the original training commit and the evaluation-code
 commit so model weights and evaluation implementation remain independently
