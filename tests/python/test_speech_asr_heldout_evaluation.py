@@ -307,14 +307,17 @@ class FrozenHeldoutControllerSourceTests(unittest.TestCase):
         )
 
         self.assertIn(
-            'EXECUTION_MODE = "persistent-tensor-stream-v1"',
+            'EXECUTION_MODE = "persistent-tensor-stream-v2"',
             evaluator,
         )
         self.assertIn("class PersistentMyriadServer:", evaluator)
+        self.assertIn("def run_single_shot_parity(", evaluator)
+        self.assertIn("persistent MYRIAD parity gate failed", evaluator)
+        self.assertIn("persistent parity gate: PASS", evaluator)
         self.assertIn("def require_persistent_runtime(", evaluator)
         self.assertIn("runtime image lacks persistent tensor-stream support", evaluator)
         self.assertIn('"custom-server"', evaluator)
-        self.assertIn("CACHE_VERSION = 2", evaluator)
+        self.assertIn("CACHE_VERSION = 3", evaluator)
         self.assertIn('"execution_mode": EXECUTION_MODE', evaluator)
         self.assertIn('"feature_sha256"', evaluator)
         self.assertIn('"xml_sha256"', evaluator)
@@ -325,7 +328,8 @@ class FrozenHeldoutControllerSourceTests(unittest.TestCase):
         self.assertIn("[myriad-eval]", evaluator)
         self.assertIn("custom-server)", runner)
         self.assertIn("--stdin", runner)
-        self.assertIn("READY protocol=tensor-stream-v1", smoke)
+        self.assertIn("OV_QUIET=1", runner)
+        self.assertIn("READY protocol=tensor-stream-v2", smoke)
         self.assertIn("TIMING request=", smoke)
         self.assertIn("subprocess.Popen(", edge_worker)
         self.assertIn("worker_proc = run_streaming(", controller)
