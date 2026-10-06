@@ -221,34 +221,46 @@ def qualify_v4(
         validation_manifest=validation_source,
     )
 
-    result = qualify_base(
-        train_source=train_source,
-        validation_source=validation_source,
-        output_dir=output_dir,
-        spec_path=spec_path,
-        vocab_path=vocab_path,
-    )
-    if set(result["train"]["stats"]["meetings"]) != train_meetings:
-        raise ValueError("qualified training set lost an expected meeting")
-    if set(result["validation"]["stats"]["meetings"]) != validation_meetings:
-        raise ValueError("qualified validation set lost an expected meeting")
-    if result["train"]["stats"]["records"] <= 4429:
-        raise ValueError("model-quality-v4 training population did not expand beyond v3")
-    if result["train"]["stats"]["audio_seconds"] <= 7150.12:
-        raise ValueError("model-quality-v4 training duration did not expand beyond v3")
+    try:
+        result = qualify_base(
+            train_source=train_source,
+            validation_source=validation_source,
+            output_dir=output_dir,
+            spec_path=spec_path,
+            vocab_path=vocab_path,
+        )
+        if set(result["train"]["stats"]["meetings"]) != train_meetings:
+            raise ValueError("qualified training set lost an expected meeting")
+        if set(result["validation"]["stats"]["meetings"]) != validation_meetings:
+            raise ValueError("qualified validation set lost an expected meeting")
+        if result["train"]["stats"]["records"] <= 4429:
+            raise ValueError("model-quality-v4 training population did not expand beyond v3")
+        if result["train"]["stats"]["audio_seconds"] <= 7150.12:
+            raise ValueError("model-quality-v4 training duration did not expand beyond v3")
 
-    result["boundary"] = boundary_document(
-        policy=policy,
-        lock=lock,
-        train_meetings=train_meetings,
-        validation_meetings=validation_meetings,
-    )
-    qualification_path = output_dir / "qualification.json"
-    qualification_path.write_text(
-        json.dumps(result, sort_keys=True, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    return result
+        result["boundary"] = boundary_document(
+            policy=policy,
+            lock=lock,
+            train_meetings=train_meetings,
+            validation_meetings=validation_meetings,
+        )
+        qualification_path = output_dir / "qualification.json"
+        qualification_path.write_text(
+            json.dumps(result, sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return result
+    except Exception:
+        for name in (
+            "train.manifest.jsonl",
+            "validation.manifest.jsonl",
+            "qualification.json",
+        ):
+            try:
+                (output_dir / name).unlink()
+            except FileNotFoundError:
+                pass
+        raise
 
 
 def verify_existing(
@@ -292,6 +304,10 @@ def verify_existing(
         validation_path
     ):
         raise ValueError("model-quality-v4 qualified validation hash mismatch")
+    if meetings(train_path) != train_meetings:
+        raise ValueError("model-quality-v4 qualified training meeting set mismatch")
+    if meetings(validation_path) != validation_meetings:
+        raise ValueError("model-quality-v4 qualified validation meeting set mismatch")
     expected_boundary = boundary_document(
         policy=policy,
         lock=lock,
