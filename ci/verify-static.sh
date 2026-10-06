@@ -596,6 +596,12 @@ grep -q '"frontend": {"kind": "logmel-v1"}' examples/speech-asr/agent/init_cnn_c
 grep -q '"checkpoint_selection": "validation_cer"' examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py || fail 'model-quality-v4 baseline changed checkpoint selection'
 grep -q '"max_wer": None' examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py || fail 'model-quality-v4 baseline must establish a new WER baseline'
 grep -q '"max_cer": None' examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py || fail 'model-quality-v4 baseline must establish a new CER baseline'
+grep -q 'TRAIN_MANIFEST_SHA256 = "6025d17f08c1815d1710c3ab56cea51a34365f398e9877b4aefec234e64e4096"' examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py || fail 'reviewed model-quality-v4 training manifest changed'
+grep -q 'VALIDATION_MANIFEST_SHA256 = "fbd72a648826b2e200f9244b4dc73be425cada2e304be92d513f7033a8de4088"' examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py || fail 'reviewed model-quality-v4 validation manifest changed'
+grep -q 'TRAIN_RECORDS = 15738' examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py || fail 'reviewed model-quality-v4 training count changed'
+grep -q 'TRAIN_AUDIO_SECONDS = 25846.327' examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py || fail 'reviewed model-quality-v4 training duration changed'
+grep -q 'VALIDATION_RECORDS = 1273' examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py || fail 'reviewed model-quality-v4 validation count changed'
+grep -q 'VALIDATION_AUDIO_SECONDS = 2279.385' examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py || fail 'reviewed model-quality-v4 validation duration changed'
 grep -q 'heldout_metrics_allowed_for_model_selection' examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py || fail 'model-quality-v4 initializer does not enforce held-out isolation'
 if grep -q '"augmentation": {' examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py; then
     fail 'model-quality-v4 baseline must not add augmentation'
