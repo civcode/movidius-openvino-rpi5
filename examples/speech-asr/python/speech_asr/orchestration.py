@@ -181,6 +181,11 @@ V16_ARCHITECTURE = {
     "output_frames": 256,
 }
 
+V17_ARCHITECTURE = {
+    **V16_ARCHITECTURE,
+    "dropout": 0.0,
+}
+
 
 def executor_model_basename(model_id: str) -> str:
     if model_id in {
@@ -200,6 +205,7 @@ def executor_model_basename(model_id: str) -> str:
         "cnn_ctc_v14",
         "cnn_ctc_v15",
         "cnn_ctc_v16",
+        "cnn_ctc_v17",
     }:
         return model_id
     raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
@@ -227,6 +233,7 @@ def validate_model_executor_request(
         "cnn_ctc_v14",
         "cnn_ctc_v15",
         "cnn_ctc_v16",
+        "cnn_ctc_v17",
     }:
         raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
     if model_spec.get("family") != "cnn_ctc":
@@ -257,6 +264,7 @@ def validate_model_executor_request(
         "cnn_ctc_v14": V14_ARCHITECTURE,
         "cnn_ctc_v15": V15_ARCHITECTURE,
         "cnn_ctc_v16": V16_ARCHITECTURE,
+        "cnn_ctc_v17": V17_ARCHITECTURE,
     }[model_id]
     if model_spec.get("architecture") != expected_architecture:
         raise ValueError(
@@ -270,15 +278,18 @@ def validate_model_executor_request(
     optimizer = train_config.get("optimizer")
     if not isinstance(optimizer, Mapping):
         raise ValueError("training optimizer declaration is missing")
+    expected_optimizer_kind = "novograd" if model_id == "cnn_ctc_v17" else "adam"
     if dict(optimizer) != {
-        "kind": "adam",
+        "kind": expected_optimizer_kind,
         "learning_rate": optimizer.get("learning_rate"),
     }:
         raise ValueError(
             f"{model_id} executor supports only optimizer kind + learning_rate"
         )
-    if optimizer.get("kind") != "adam":
-        raise ValueError(f"{model_id} executor supports only Adam")
+    if optimizer.get("kind") != expected_optimizer_kind:
+        raise ValueError(
+            f"{model_id} executor requires optimizer {expected_optimizer_kind!r}"
+        )
 
     ctc_objective = train_config.get("ctc_objective")
     if ctc_objective is not None:
@@ -355,6 +366,7 @@ def compatibility_probe_command(
         "cnn_ctc_v14",
         "cnn_ctc_v15",
         "cnn_ctc_v16",
+        "cnn_ctc_v17",
     }:
         return [
             str(root / "scripts" / f"probe-{model_id.replace('_', '-')}.sh"),
@@ -393,6 +405,7 @@ def training_command(
         "cnn_ctc_v14": "train-cnn-ctc-v14.sh",
         "cnn_ctc_v15": "train-cnn-ctc-v15.sh",
         "cnn_ctc_v16": "train-cnn-ctc-v16.sh",
+        "cnn_ctc_v17": "train-cnn-ctc-v17.sh",
     }.get(model_id)
     if executable is None:
         raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
