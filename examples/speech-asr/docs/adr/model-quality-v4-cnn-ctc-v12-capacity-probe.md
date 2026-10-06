@@ -44,6 +44,13 @@ The probe reuses the exact frozen architecture-screen training manifest and
 full ES2011 validation manifest for comparability and keeps the 12-epoch,
 batch-1, validation-CER-selected screen budget.
 
+The optimization policy is intentionally more aggressive than v11. Adam uses
+a OneCycle schedule with a `3e-3` peak learning rate: it starts at `3e-4`,
+reaches the peak during the first 10% of optimizer steps, then cosine-anneals
+to `3e-5`. Gradient clipping remains at 5.0. This raises the peak global
+learning rate by 10x rather than carrying the small-model `3e-4` ceiling
+into the 20M-parameter probe.
+
 Acceptance applies no numeric WER, CER, RTF or latency limit. Required evidence
 is:
 

@@ -36,7 +36,7 @@ VALIDATION_MANIFEST = (
     ROOT / "work" / "speech-asr" / "ami" / "model-quality-v4" / "validation.manifest.jsonl"
 )
 
-MODEL_SPEC_SHA256 = "8fcac3a58eb1f22a82ec9b4d9811e93bcc0b8d853e409c001c850ea7508eb36f"
+MODEL_SPEC_SHA256 = "cd534c32fe1090471e938e2f9cbab0865f07d3d7d65aa8de1b17f1f605985730"
 VOCAB_SHA256 = "79f4dc2b628f5f61b3d5361ca67fadff044a91569c24e0af3916786fd8ddce4f"
 SCREEN_MANIFEST_SHA256 = "0528db59eec36d00d710b3090b0c6404dbdbf548ae7e13d3daf3d5152eacfc8b"
 VALIDATION_MANIFEST_SHA256 = "fbd72a648826b2e200f9244b4dc73be425cada2e304be92d513f7033a8de4088"
@@ -194,8 +194,32 @@ def validate_model() -> dict:
         raise ValueError("cnn_ctc_v12 input contract differs from cnn_ctc_v3")
     if package["decoder"] != base["decoder"]:
         raise ValueError("cnn_ctc_v12 decoder differs from cnn_ctc_v3")
-    if package["training"] != base["training"]:
-        raise ValueError("cnn_ctc_v12 package training defaults differ from cnn_ctc_v3")
+    base_training = base["training"]
+    for key in (
+        "seed",
+        "batch_size",
+        "epochs",
+        "optimizer",
+        "loss",
+        "zero_infinity",
+        "gradient_clip_norm",
+        "checkpoint_selection",
+    ):
+        if package["training"].get(key) != base_training.get(key):
+            raise ValueError(f"cnn_ctc_v12 training.{key} differs from cnn_ctc_v3")
+    expected_schedule = {
+        "learning_rate": 0.003,
+        "lr_schedule": "onecycle",
+        "min_learning_rate": 0.00003,
+        "onecycle_pct_start": 0.1,
+        "onecycle_div_factor": 10.0,
+        "onecycle_final_div_factor": 10.0,
+    }
+    for key, expected in expected_schedule.items():
+        if package["training"].get(key) != expected:
+            raise ValueError(
+                f"cnn_ctc_v12 training.{key} differs from reviewed high-LR policy"
+            )
 
     estimate = model_resource_estimate(package)
     if estimate["parameters"] != EXPECTED_PARAMETERS:
@@ -252,6 +276,7 @@ def main() -> int:
                 "repeat dilation schedule [1,2,3,4,4,3,2,1] twice",
                 "retain normalization-free ReLU/dropout/residual projection policy",
                 "train for exactly 12 screen epochs with validation-CER selection",
+                "use Adam with OneCycle LR: 3e-4 start, 3e-3 peak, 3e-5 finish",
                 "use no augmentation, blank penalty, InterCTC or decoder change",
                 "physically probe initialized ONNX/OpenVINO graph before training",
                 "record physical latency but apply no latency rejection threshold",
@@ -261,7 +286,9 @@ def main() -> int:
                 "There is no numeric CER, WER, RTF or p95 rejection threshold. Conversion, "
                 "physical MYRIAD execution and numerical compatibility determine hardware "
                 "feasibility; quality and measured latency are reviewed afterward. Sealed "
-                "held-out evidence remains forbidden for architecture selection."
+                "held-out evidence remains forbidden for architecture selection. "
+                "The v12 training policy intentionally raises peak Adam LR by 10x "
+                "versus v11, using OneCycle warmup/annealing."
             ),
         }
         experiment_model = {

@@ -985,7 +985,7 @@ spec = json.loads(Path("examples/speech-asr/models/cnn_ctc_v12/model_spec.json")
 canonical = hashlib.sha256(
     json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 ).hexdigest()
-assert canonical == "8fcac3a58eb1f22a82ec9b4d9811e93bcc0b8d853e409c001c850ea7508eb36f"
+assert canonical == "cd534c32fe1090471e938e2f9cbab0865f07d3d7d65aa8de1b17f1f605985730"
 assert spec["input_contract"]["shape"] == [1,64,512]
 assert spec["output_contract"]["shape"] == [1,128,39]
 assert [x["stride"] for x in spec["network"]["stem"]] == [2,2]
@@ -996,6 +996,12 @@ assert [x["dilation"] for x in spec["network"]["residual_blocks"]] == [1,2,3,4,4
 assert spec["network"]["estimated_parameters"] == 19627687
 assert spec["network"]["estimated_macs_fixed_input"] == 2515673088
 assert spec["network"]["receptive_field_feature_frames"] == 653
+assert spec["training"]["learning_rate"] == 0.003
+assert spec["training"]["lr_schedule"] == "onecycle"
+assert spec["training"]["min_learning_rate"] == 0.00003
+assert spec["training"]["onecycle_pct_start"] == 0.1
+assert spec["training"]["onecycle_div_factor"] == 10.0
+assert spec["training"]["onecycle_final_div_factor"] == 10.0
 PY_V12
 grep -q 'V12_ARCHITECTURE' examples/speech-asr/python/speech_asr/orchestration.py || fail 'cnn_ctc_v12 architecture registration missing'
 grep -q '"cnn_ctc_v12": "train-cnn-ctc-v12.sh"' examples/speech-asr/python/speech_asr/orchestration.py || fail 'cnn_ctc_v12 training registration missing'
@@ -1004,6 +1010,8 @@ grep -q 'DEFAULT_PARENT = "exp-00e6b1e434d187d8"' examples/speech-asr/agent/init
 grep -q 'SCREEN_MANIFEST_SHA256 = "0528db59eec36d00d710b3090b0c6404dbdbf548ae7e13d3daf3d5152eacfc8b"' examples/speech-asr/agent/init_cnn_ctc_v12_capacity_probe.py || fail 'cnn_ctc_v12 screen manifest changed'
 grep -q '"max_cer": None' examples/speech-asr/agent/init_cnn_ctc_v12_capacity_probe.py || fail 'cnn_ctc_v12 CER must be measured, not gated'
 grep -q '"max_latency_p95_ms": None' examples/speech-asr/agent/init_cnn_ctc_v12_capacity_probe.py || fail 'cnn_ctc_v12 latency must be measured, not gated'
+grep -q 'OneCycleLR' examples/speech-asr/training/train_cnn_ctc_v12.py || fail 'cnn_ctc_v12 OneCycle schedule missing'
+grep -q 'scheduler.step()' examples/speech-asr/training/train_cnn_ctc_v12.py || fail 'cnn_ctc_v12 per-step LR schedule missing'
 grep -q '"event": "training_progress"' examples/speech-asr/training/train_cnn_ctc_v12.py || fail 'cnn_ctc_v12 live training progress missing'
 
 python3 - <<'PY_CHECK'

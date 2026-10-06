@@ -39,7 +39,7 @@ def train_config():
         "batch_size": 1,
         "max_samples": None,
         "checkpoint_selection": "validation_cer",
-        "optimizer": {"kind": "adam", "learning_rate": 0.0003},
+        "optimizer": {"kind": "adam", "learning_rate": 0.003},
         "training_manifest": {
             "id": "ami-model-quality-v4-architecture-screen-v1-train",
             "path": "work/speech-asr/ami/model-quality-v4-architecture-screen-v1/train.manifest.jsonl",
@@ -77,6 +77,14 @@ class CnnCtcV12Tests(unittest.TestCase):
         self.assertEqual(estimate["fp16_weight_bytes"], 39255374)
         self.assertEqual(estimate["output_frames"], 128)
         self.assertEqual(self.spec["output_contract"]["shape"], [1, 128, 39])
+        self.assertEqual(self.spec["training"]["learning_rate"], 0.003)
+        self.assertEqual(self.spec["training"]["lr_schedule"], "onecycle")
+        self.assertEqual(self.spec["training"]["min_learning_rate"], 0.00003)
+        self.assertEqual(self.spec["training"]["onecycle_pct_start"], 0.1)
+        self.assertEqual(self.spec["training"]["onecycle_div_factor"], 10.0)
+        self.assertEqual(
+            self.spec["training"]["onecycle_final_div_factor"], 10.0
+        )
 
     def test_request_and_commands_are_registered(self):
         model = experiment_model()
@@ -103,7 +111,7 @@ class CnnCtcV12Tests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn('DEFAULT_PARENT = "exp-00e6b1e434d187d8"', source)
         self.assertIn('SCREEN_MANIFEST_SHA256 = "0528db59eec36d00d710b3090b0c6404dbdbf548ae7e13d3daf3d5152eacfc8b"', source)
-        self.assertIn('MODEL_SPEC_SHA256 = "8fcac3a58eb1f22a82ec9b4d9811e93bcc0b8d853e409c001c850ea7508eb36f"', source)
+        self.assertIn('MODEL_SPEC_SHA256 = "cd534c32fe1090471e938e2f9cbab0865f07d3d7d65aa8de1b17f1f605985730"', source)
         self.assertIn('SCREEN_EPOCHS = 12', source)
         self.assertIn('PARENT_CER = 0.7984219316938317', source)
         self.assertIn('"max_cer": None', source)
@@ -111,6 +119,8 @@ class CnnCtcV12Tests(unittest.TestCase):
         self.assertIn('"max_latency_p95_ms": None', source)
         self.assertNotIn('"max_latency_p95_ms": 25.0', source)
         self.assertIn('"model_id": "cnn_ctc_v12"', source)
+        self.assertIn('"learning_rate": 0.003', source)
+        self.assertIn('"lr_schedule": "onecycle"', source)
         self.assertNotIn('"augmentation": {', source)
         self.assertNotIn('"ctc_objective": {', source)
 

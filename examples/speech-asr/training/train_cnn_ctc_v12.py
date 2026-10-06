@@ -427,6 +427,11 @@ def main() -> int:
         )
         gradient_clip_norm = float(spec["training"]["gradient_clip_norm"])
         min_learning_rate = float(spec["training"]["min_learning_rate"])
+        onecycle_pct_start = float(spec["training"]["onecycle_pct_start"])
+        onecycle_div_factor = float(spec["training"]["onecycle_div_factor"])
+        onecycle_final_div_factor = float(
+            spec["training"]["onecycle_final_div_factor"]
+        )
         if epochs < 0 or batch_size < 1 or learning_rate <= 0:
             raise ValueError(
                 "epochs must be >= 0, batch size >= 1 and learning rate > 0"
@@ -439,8 +444,19 @@ def main() -> int:
             raise ValueError(
                 "min_learning_rate must be between 0 and learning_rate"
             )
-        if spec["training"].get("lr_schedule") != "cosine":
-            raise ValueError("cnn_ctc_v12 lr_schedule must be cosine")
+        if spec["training"].get("lr_schedule") != "onecycle":
+            raise ValueError("cnn_ctc_v12 lr_schedule must be onecycle")
+        if not 0 < onecycle_pct_start < 1:
+            raise ValueError("onecycle_pct_start must be in (0,1)")
+        if onecycle_div_factor <= 1 or onecycle_final_div_factor <= 1:
+            raise ValueError("OneCycle div factors must be > 1")
+        expected_min_learning_rate = (
+            learning_rate / onecycle_div_factor / onecycle_final_div_factor
+        )
+        if abs(min_learning_rate - expected_min_learning_rate) > 1e-12:
+            raise ValueError(
+                "min_learning_rate must equal peak_lr / div_factor / final_div_factor"
+            )
         if spec["training"].get("checkpoint_selection") != "best_validation_loss":
             raise ValueError(
                 "cnn_ctc_v12 package checkpoint_selection must remain best_validation_loss"
@@ -577,11 +593,21 @@ def main() -> int:
             model.parameters(),
             lr=learning_rate,
         )
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer,
-            T_max=max(1, epochs),
-            eta_min=min_learning_rate,
+        total_train_steps = (
+            0 if args.init_only else epochs * len(train_loader)
         )
+        scheduler = None
+        if not args.init_only:
+            scheduler = torch.optim.lr_scheduler.OneCycleLR(
+                optimizer,
+                max_lr=learning_rate,
+                total_steps=max(1, total_train_steps),
+                pct_start=onecycle_pct_start,
+                anneal_strategy="cos",
+                div_factor=onecycle_div_factor,
+                final_div_factor=onecycle_final_div_factor,
+                cycle_momentum=False,
+            )
 
         history = []
         optimizer_steps = 0
@@ -597,7 +623,7 @@ def main() -> int:
         start = time.monotonic()
 
         if not args.init_only:
-            total_train_steps = epochs * len(train_loader)
+            assert scheduler is not None
             print(
                 json.dumps(
                     {
@@ -666,7 +692,9 @@ def main() -> int:
                         model.parameters(),
                         max_norm=gradient_clip_norm,
                     )
+                    step_learning_rate = float(optimizer.param_groups[0]["lr"])
                     optimizer.step()
+                    scheduler.step()
                     optimizer_steps += 1
                     batch_losses.append(float(loss.detach().cpu()))
                     gradient_norms.append(float(gradient_norm.detach().cpu()))
@@ -706,7 +734,10 @@ def main() -> int:
                                     "running_train_loss": float(
                                         sum(batch_losses) / len(batch_losses)
                                     ),
-                                    "learning_rate": current_lr,
+                                    "learning_rate": step_learning_rate,
+                                    "next_learning_rate": float(
+                                        optimizer.param_groups[0]["lr"]
+                                    ),
                                 },
                                 sort_keys=True,
                             ),
@@ -759,6 +790,9 @@ def main() -> int:
                             "emitted_to_reference_character_ratio"
                         ],
                         "learning_rate": current_lr,
+                        "learning_rate_end": float(
+                            optimizer.param_groups[0]["lr"]
+                        ),
                         "optimizer_steps": optimizer_steps,
                         "max_gradient_norm_before_clip": (
                             max(gradient_norms) if gradient_norms else 0.0
@@ -792,7 +826,6 @@ def main() -> int:
                     best_epoch = epoch + 1
                     best_state_dict = copy.deepcopy(model.state_dict())
                     best_optimizer_state = copy.deepcopy(optimizer.state_dict())
-                scheduler.step()
                 epoch_elapsed = time.monotonic() - epoch_started
                 total_elapsed = time.monotonic() - start
                 completed_epochs = epoch + 1
@@ -889,7 +922,10 @@ def main() -> int:
             "batch_size": batch_size,
             "learning_rate": learning_rate,
             "min_learning_rate": min_learning_rate,
-            "lr_schedule": "cosine",
+            "lr_schedule": "onecycle",
+            "onecycle_pct_start": onecycle_pct_start,
+            "onecycle_div_factor": onecycle_div_factor,
+            "onecycle_final_div_factor": onecycle_final_div_factor,
             "gradient_clip_norm": gradient_clip_norm,
             "checkpoint_selection": checkpoint_selection,
             "selected_metric_value": selected_metric_value,

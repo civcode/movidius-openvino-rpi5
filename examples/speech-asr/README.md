@@ -491,8 +491,11 @@ regime that may be too slow for final deployment:
 - about 39.3 MB of FP16 weights.
 
 The frontend, vocabulary, greedy CTC decoder, architecture-screen data and
-12-epoch ranking budget remain frozen. Unlike the small-model screen, v12 has
-no numeric CER, WER, RTF or p95 rejection threshold. The initialized graph is
+12-epoch ranking budget remain frozen. v12 deliberately does not preserve the
+small-model learning-rate ceiling: Adam now uses OneCycle from `3e-4` to a
+`3e-3` peak and down to `3e-5`, with the peak reached in the first 10% of
+optimizer steps. Unlike the small-model screen, v12 has no numeric CER, WER,
+RTF or p95 rejection threshold. The initialized graph is
 converted and physically probed on MYRIAD before training. If it cannot run,
 that is capacity-boundary evidence; if it runs, quality and measured latency
 are reviewed afterward.

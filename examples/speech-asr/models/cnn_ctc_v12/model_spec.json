@@ -186,15 +186,18 @@
   "training": {
     "seed": 1337,
     "batch_size": 1,
-    "learning_rate": 0.0003,
+    "learning_rate": 0.003,
     "epochs": 32,
     "optimizer": "adam",
     "loss": "ctc",
     "zero_infinity": true,
     "gradient_clip_norm": 5,
-    "lr_schedule": "cosine",
+    "lr_schedule": "onecycle",
     "min_learning_rate": 0.00003,
-    "checkpoint_selection": "best_validation_loss"
+    "checkpoint_selection": "best_validation_loss",
+    "onecycle_pct_start": 0.1,
+    "onecycle_div_factor": 10,
+    "onecycle_final_div_factor": 10
   },
   "export": {
     "framework": "pytorch",

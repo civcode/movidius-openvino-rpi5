@@ -25,3 +25,17 @@ is evidence for later downsizing if quality improves.
 The frontend, character vocabulary and greedy CTC decoder remain unchanged so
 the acoustic-quality result is directly comparable to the existing screen
 lineage.
+
+
+## Training policy
+
+The capacity probe uses Adam with a per-step OneCycle learning-rate schedule:
+
+- initial LR: `3e-4`;
+- peak LR: `3e-3`;
+- peak position: first 10% of optimizer steps;
+- final LR: `3e-5`;
+- gradient clipping: 5.0;
+- screen checkpoint selection: validation CER.
+
+The peak is intentionally 10x higher than the v9-v11 screen learning rate.
