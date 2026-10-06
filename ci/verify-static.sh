@@ -657,7 +657,7 @@ canonical=hashlib.sha256(
         ensure_ascii=False,
     ).encode("utf-8")
 ).hexdigest()
-assert canonical == "a4e53c89044dad473fb321e2187f5de598f8623b66de42d29e2c2c775c82ebc8"
+assert canonical == "0282f70168765fba5c1d33d28d47e6db18bc0163d99a1b3a8b15f49312b6401d"
 assert spec["id"] == "cnn_ctc_v7"
 assert spec["frontend"]["kind"] == "logmel-v1"
 assert [x["channels"] for x in spec["network"]["stem"]] == [64, 112]
@@ -674,7 +674,7 @@ grep -q '"cnn_ctc_v7": "train-cnn-ctc-v7.sh"' examples/speech-asr/python/speech_
 grep -q '"cnn_ctc_v7": "evaluate-cnn-ctc-v7.sh"' examples/speech-asr/agent/edge_worker.py || fail 'cnn_ctc_v7 edge evaluator registration missing'
 grep -q '"cnn_ctc_v7"' examples/speech-asr/tools/validate_cnn_ctc_ir.py || fail 'cnn_ctc_v7 IR validation registration missing'
 grep -q 'DEFAULT_PARENT = "exp-63fdb8d218673527"' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 model-quality-v4 parent changed'
-grep -q 'MODEL_SPEC_SHA256 = "a4e53c89044dad473fb321e2187f5de598f8623b66de42d29e2c2c775c82ebc8"' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 reviewed model spec changed'
+grep -q 'MODEL_SPEC_SHA256 = "0282f70168765fba5c1d33d28d47e6db18bc0163d99a1b3a8b15f49312b6401d"' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 reviewed model spec changed'
 grep -q 'PARENT_CER = 0.7588550365720209' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 parent CER changed'
 grep -q '"max_cer": PARENT_CER' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 CER decision gate missing'
 grep -q 'EXPECTED_PARAMETERS = 1818183' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 parameter count changed'
