@@ -162,6 +162,25 @@ V15_ARCHITECTURE = {
     "residual_projection_init": "kaiming_bn_gamma_0.01",
 }
 
+V16_ARCHITECTURE = {
+    "kind": "quartznet-15x5-v1",
+    "prologue_channels": 256,
+    "prologue_kernel": 33,
+    "prologue_stride": 2,
+    "block_channels": [256, 256, 512, 512, 512],
+    "block_kernels": [33, 39, 51, 63, 75],
+    "block_repeats": 3,
+    "module_repeats": 5,
+    "epilogue_channels": [512, 1024],
+    "epilogue_kernels": [87, 1],
+    "epilogue_dilations": [2, 1],
+    "normalization": "batchnorm",
+    "activation": "relu",
+    "dropout": 0.2,
+    "separable_convolution": "depthwise-pointwise",
+    "output_frames": 256,
+}
+
 
 def executor_model_basename(model_id: str) -> str:
     if model_id in {
@@ -180,6 +199,7 @@ def executor_model_basename(model_id: str) -> str:
         "cnn_ctc_v13",
         "cnn_ctc_v14",
         "cnn_ctc_v15",
+        "cnn_ctc_v16",
     }:
         return model_id
     raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
@@ -206,6 +226,7 @@ def validate_model_executor_request(
         "cnn_ctc_v13",
         "cnn_ctc_v14",
         "cnn_ctc_v15",
+        "cnn_ctc_v16",
     }:
         raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
     if model_spec.get("family") != "cnn_ctc":
@@ -235,6 +256,7 @@ def validate_model_executor_request(
         "cnn_ctc_v13": V13_ARCHITECTURE,
         "cnn_ctc_v14": V14_ARCHITECTURE,
         "cnn_ctc_v15": V15_ARCHITECTURE,
+        "cnn_ctc_v16": V16_ARCHITECTURE,
     }[model_id]
     if model_spec.get("architecture") != expected_architecture:
         raise ValueError(
@@ -332,6 +354,7 @@ def compatibility_probe_command(
         "cnn_ctc_v13",
         "cnn_ctc_v14",
         "cnn_ctc_v15",
+        "cnn_ctc_v16",
     }:
         return [
             str(root / "scripts" / f"probe-{model_id.replace('_', '-')}.sh"),
@@ -369,6 +392,7 @@ def training_command(
         "cnn_ctc_v13": "train-cnn-ctc-v13.sh",
         "cnn_ctc_v14": "train-cnn-ctc-v14.sh",
         "cnn_ctc_v15": "train-cnn-ctc-v15.sh",
+        "cnn_ctc_v16": "train-cnn-ctc-v16.sh",
     }.get(model_id)
     if executable is None:
         raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
