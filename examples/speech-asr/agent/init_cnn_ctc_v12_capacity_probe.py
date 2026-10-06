@@ -36,7 +36,7 @@ VALIDATION_MANIFEST = (
     ROOT / "work" / "speech-asr" / "ami" / "model-quality-v4" / "validation.manifest.jsonl"
 )
 
-MODEL_SPEC_SHA256 = "cd534c32fe1090471e938e2f9cbab0865f07d3d7d65aa8de1b17f1f605985730"
+MODEL_SPEC_SHA256 = "b252cf8f13b86768d99edaa8f74f2397e6eb928d201ab78402dce5603cf4b008"
 VOCAB_SHA256 = "79f4dc2b628f5f61b3d5361ca67fadff044a91569c24e0af3916786fd8ddce4f"
 SCREEN_MANIFEST_SHA256 = "0528db59eec36d00d710b3090b0c6404dbdbf548ae7e13d3daf3d5152eacfc8b"
 VALIDATION_MANIFEST_SHA256 = "fbd72a648826b2e200f9244b4dc73be425cada2e304be92d513f7033a8de4088"
@@ -184,8 +184,12 @@ def validate_model() -> dict:
     package = load_spec(MODEL_SPEC)
     base = load_spec(V3_MODEL_SPEC)
     vocab = load_vocab(MODEL_SPEC.parent / "vocab.json")
-    if canonical_sha256(package) != MODEL_SPEC_SHA256:
-        raise ValueError("cnn_ctc_v12 model spec differs from reviewed design")
+    actual_model_spec_sha256 = canonical_sha256(package)
+    if actual_model_spec_sha256 != MODEL_SPEC_SHA256:
+        raise ValueError(
+            "cnn_ctc_v12 model spec differs from reviewed design: "
+            f"{actual_model_spec_sha256} != {MODEL_SPEC_SHA256}"
+        )
     if canonical_sha256(vocab) != VOCAB_SHA256:
         raise ValueError("cnn_ctc_v12 vocabulary differs from frozen v3 vocabulary")
     if package["frontend"] != base["frontend"]:

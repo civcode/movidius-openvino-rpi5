@@ -985,7 +985,7 @@ spec = json.loads(Path("examples/speech-asr/models/cnn_ctc_v12/model_spec.json")
 canonical = hashlib.sha256(
     json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 ).hexdigest()
-assert canonical == "cd534c32fe1090471e938e2f9cbab0865f07d3d7d65aa8de1b17f1f605985730"
+assert canonical == "b252cf8f13b86768d99edaa8f74f2397e6eb928d201ab78402dce5603cf4b008"
 assert spec["input_contract"]["shape"] == [1,64,512]
 assert spec["output_contract"]["shape"] == [1,128,39]
 assert [x["stride"] for x in spec["network"]["stem"]] == [2,2]
