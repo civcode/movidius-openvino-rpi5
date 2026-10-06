@@ -645,6 +645,11 @@ def main() -> int:
                 evaluator_sha256=evaluator_sha,
                 output_elements=output_elements,
             )
+            # Every evaluator invocation must physically re-prove stream parity
+            # before any cached corpus logits can be accepted. This also covers
+            # a retry after all v3 sample caches were written but sealing failed.
+            if not parity_checked:
+                cached = None
             if cached is not None:
                 infer_ms, session_id, load_ms = cached
                 register_session(session_id, load_ms)
