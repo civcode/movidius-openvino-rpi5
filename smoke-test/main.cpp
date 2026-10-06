@@ -174,7 +174,7 @@ int runStreamInference(const std::string& modelXml, const std::string& modelBin,
     const size_t outBytes = outElems * sizeof(float);
     std::fprintf(
         stderr,
-        "READY protocol=tensor-stream-v1 input_elements=%zu output_elements=%zu "
+        "READY protocol=tensor-stream-v2 input_elements=%zu output_elements=%zu "
         "load_ms=%.6f warmup=%d\n",
         inElems, outElems, loadMs, warmupIterations);
     std::fflush(stderr);
