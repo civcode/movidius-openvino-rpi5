@@ -36,6 +36,7 @@ def load_spec(path: Path) -> dict:
         "cnn_ctc_v5",
         "cnn_ctc_v6",
         "cnn_ctc_v7",
+        "cnn_ctc_v8",
     }:
         raise ValueError("unsupported cnn_ctc model spec id")
 
@@ -75,8 +76,9 @@ def load_spec(path: Path) -> dict:
     if not isinstance(input_contract, dict) or input_contract.get("shape") != [1, 64, 512]:
         raise ValueError(f"{model_id} input shape must be [1,64,512]")
     output_contract = value.get("output_contract")
-    if not isinstance(output_contract, dict) or output_contract.get("shape") != [1, 128, 39]:
-        raise ValueError(f"{model_id} output shape must be [1,128,39]")
+    expected_output_shape = [1, 256, 39] if model_id == "cnn_ctc_v8" else [1, 128, 39]
+    if not isinstance(output_contract, dict) or output_contract.get("shape") != expected_output_shape:
+        raise ValueError(f"{model_id} output shape must be {expected_output_shape}")
     export = value.get("export")
     if not isinstance(export, dict) or export.get("onnx_opset") != 11:
         raise ValueError(f"{model_id} ONNX opset must be 11")
@@ -97,6 +99,7 @@ def load_spec(path: Path) -> dict:
             "cnn_ctc_v5": "residual-temporal-v3",
             "cnn_ctc_v6": "residual-temporal-v4",
             "cnn_ctc_v7": "residual-temporal-v2",
+            "cnn_ctc_v8": "residual-temporal-v5",
         }[model_id]
         if network.get("kind") != expected_kind:
             raise ValueError(f"{model_id} network.kind must be {expected_kind}")
@@ -109,7 +112,7 @@ def load_spec(path: Path) -> dict:
         expected_stem_channels = (
             [48, 64]
             if model_id == "cnn_ctc_v5"
-            else ([64, 112] if model_id == "cnn_ctc_v7" else [64, 96])
+            else ([64, 112] if model_id == "cnn_ctc_v7" else ([64, 72] if model_id == "cnn_ctc_v8" else [64, 96]))
         )
         if [int(layer.get("channels", 0)) for layer in stem] != expected_stem_channels:
             raise ValueError(
@@ -127,7 +130,7 @@ def load_spec(path: Path) -> dict:
         )
         if [int(block.get("kernel", 0)) for block in blocks] != expected_kernels:
             raise ValueError(f"{model_id} residual kernel schedule is frozen")
-        expected_channels = 64 if model_id == "cnn_ctc_v5" else (112 if model_id == "cnn_ctc_v7" else 96)
+        expected_channels = 64 if model_id == "cnn_ctc_v5" else (112 if model_id == "cnn_ctc_v7" else (72 if model_id == "cnn_ctc_v8" else 96))
         if any(
             int(block.get("channels", 0)) != expected_channels for block in blocks
         ):
@@ -141,12 +144,23 @@ def load_spec(path: Path) -> dict:
                 "cnn_ctc_v5",
                 "cnn_ctc_v6",
                 "cnn_ctc_v7",
+                "cnn_ctc_v8",
             }
             and network.get("residual_projection_init") != "kaiming_scaled_0.01"
         ):
             raise ValueError(
                 f"{model_id} residual projection init must be kaiming_scaled_0.01"
             )
+        if model_id == "cnn_ctc_v8":
+            expected_strides = [1, 2]
+            if [int(layer.get("stride", 0)) for layer in stem] != expected_strides:
+                raise ValueError("cnn_ctc_v8 stem strides must remain [1,2]")
+            expected_dilations = [1, 2, 2, 2, 2]
+            if [int(block.get("dilation", 0)) for block in blocks] != expected_dilations:
+                raise ValueError("cnn_ctc_v8 residual dilation schedule is frozen")
+            expected_paddings = [5, 18, 26, 34, 42]
+            if [int(block.get("padding", -1)) for block in blocks] != expected_paddings:
+                raise ValueError("cnn_ctc_v8 residual padding schedule is frozen")
         if (
             model_id in {"cnn_ctc_v5", "cnn_ctc_v6"}
             and network.get("intermediate_ctc_after_block") != 3
@@ -316,6 +330,7 @@ def acoustic_output_length(feature_frames: int, spec: dict) -> int:
         "cnn_ctc_v5",
         "cnn_ctc_v6",
         "cnn_ctc_v7",
+        "cnn_ctc_v8",
     }:
         layers = network["stem"]
         for layer in layers:
@@ -324,6 +339,7 @@ def acoustic_output_length(feature_frames: int, spec: dict) -> int:
                 kernel=int(layer["kernel"]),
                 stride=int(layer["stride"]),
                 padding=int(layer["padding"]),
+                dilation=int(layer.get("dilation", 1)),
             )
         return length
 
@@ -350,8 +366,9 @@ def model_resource_estimate(spec: dict, vocab_size: int = 39) -> dict:
         "cnn_ctc_v5",
         "cnn_ctc_v6",
         "cnn_ctc_v7",
+        "cnn_ctc_v8",
     }:
-        raise ValueError("resource estimator targets cnn_ctc_v2/v3/v4/v5/v6/v7")
+        raise ValueError("resource estimator targets cnn_ctc_v2/v3/v4/v5/v6/v7/v8")
 
     network = spec["network"]
     input_frames = int(spec["input_contract"]["shape"][2])
@@ -367,11 +384,13 @@ def model_resource_estimate(spec: dict, vocab_size: int = 39) -> dict:
         kernel = int(layer["kernel"])
         stride = int(layer["stride"])
         padding = int(layer["padding"])
+        dilation = int(layer.get("dilation", 1))
         out_length = conv1d_output_length(
             length,
             kernel=kernel,
             stride=stride,
             padding=padding,
+            dilation=dilation,
         )
         use_batchnorm = spec["network"]["normalization"] == "batchnorm"
         parameters += in_channels * out_channels * kernel
@@ -380,7 +399,7 @@ def model_resource_estimate(spec: dict, vocab_size: int = 39) -> dict:
         else:
             parameters += out_channels  # Conv bias
         macs += in_channels * out_channels * kernel * out_length
-        receptive_field += (kernel - 1) * jump
+        receptive_field += (kernel - 1) * dilation * jump
         jump *= stride
         length = out_length
         in_channels = out_channels
@@ -389,6 +408,7 @@ def model_resource_estimate(spec: dict, vocab_size: int = 39) -> dict:
         channels = int(block["channels"])
         kernel = int(block["kernel"])
         projection_kernel = int(block["projection_kernel"])
+        dilation = int(block.get("dilation", 1))
         if channels != in_channels:
             raise ValueError("generation-1 residual block changes channel width")
         parameters += channels * channels * kernel
@@ -397,7 +417,7 @@ def model_resource_estimate(spec: dict, vocab_size: int = 39) -> dict:
         parameters += 2 * channels if use_batchnorm else channels
         macs += channels * channels * kernel * length
         macs += channels * channels * projection_kernel * length
-        receptive_field += (kernel - 1) * jump
+        receptive_field += (kernel - 1) * dilation * jump
 
     projection_kernel = int(network["projection_kernel"])
     parameters += in_channels * vocab_size * projection_kernel + vocab_size
