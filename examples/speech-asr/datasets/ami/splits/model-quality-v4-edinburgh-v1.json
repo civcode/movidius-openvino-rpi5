@@ -1,0 +1,58 @@
+{
+  "schema": "speech-asr/model-quality-data-policy",
+  "version": 1,
+  "id": "ami-model-quality-v4-edinburgh-full-corpus-asr-v1",
+  "authority": {
+    "partition_name": "Full-corpus-ASR",
+    "url": "https://groups.inf.ed.ac.uk/ami/corpus/datasets.shtml",
+    "rationale": "Use the official Full-corpus-ASR development partition while retiring ES2002 from model selection after prior reuse."
+  },
+  "annotations": {
+    "version": "1.6.2",
+    "filename": "ami_public_manual_1.6.2.zip",
+    "url": "https://groups.inf.ed.ac.uk/ami/AMICorpusAnnotations/ami_public_manual_1.6.2.zip",
+    "sha256": "b56e5babb2496b8795deeeda7e71178d7fbc9963f94276cf2a3f4b56ebbc9f9d"
+  },
+  "audio": {
+    "stream": "Mix-Headset",
+    "url_template": "https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/{meeting}/audio/{meeting}.Mix-Headset.wav"
+  },
+  "train_groups": [
+    "ES2003",
+    "ES2005",
+    "ES2006",
+    "ES2007",
+    "ES2008",
+    "ES2009",
+    "ES2010",
+    "ES2012",
+    "ES2013",
+    "ES2014",
+    "ES2015",
+    "ES2016"
+  ],
+  "validation_groups": [
+    "ES2011"
+  ],
+  "excluded_prior_selection_groups": [
+    "ES2002"
+  ],
+  "sealed_test_groups": [
+    "EN2002",
+    "ES2004",
+    "IS1009",
+    "TS3003"
+  ],
+  "speakers": [
+    "A",
+    "B",
+    "C",
+    "D"
+  ],
+  "policy": {
+    "training_allowed_on_train": true,
+    "training_allowed_on_validation": false,
+    "checkpoint_selection_allowed_on_validation": true,
+    "heldout_metrics_allowed_for_model_selection": false
+  }
+}
