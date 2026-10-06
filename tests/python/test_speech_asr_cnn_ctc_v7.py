@@ -99,6 +99,7 @@ class CnnCtcV7Tests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn('DEFAULT_PARENT = "exp-63fdb8d218673527"', source)
         self.assertIn('PARENT_CER = 0.7588550365720209', source)
+        self.assertIn('MODEL_SPEC_SHA256 = "0282f70168765fba5c1d33d28d47e6db18bc0163d99a1b3a8b15f49312b6401d"', source)
         self.assertIn('"max_cer": PARENT_CER', source)
         self.assertIn('"model_id": "cnn_ctc_v7"', source)
         self.assertIn('"checkpoint_selection": "validation_cer"', source)
