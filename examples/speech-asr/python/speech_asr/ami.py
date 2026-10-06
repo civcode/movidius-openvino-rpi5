@@ -31,6 +31,41 @@ class AmiPreparationError(RuntimeError):
     """Raised when pinned AMI data cannot be prepared deterministically."""
 
 
+class AmiInvalidSegmentInterval(AmiPreparationError):
+    """Raised for an annotation segment whose end is not after its start."""
+
+    def __init__(
+        self,
+        *,
+        meeting: str,
+        speaker: str,
+        segment_id: str,
+        source_start_sample: int,
+        source_end_sample: int,
+    ) -> None:
+        self.meeting = meeting
+        self.speaker = speaker
+        self.segment_id = segment_id
+        self.source_start_sample = source_start_sample
+        self.source_end_sample = source_end_sample
+        super().__init__(
+            f"{meeting}/{speaker}/{segment_id}: non-positive annotated segment "
+            f"interval {source_start_sample}:{source_end_sample}"
+        )
+
+    def provenance(self) -> Dict[str, Any]:
+        suffix = self.segment_id.rsplit(".", 1)[-1]
+        return {
+            "id": f"ami-{self.meeting}-{self.speaker}-{suffix}",
+            "meeting": self.meeting,
+            "speaker": self.speaker,
+            "segment_id": self.segment_id,
+            "reason": "non_positive_annotated_segment_interval",
+            "source_start_sample": self.source_start_sample,
+            "source_end_sample": self.source_end_sample,
+        }
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -376,6 +411,14 @@ def render_segment(
 
     source_start = seconds_to_samples(segment["start"])
     source_end = seconds_to_samples(segment["end"])
+    if source_end <= source_start:
+        raise AmiInvalidSegmentInterval(
+            meeting=meeting,
+            speaker=speaker,
+            segment_id=segment_id,
+            source_start_sample=source_start,
+            source_end_sample=source_end,
+        )
     pcm16, source_channels = _read_pcm16_clip(
         source_audio,
         source_start,
@@ -468,6 +511,7 @@ def prepare_from_spec(
     audio_dir = output_dir / "audio"
     manifest_path = output_dir / "manifest.jsonl"
     records = []
+    excluded_segments: list[Dict[str, Any]] = []
 
     annotation_sha = sha256_file(annotation_zip_path)
     expected_annotation = spec["annotations"]["sha256"]
@@ -504,17 +548,21 @@ def prepare_from_spec(
                 for segment_id in segment_ids:
                     suffix = segment_id.rsplit(".", 1)[-1]
                     filename = f"{meeting}.{speaker}.{suffix}.f32"
-                    record = render_segment(
-                        annotation_zip=archive,
-                        source_audio=source_audio,
-                        output_audio=audio_dir / filename,
-                        meeting=meeting,
-                        speaker=speaker,
-                        segment_id=segment_id,
-                        source_audio_sha256=source_hash,
-                        annotation_sha256=annotation_sha,
-                        audio_stream=source["audio"]["stream"],
-                    )
+                    try:
+                        record = render_segment(
+                            annotation_zip=archive,
+                            source_audio=source_audio,
+                            output_audio=audio_dir / filename,
+                            meeting=meeting,
+                            speaker=speaker,
+                            segment_id=segment_id,
+                            source_audio_sha256=source_hash,
+                            annotation_sha256=annotation_sha,
+                            audio_stream=source["audio"]["stream"],
+                        )
+                    except AmiInvalidSegmentInterval as exc:
+                        excluded_segments.append(exc.provenance())
+                        continue
                     record["audio"]["path"] = f"audio/{filename}"
                     records.append(record)
 
@@ -546,6 +594,7 @@ def prepare_from_spec(
         "annotation_sha256": annotation_sha,
         "manifest_sha256": manifest_sha,
         "records": len(records),
+        "excluded_segments": excluded_segments,
         "normalized_audio_sha256": normalized_audio,
         "logical_tree_sha256": logical_tree_hash,
         "audio_sha256": {
@@ -641,6 +690,59 @@ def verify_prepared_dataset(
     if provenance.get("records") != len(records):
         raise AmiPreparationError("record count does not match provenance")
 
+    excluded_segments = provenance.get("excluded_segments", [])
+    if not isinstance(excluded_segments, list):
+        raise AmiPreparationError("excluded_segments provenance must be an array")
+    excluded_ids: set[str] = set()
+    for index, excluded in enumerate(excluded_segments):
+        if not isinstance(excluded, Mapping):
+            raise AmiPreparationError(
+                f"excluded_segments[{index}] must be an object"
+            )
+        expected_keys = {
+            "id",
+            "meeting",
+            "speaker",
+            "segment_id",
+            "reason",
+            "source_start_sample",
+            "source_end_sample",
+        }
+        if set(excluded) != expected_keys:
+            raise AmiPreparationError(
+                f"excluded_segments[{index}] has unexpected fields"
+            )
+        if excluded.get("reason") != "non_positive_annotated_segment_interval":
+            raise AmiPreparationError(
+                f"excluded_segments[{index}] has unsupported reason"
+            )
+        start = excluded.get("source_start_sample")
+        end = excluded.get("source_end_sample")
+        if (
+            not isinstance(start, int)
+            or isinstance(start, bool)
+            or not isinstance(end, int)
+            or isinstance(end, bool)
+            or end > start
+        ):
+            raise AmiPreparationError(
+                f"excluded_segments[{index}] does not describe a non-positive interval"
+            )
+        sample_id = excluded.get("id")
+        if not isinstance(sample_id, str) or not sample_id:
+            raise AmiPreparationError(
+                f"excluded_segments[{index}] has invalid sample id"
+            )
+        if sample_id in excluded_ids:
+            raise AmiPreparationError(
+                f"duplicate excluded segment sample id: {sample_id}"
+            )
+        if sample_id in ids:
+            raise AmiPreparationError(
+                f"excluded segment is also present in manifest: {sample_id}"
+            )
+        excluded_ids.add(sample_id)
+
     expected_clip_paths = {
         (output_dir / record["audio"]["path"]).resolve() for record in records
     }
@@ -684,6 +786,7 @@ def verify_prepared_dataset(
         "version": 1,
         "split_id": spec["id"],
         "records": len(records),
+        "excluded_segments": len(excluded_segments),
         "manifest_sha256": manifest_hash,
         "logical_tree_sha256": logical_tree_hash,
     }
