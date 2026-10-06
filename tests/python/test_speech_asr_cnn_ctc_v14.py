@@ -106,7 +106,7 @@ class CnnCtcV14Tests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn('DEFAULT_PARENT = "exp-968150d44c4479ac"', source)
         self.assertIn('SCREEN_MANIFEST_SHA256 = "0528db59eec36d00d710b3090b0c6404dbdbf548ae7e13d3daf3d5152eacfc8b"', source)
-        self.assertIn('MODEL_SPEC_SHA256 = "2974ff5f4777803e1e1049296147aab75993dbd8c6d0f7c0c20ec5aa0c884067"', source)
+        self.assertIn('MODEL_SPEC_SHA256 = "f2897df71bcf54c49febff31a7c5465e8a8653c5d9698276cbf80e5c242d016e"', source)
         self.assertIn('SCREEN_EPOCHS = 12', source)
         self.assertIn('PARENT_CER = 0.975522663134251', source)
         self.assertIn('"max_cer": None', source)

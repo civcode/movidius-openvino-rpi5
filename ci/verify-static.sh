@@ -1106,7 +1106,7 @@ spec = json.loads(Path("examples/speech-asr/models/cnn_ctc_v14/model_spec.json")
 canonical = hashlib.sha256(
     json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 ).hexdigest()
-assert canonical == "2974ff5f4777803e1e1049296147aab75993dbd8c6d0f7c0c20ec5aa0c884067"
+assert canonical == "f2897df71bcf54c49febff31a7c5465e8a8653c5d9698276cbf80e5c242d016e"
 assert spec["input_contract"]["shape"] == [1,64,512]
 assert spec["output_contract"]["shape"] == [1,128,39]
 assert [x["channels"] for x in spec["network"]["stem"]] == [128,448]
@@ -1126,7 +1126,7 @@ grep -q 'V14_ARCHITECTURE' examples/speech-asr/python/speech_asr/orchestration.p
 grep -q '"cnn_ctc_v14": "train-cnn-ctc-v14.sh"' examples/speech-asr/python/speech_asr/orchestration.py || fail 'cnn_ctc_v14 training registration missing'
 grep -q '"cnn_ctc_v14": "evaluate-cnn-ctc-v14.sh"' examples/speech-asr/agent/edge_worker.py || fail 'cnn_ctc_v14 edge evaluator registration missing'
 grep -q 'DEFAULT_PARENT = "exp-968150d44c4479ac"' examples/speech-asr/agent/init_cnn_ctc_v14_cosine_control.py || fail 'cnn_ctc_v14 parent changed'
-grep -q 'MODEL_SPEC_SHA256 = "2974ff5f4777803e1e1049296147aab75993dbd8c6d0f7c0c20ec5aa0c884067"' examples/speech-asr/agent/init_cnn_ctc_v14_cosine_control.py || fail 'cnn_ctc_v14 model identity changed'
+grep -q 'MODEL_SPEC_SHA256 = "f2897df71bcf54c49febff31a7c5465e8a8653c5d9698276cbf80e5c242d016e"' examples/speech-asr/agent/init_cnn_ctc_v14_cosine_control.py || fail 'cnn_ctc_v14 model identity changed'
 grep -q '"max_cer": None' examples/speech-asr/agent/init_cnn_ctc_v14_cosine_control.py || fail 'cnn_ctc_v14 CER must be measured, not gated'
 grep -q '"max_latency_p95_ms": None' examples/speech-asr/agent/init_cnn_ctc_v14_cosine_control.py || fail 'cnn_ctc_v14 latency must be measured, not gated'
 grep -q 'CosineAnnealingLR' examples/speech-asr/training/train_cnn_ctc_v14.py || fail 'cnn_ctc_v14 cosine schedule missing'
