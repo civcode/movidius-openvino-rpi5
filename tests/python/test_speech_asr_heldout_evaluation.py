@@ -235,6 +235,36 @@ class FrozenHeldoutControllerSourceTests(unittest.TestCase):
         self.assertIn('"repeat_for_model_selection": False', source)
         self.assertIn("held-out evaluation is already sealed", source)
 
+    def test_controller_only_allows_known_v1_transport_correction(self):
+        controller = (
+            SPEECH / "agent" / "run_frozen_heldout_evaluation.py"
+        ).read_text(encoding="utf-8")
+        review = (
+            SPEECH / "agent" / "review_heldout_evaluation.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            'KNOWN_BAD_V1_EVALUATION_COMMIT = "f5c059d2028d215777b28c1fc971b2f482185a05"',
+            controller,
+        )
+        self.assertIn(
+            'INVALIDATION_DEFECT_ID = "persistent-tensor-stream-v1-stdout-banner"',
+            controller,
+        )
+        self.assertIn("--correct-invalid-v1-transport-result", controller)
+        self.assertIn("def validate_known_bad_v1_result(", controller)
+        self.assertIn("def prepare_corrective_rerun(", controller)
+        self.assertIn('"maximum_replacement_seals": 1', controller)
+        self.assertIn("archived invalidated held-out result hash mismatch", controller)
+        self.assertIn("archived invalidated hardware result hash mismatch", controller)
+        self.assertIn(
+            '"held-out hardware result did not use persistent-tensor-stream-v2"',
+            controller,
+        )
+        self.assertIn('"persistent_parity_gate"', controller)
+        self.assertIn('"supersedes"', controller)
+        self.assertIn('"supersedes": result.get("supersedes")', review)
+
     def test_controller_pins_edge_and_uses_hash_bound_ir(self):
         source = (
             SPEECH / "agent" / "run_frozen_heldout_evaluation.py"
