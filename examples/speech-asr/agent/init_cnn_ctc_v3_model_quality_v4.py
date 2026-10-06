@@ -35,6 +35,16 @@ MODEL_SPEC_SHA256 = "beb28c4666687d634aa4a954b0c5cdabd82c373b7d028d6ffa96c9f56aa
 VOCAB_SHA256 = "79f4dc2b628f5f61b3d5361ca67fadff044a91569c24e0af3916786fd8ddce4f"
 DEFAULT_PARENT = "exp-87538823d2bf1562"
 BOUNDARY_ID = "ami-model-quality-v4-edinburgh-full-corpus-asr-v1"
+TRAIN_MANIFEST_SHA256 = "6025d17f08c1815d1710c3ab56cea51a34365f398e9877b4aefec234e64e4096"
+VALIDATION_MANIFEST_SHA256 = "fbd72a648826b2e200f9244b4dc73be425cada2e304be92d513f7033a8de4088"
+TRAIN_SOURCE_MANIFEST_SHA256 = "89d82a09adedd3c1acd2f6749936c4cba8ebfed117b8c7eb190e27838e95b538"
+VALIDATION_SOURCE_MANIFEST_SHA256 = "f6d39166944c01de3b3db3d68e3c3442a1a9cae33a050e2720edefe33fe196ba"
+TRAIN_RECORDS = 15738
+TRAIN_AUDIO_SECONDS = 25846.327
+VALIDATION_RECORDS = 1273
+VALIDATION_AUDIO_SECONDS = 2279.385
+TRAIN_EXCLUDED = {"target_too_long": 141, "too_long": 4547}
+VALIDATION_EXCLUDED = {"target_too_long": 7, "too_long": 351}
 
 
 def sha256_path(path: pathlib.Path) -> str:
@@ -156,17 +166,43 @@ def validate_qualification() -> dict:
         TRAIN_MANIFEST
     ):
         raise ValueError("model-quality-v4 training manifest hash mismatch")
-    if qualification.get("validation", {}).get("manifest_sha256") != sha256_path(
-        VALIDATION_MANIFEST
-    ):
+    train_manifest_sha = sha256_path(TRAIN_MANIFEST)
+    validation_manifest_sha = sha256_path(VALIDATION_MANIFEST)
+    if qualification.get("train", {}).get("manifest_sha256") != train_manifest_sha:
+        raise ValueError("model-quality-v4 training manifest hash mismatch")
+    if qualification.get("validation", {}).get("manifest_sha256") != validation_manifest_sha:
         raise ValueError("model-quality-v4 validation manifest hash mismatch")
+    if train_manifest_sha != TRAIN_MANIFEST_SHA256:
+        raise ValueError("model-quality-v4 reviewed training manifest changed")
+    if validation_manifest_sha != VALIDATION_MANIFEST_SHA256:
+        raise ValueError("model-quality-v4 reviewed validation manifest changed")
+    if qualification.get("sources", {}).get("train", {}).get(
+        "manifest_sha256"
+    ) != TRAIN_SOURCE_MANIFEST_SHA256:
+        raise ValueError("model-quality-v4 reviewed training source manifest changed")
+    if qualification.get("sources", {}).get("validation", {}).get(
+        "manifest_sha256"
+    ) != VALIDATION_SOURCE_MANIFEST_SHA256:
+        raise ValueError("model-quality-v4 reviewed validation source manifest changed")
+    if qualification.get("sources", {}).get("train", {}).get("records") != 20426:
+        raise ValueError("model-quality-v4 reviewed training source record count changed")
+    if qualification.get("sources", {}).get("validation", {}).get("records") != 1631:
+        raise ValueError("model-quality-v4 reviewed validation source record count changed")
 
     train_stats = qualification.get("train", {}).get("stats", {})
     validation_stats = qualification.get("validation", {}).get("stats", {})
-    if train_stats.get("records", 0) <= 4429:
-        raise ValueError("model-quality-v4 training population is not larger than v3")
-    if train_stats.get("audio_seconds", 0) <= 7150.12:
-        raise ValueError("model-quality-v4 training duration is not larger than v3")
+    if train_stats.get("records") != TRAIN_RECORDS:
+        raise ValueError("model-quality-v4 reviewed training record count changed")
+    if train_stats.get("audio_seconds") != TRAIN_AUDIO_SECONDS:
+        raise ValueError("model-quality-v4 reviewed training duration changed")
+    if validation_stats.get("records") != VALIDATION_RECORDS:
+        raise ValueError("model-quality-v4 reviewed validation record count changed")
+    if validation_stats.get("audio_seconds") != VALIDATION_AUDIO_SECONDS:
+        raise ValueError("model-quality-v4 reviewed validation duration changed")
+    if qualification.get("train", {}).get("excluded") != TRAIN_EXCLUDED:
+        raise ValueError("model-quality-v4 reviewed training exclusion counts changed")
+    if qualification.get("validation", {}).get("excluded") != VALIDATION_EXCLUDED:
+        raise ValueError("model-quality-v4 reviewed validation exclusion counts changed")
     if set(validation_stats.get("meetings", [])) != {
         "ES2011a",
         "ES2011b",
