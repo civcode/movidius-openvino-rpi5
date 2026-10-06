@@ -48,6 +48,7 @@ DEFAULT_MANIFEST = ROOT / "work" / "speech-asr" / "ami" / "ami-smoke-v1" / "mani
 DEFAULT_IR = ROOT / "work" / "speech-asr" / "cnn_ctc_v16" / "openvino" / "fp16"
 
 EXECUTION_MODE = "persistent-tensor-stream-v2"
+MAX_SERVER_RESTARTS = 4
 CACHE_VERSION = 3
 READY_RE = re.compile(
     r"READY protocol=tensor-stream-v2 input_elements=(\d+) "
@@ -538,6 +539,7 @@ def main() -> int:
         reused_samples = 0
         new_samples = 0
         request_index = 0
+        server_restarts = 0
         parity_checked = False
         parity_report = None
         session_loads: dict[str, float] = {}
@@ -561,7 +563,7 @@ def main() -> int:
             session_loads[session_id] = load_ms
 
         def ensure_server() -> PersistentMyriadServer:
-            nonlocal server
+            nonlocal server, request_index
             if server is not None:
                 return server
             session_id = next_server_session_id(work)
@@ -590,7 +592,43 @@ def main() -> int:
                 )
             register_session(session_id, server.load_ms)
             server.session_id = session_id
+            request_index = 0
             return server
+
+        def infer_with_restart(
+            feature_values: np.ndarray,
+            *,
+            record_id: str,
+        ) -> tuple[PersistentMyriadServer, np.ndarray, float]:
+            nonlocal server, request_index, server_restarts
+            last_error: RuntimeError | None = None
+            for restart_attempt in range(MAX_SERVER_RESTARTS + 1):
+                active = ensure_server()
+                request_index += 1
+                try:
+                    logits_flat, infer_ms = active.infer(
+                        feature_values,
+                        request_index=request_index,
+                    )
+                    return active, logits_flat, infer_ms
+                except RuntimeError as exc:
+                    last_error = exc
+                    failed_session = active.session_id
+                    if restart_attempt >= MAX_SERVER_RESTARTS:
+                        raise
+                    print(
+                        "[myriad-eval] persistent server request failed; "
+                        f"record={record_id} session={failed_session} "
+                        f"restart={server_restarts + 1}/{MAX_SERVER_RESTARTS}: "
+                        f"{exc}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    active.close()
+                    server = None
+                    server_restarts += 1
+            assert last_error is not None
+            raise last_error
 
         for record in records(args.manifest):
             manifest_samples += 1
@@ -670,11 +708,9 @@ def main() -> int:
                         output_elements=output_elements,
                     )
 
-                active = ensure_server()
-                request_index += 1
-                logits_flat, infer_ms = active.infer(
+                active, logits_flat, infer_ms = infer_with_restart(
                     feature_values,
-                    request_index=request_index,
+                    record_id=str(record["id"]),
                 )
 
                 if single_shot is not None:
@@ -827,6 +863,7 @@ def main() -> int:
             f"processed={manifest_samples}/{manifest_total} "
             f"evaluated={len(per_sample)} reused={reused_samples} "
             f"new={new_samples} sessions={len(session_loads)} "
+            f"restarts={server_restarts} "
             "hardware_pass_complete=true",
             flush=True,
         )
@@ -893,6 +930,8 @@ def main() -> int:
                 "hardware_execution": {
                     "mode": EXECUTION_MODE,
                     "server_sessions": len(load_values),
+                    "server_restarts": server_restarts,
+                    "max_server_restarts": MAX_SERVER_RESTARTS,
                     "warmup_per_session": 1,
                     "reused_samples": reused_samples,
                     "new_samples": new_samples,
