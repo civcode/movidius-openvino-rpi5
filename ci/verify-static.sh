@@ -754,6 +754,29 @@ for f in \
     scripts/evaluate-cnn-ctc-v8.sh; do
     test -x "$f" || fail "cnn_ctc_v8 shell entry point is not executable: $f"
 done
+python3 - <<'PY_V8'
+import hashlib
+import json
+from pathlib import Path
+spec = json.loads(Path("examples/speech-asr/models/cnn_ctc_v8/model_spec.json").read_text())
+canonical = hashlib.sha256(
+    json.dumps(
+        spec,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+).hexdigest()
+assert canonical == "e9ac743b98591f8c0abe652f3343ecd30d895c044a06949b3d5ee9266a2fcaf4"
+assert spec["input_contract"]["shape"] == [1,64,512]
+assert spec["output_contract"]["shape"] == [1,256,39]
+assert [x["stride"] for x in spec["network"]["stem"]] == [1,2]
+assert [x["channels"] for x in spec["network"]["stem"]] == [64,72]
+assert [x["dilation"] for x in spec["network"]["residual_blocks"]] == [1,2,2,2,2]
+assert spec["network"]["estimated_parameters"] == 772983
+assert spec["network"]["estimated_macs_fixed_input"] == 202897408
+assert spec["network"]["receptive_field_feature_frames"] == 509
+PY_V8
 grep -q 'V8_ARCHITECTURE' examples/speech-asr/python/speech_asr/orchestration.py || fail 'cnn_ctc_v8 architecture registration missing'
 grep -q '"cnn_ctc_v8": "train-cnn-ctc-v8.sh"' examples/speech-asr/python/speech_asr/orchestration.py || fail 'cnn_ctc_v8 training registration missing'
 grep -q '"cnn_ctc_v8": "evaluate-cnn-ctc-v8.sh"' examples/speech-asr/agent/edge_worker.py || fail 'cnn_ctc_v8 edge evaluator registration missing'
