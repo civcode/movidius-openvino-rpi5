@@ -645,9 +645,19 @@ for f in \
     test -x "$f" || fail "cnn_ctc_v7 shell entry point is not executable: $f"
 done
 python3 - <<'PY_V7'
+import hashlib
 import json
 from pathlib import Path
 spec=json.loads(Path("examples/speech-asr/models/cnn_ctc_v7/model_spec.json").read_text())
+canonical=hashlib.sha256(
+    json.dumps(
+        spec,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+).hexdigest()
+assert canonical == "a4e53c89044dad473fb321e2187f5de598f8623b66de42d29e2c2c775c82ebc8"
 assert spec["id"] == "cnn_ctc_v7"
 assert spec["frontend"]["kind"] == "logmel-v1"
 assert [x["channels"] for x in spec["network"]["stem"]] == [64, 112]
