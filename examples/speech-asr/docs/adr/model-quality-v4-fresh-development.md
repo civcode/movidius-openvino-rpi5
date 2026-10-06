@@ -97,6 +97,26 @@ to training and validation. Qualification requires:
 The qualification records the policy hash, source-lock hash and both frozen
 split-spec hashes.
 
+### Reviewed ES2011c annotation anomaly
+
+The pinned AMI v1.6.2 annotations contain one observed ES2011c segment whose
+`transcriber_start` is after its `transcriber_end`. At 16 kHz the annotated
+interval is `1249952:1248016` samples (78.122 s to 78.001 s). AMI's public
+data-problems material does not publish a correction for this interval, so the
+pipeline does not swap, infer, or otherwise invent segment boundaries.
+
+The generic AMI preparer classifies a non-positive annotated segment interval
+and records the excluded segment in preparation provenance. For
+model-quality-v4, qualification is stricter:
+
+- training must contain zero such exclusions;
+- validation must contain exactly one exclusion;
+- that exclusion must be ES2011c with the exact reviewed sample interval above;
+- any additional or changed malformed interval stops qualification for review.
+
+This preserves every valid ES2011 segment unchanged while making the single
+source annotation defect explicit and auditable.
+
 ## Baseline experiment
 
 The first model-quality-v4 experiment deliberately changes **data only**.
