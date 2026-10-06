@@ -47,10 +47,10 @@ DEFAULT_VOCAB = SPEECH_ROOT / "models" / "cnn_ctc_v3" / "vocab.json"
 DEFAULT_MANIFEST = ROOT / "work" / "speech-asr" / "ami" / "ami-smoke-v1" / "manifest.jsonl"
 DEFAULT_IR = ROOT / "work" / "speech-asr" / "cnn_ctc_v3" / "openvino" / "fp16"
 
-EXECUTION_MODE = "persistent-tensor-stream-v1"
-CACHE_VERSION = 2
+EXECUTION_MODE = "persistent-tensor-stream-v2"
+CACHE_VERSION = 3
 READY_RE = re.compile(
-    r"READY protocol=tensor-stream-v1 input_elements=(\d+) "
+    r"READY protocol=tensor-stream-v2 input_elements=(\d+) "
     r"output_elements=(\d+) load_ms=([0-9.]+) warmup=(\d+)"
 )
 TIMING_RE = re.compile(
@@ -124,6 +124,57 @@ def require_persistent_runtime(platform: str) -> None:
             "runtime image lacks persistent tensor-stream support; "
             f"rebuild it from this checkout with: ./build.sh --platform {platform}"
         )
+
+
+def run_single_shot_parity(
+    *,
+    platform: str,
+    xml: pathlib.Path,
+    binary: pathlib.Path,
+    feature_path: pathlib.Path,
+    output_path: pathlib.Path,
+    output_elements: int,
+) -> np.ndarray:
+    proc = subprocess.run(
+        [
+            str(ROOT / "run.sh"),
+            "--platform",
+            platform,
+            "custom",
+            "--model",
+            container_work(xml),
+            "--weights",
+            container_work(binary),
+            "--iterations",
+            "1",
+            "--tensor",
+            container_work(feature_path),
+            "--output",
+            container_work(output_path),
+        ],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+        timeout=180.0,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            "single-shot MYRIAD parity probe failed:\n"
+            + "\n".join(proc.stdout.splitlines()[-40:])
+        )
+    if not output_path.is_file():
+        raise RuntimeError("single-shot MYRIAD parity output is missing")
+    values = np.fromfile(output_path, dtype=np.float32)
+    if values.size != output_elements:
+        raise RuntimeError(
+            f"single-shot MYRIAD parity output has {values.size} elements, "
+            f"expected {output_elements}"
+        )
+    if not np.isfinite(values).all():
+        raise RuntimeError("single-shot MYRIAD parity output contains non-finite values")
+    return values
 
 
 class PersistentMyriadServer:
@@ -487,6 +538,8 @@ def main() -> int:
         reused_samples = 0
         new_samples = 0
         request_index = 0
+        parity_checked = False
+        parity_report = None
         session_loads: dict[str, float] = {}
         manifest_total = sum(
             1
@@ -599,12 +652,85 @@ def main() -> int:
                 logits_flat = np.fromfile(logits_path, dtype=np.float32)
             else:
                 feature_values.tofile(feature_path)
+
+                single_shot = None
+                parity_output_path = sample_dir / "parity-single-shot.f32"
+                if not parity_checked:
+                    single_shot = run_single_shot_parity(
+                        platform=args.platform,
+                        xml=xml,
+                        binary=binary,
+                        feature_path=feature_path,
+                        output_path=parity_output_path,
+                        output_elements=output_elements,
+                    )
+
                 active = ensure_server()
                 request_index += 1
                 logits_flat, infer_ms = active.infer(
                     feature_values,
                     request_index=request_index,
                 )
+
+                if single_shot is not None:
+                    if not np.isfinite(logits_flat).all():
+                        raise RuntimeError(
+                            "persistent MYRIAD parity output contains non-finite values"
+                        )
+                    full_argmax = float(
+                        np.mean(
+                            single_shot.reshape(output_shape).argmax(axis=-1)
+                            == logits_flat.reshape(output_shape).argmax(axis=-1)
+                        )
+                    )
+                    valid_output_frames = int(decision["valid_output_frames"])
+                    single_valid = single_shot.reshape(output_shape)[
+                        0, :valid_output_frames, :
+                    ]
+                    stream_valid = logits_flat.reshape(output_shape)[
+                        0, :valid_output_frames, :
+                    ]
+                    valid_argmax = float(
+                        np.mean(
+                            single_valid.argmax(axis=-1)
+                            == stream_valid.argmax(axis=-1)
+                        )
+                    )
+                    max_abs_error = float(
+                        np.max(np.abs(single_shot - logits_flat))
+                    )
+                    if valid_argmax != 1.0 or max_abs_error > 0.01:
+                        raise RuntimeError(
+                            "persistent MYRIAD parity gate failed: "
+                            f"sample={record['id']} "
+                            f"valid_argmax_agreement={valid_argmax:.9f} "
+                            f"full_argmax_agreement={full_argmax:.9f} "
+                            f"max_abs_error={max_abs_error:.9f}"
+                        )
+                    parity_report = {
+                        "sample_id": record["id"],
+                        "single_shot_logits_sha256": sha256_path(
+                            parity_output_path
+                        ),
+                        "persistent_logits_sha256": hashlib.sha256(
+                            np.ascontiguousarray(
+                                logits_flat, dtype=np.float32
+                            ).tobytes(order="C")
+                        ).hexdigest(),
+                        "valid_argmax_agreement": valid_argmax,
+                        "full_argmax_agreement": full_argmax,
+                        "max_abs_error": max_abs_error,
+                        "max_abs_error_threshold": 0.01,
+                    }
+                    parity_checked = True
+                    print(
+                        "[myriad-eval] persistent parity gate: PASS "
+                        f"sample={record['id']} "
+                        f"valid_argmax_agreement={valid_argmax:.9f} "
+                        f"max_abs_error={max_abs_error:.9f}",
+                        flush=True,
+                    )
+
                 logits_flat.astype(np.float32, copy=False).tofile(logits_path)
                 write_sample_cache(
                     cache_path=cache_path,
@@ -765,6 +891,7 @@ def main() -> int:
                     "warmup_per_session": 1,
                     "reused_samples": reused_samples,
                     "new_samples": new_samples,
+                    "persistent_parity_gate": parity_report,
                 },
                 "decoder": decoder_summary,
                 "per_sample": per_sample,
@@ -775,6 +902,7 @@ def main() -> int:
                 "vocab_sha256": canonical_sha256(vocab),
                 "frontend_kind": spec["frontend"]["kind"],
                 "hardware_execution_mode": EXECUTION_MODE,
+                "persistent_parity_gate": parity_report,
                 "evaluator_sha256": evaluator_sha,
             },
         }
