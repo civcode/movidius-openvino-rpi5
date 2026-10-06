@@ -1,0 +1,210 @@
+{
+  "schema": "speech-asr/custom-model-spec",
+  "version": 1,
+  "id": "cnn_ctc_v14",
+  "family": "cnn_ctc",
+  "purpose": "model-quality-v4 large-capacity cosine-control retry: v12/v13 graph with proven-stable small-model optimizer schedule",
+  "frontend": {
+    "kind": "logmel-v1",
+    "sample_rate_hz": 16000,
+    "window_samples": 400,
+    "hop_samples": 160,
+    "fft_size": 512,
+    "mel_bins": 64,
+    "fmin_hz": 20,
+    "fmax_hz": 7600,
+    "log_floor": 0.00001,
+    "normalization": "per_mel_bin_mean",
+    "fixed_frames": 512,
+    "fixed_audio_samples": 82160
+  },
+  "input_contract": {
+    "name": "features",
+    "layout": "NCT",
+    "dtype": "float32",
+    "shape": [
+      1,
+      64,
+      512
+    ]
+  },
+  "network": {
+    "kind": "residual-temporal-v9",
+    "stem": [
+      {
+        "channels": 128,
+        "kernel": 5,
+        "stride": 2,
+        "padding": 2
+      },
+      {
+        "channels": 448,
+        "kernel": 5,
+        "stride": 2,
+        "padding": 2
+      }
+    ],
+    "residual_blocks": [
+      {
+        "channels": 448,
+        "kernel": 5,
+        "dilation": 1,
+        "padding": 2,
+        "projection_kernel": 1
+      },
+      {
+        "channels": 448,
+        "kernel": 5,
+        "dilation": 2,
+        "padding": 4,
+        "projection_kernel": 1
+      },
+      {
+        "channels": 448,
+        "kernel": 5,
+        "dilation": 3,
+        "padding": 6,
+        "projection_kernel": 1
+      },
+      {
+        "channels": 448,
+        "kernel": 5,
+        "dilation": 4,
+        "padding": 8,
+        "projection_kernel": 1
+      },
+      {
+        "channels": 448,
+        "kernel": 5,
+        "dilation": 4,
+        "padding": 8,
+        "projection_kernel": 1
+      },
+      {
+        "channels": 448,
+        "kernel": 5,
+        "dilation": 3,
+        "padding": 6,
+        "projection_kernel": 1
+      },
+      {
+        "channels": 448,
+        "kernel": 5,
+        "dilation": 2,
+        "padding": 4,
+        "projection_kernel": 1
+      },
+      {
+        "channels": 448,
+        "kernel": 5,
+        "dilation": 1,
+        "padding": 2,
+        "projection_kernel": 1
+      },
+      {
+        "channels": 448,
+        "kernel": 5,
+        "dilation": 1,
+        "padding": 2,
+        "projection_kernel": 1
+      },
+      {
+        "channels": 448,
+        "kernel": 5,
+        "dilation": 2,
+        "padding": 4,
+        "projection_kernel": 1
+      },
+      {
+        "channels": 448,
+        "kernel": 5,
+        "dilation": 3,
+        "padding": 6,
+        "projection_kernel": 1
+      },
+      {
+        "channels": 448,
+        "kernel": 5,
+        "dilation": 4,
+        "padding": 8,
+        "projection_kernel": 1
+      },
+      {
+        "channels": 448,
+        "kernel": 5,
+        "dilation": 4,
+        "padding": 8,
+        "projection_kernel": 1
+      },
+      {
+        "channels": 448,
+        "kernel": 5,
+        "dilation": 3,
+        "padding": 6,
+        "projection_kernel": 1
+      },
+      {
+        "channels": 448,
+        "kernel": 5,
+        "dilation": 2,
+        "padding": 4,
+        "projection_kernel": 1
+      },
+      {
+        "channels": 448,
+        "kernel": 5,
+        "dilation": 1,
+        "padding": 2,
+        "projection_kernel": 1
+      }
+    ],
+    "normalization": "none",
+    "activation": "relu",
+    "dropout": 0.1,
+    "residual_projection_init": "kaiming_scaled_0.01",
+    "projection_kernel": 1,
+    "estimated_parameters": 19627687,
+    "estimated_macs_fixed_input": 2515673088,
+    "receptive_field_feature_frames": 653
+  },
+  "output_contract": {
+    "name": "logits",
+    "layout": "NTV",
+    "dtype": "float32",
+    "shape": [
+      1,
+      128,
+      39
+    ],
+    "semantics": "unnormalized CTC logits"
+  },
+  "decoder": {
+    "kind": "ctc-greedy-v1",
+    "blank_index": 0,
+    "vocab": "vocab.json"
+  },
+  "training": {
+    "seed": 1337,
+    "batch_size": 1,
+    "learning_rate": 0.0003,
+    "epochs": 32,
+    "optimizer": "adam",
+    "loss": "ctc",
+    "zero_infinity": true,
+    "gradient_clip_norm": 5,
+    "lr_schedule": "cosine",
+    "min_learning_rate": 0.00003,
+    "checkpoint_selection": "best_validation_loss"
+  },
+  "export": {
+    "framework": "pytorch",
+    "onnx_opset": 11,
+    "fixed_shapes": true,
+    "precision": "FP32 source -> FP16 OpenVINO IR"
+  },
+  "deployment": {
+    "target": "MYRIAD",
+    "openvino_version": "2020.3.2",
+    "precision": "FP16"
+  }
+}
