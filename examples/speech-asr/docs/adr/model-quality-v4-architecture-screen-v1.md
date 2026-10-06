@@ -82,10 +82,15 @@ The first candidate, `cnn_ctc_v8`, was rejected at CER
 `0.8442089500662328` and MA2450 p95 `26.6580554 ms`. Its 256-frame CTC
 output also worsened under-emission. That direction is retired.
 
-The active second candidate is `cnn_ctc_v9`, which restores v3's 128-frame
-CTC rate and 96-channel width and replaces the five large residual kernels with
-eight kernel-7 dilated blocks. See
-`model-quality-v4-cnn-ctc-v9-screen.md`.
+The second candidate, `cnn_ctc_v9`, restored healthy 128-frame emission
+behavior and reduced MA2450 p95 to `12.0927212 ms`, but missed the v3-screen
+CER gate by about 0.61% relative. It is retained as an efficiency Pareto point.
+
+The active third candidate is `cnn_ctc_v10`: identical v9 temporal geometry,
+but with the second stem and residual width increased from 96 to 112 channels.
+This isolates whether v9's slight CER deficit is a capacity limitation while
+retaining substantial latency headroom. See
+`model-quality-v4-cnn-ctc-v10-screen.md`.
 
 ## Commands
 

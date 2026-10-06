@@ -460,16 +460,21 @@ The first candidate, `cnn_ctc_v8`, was rejected: CER regressed to
 empty hypotheses rose to `0.330715`, and MA2450 p95 rose to `26.6580554
 ms`. The 256-frame CTC direction is retired.
 
-The active candidate is `cnn_ctc_v9`: v3's 128-frame CTC rate and 96-channel
-width with eight kernel-7 residual blocks and dilations
-`[1,2,3,4,4,3,2,1]`. Its frozen estimate is 646,503 parameters and
-85,151,744 MACs.
+`cnn_ctc_v9` finished at CER `0.8032598053331798` and MA2450 p95
+`12.0927212 ms`. It narrowly misses the v3-screen CER gate but is retained as
+an efficiency Pareto point because emission diagnostics are healthy and latency
+is much lower.
+
+The active candidate is `cnn_ctc_v10`: the exact v9 temporal geometry widened
+from 96 to 112 channels. Its frozen estimate is 865,511 parameters and
+113,149,952 MACs, still well below v3's compute while using some of v9's large
+latency headroom.
 
 Run it with:
 
 ```bash
 ./scripts/provision-speech-model-data-v4-edge.sh
-INIT_JSON="$(./scripts/init-cnn-ctc-v9-architecture-screen.sh)"
+INIT_JSON="$(./scripts/init-cnn-ctc-v10-architecture-screen.sh)"
 EXP="$(printf '%s\n' "$INIT_JSON" |
   python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])')"
 ./scripts/run-speech-experiment.sh --experiment "$EXP" --worker edge

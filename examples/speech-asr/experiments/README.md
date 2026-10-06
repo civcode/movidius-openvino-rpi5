@@ -504,3 +504,27 @@ Initialize with:
 ./scripts/init-cnn-ctc-v9-architecture-screen.sh
 ```
 
+## v9 efficiency Pareto and v10
+
+`cnn_ctc_v9` completed as `exp-df5bbe0ea05c2238/attempt-0001`:
+
+- CER `0.8032598053331798` vs v3-screen `0.7984219316938317`;
+- WER `1.005182465990067`;
+- emitted/reference characters `0.39399873293785637`;
+- empty-hypothesis fraction `0.2545168892380204`;
+- MA2450 p95 `12.0927212 ms`;
+- final PyTorch/ONNX argmax agreement `1.0`.
+
+It is rejected for promotion but retained as an efficiency Pareto point.
+
+The next candidate, `cnn_ctc_v10`, keeps v9's eight kernel-7 blocks and
+dilations `[1,2,3,4,4,3,2,1]` and changes only width from 96 to 112
+channels. It remains parented to the frozen v3 screen control so its CER gate
+is directly comparable.
+
+Initialize with:
+
+```bash
+./scripts/init-cnn-ctc-v10-architecture-screen.sh
+```
+

@@ -1,6 +1,6 @@
 # ADR: cnn_ctc_v9 deep small-kernel dilated architecture screen
 
-Status: implemented; execution pending
+Status: executed; rejected on CER; retained as efficiency Pareto
 Date: 2026-10-06
 Parent: `exp-00e6b1e434d187d8/attempt-0001`
 
@@ -67,6 +67,31 @@ plus non-regressing emission diagnostics.
 
 Because v9 restores the 128-frame output, blank-frame fraction is directly
 comparable to the v3 screen again.
+
+## Result
+
+`exp-df5bbe0ea05c2238/attempt-0001` completed normally.
+
+Observed evidence:
+
+- selected checkpoint: epoch 12;
+- training validation CER: `0.8030870241317745`;
+- physical CER: `0.8032598053331798`;
+- physical WER: `1.005182465990067`;
+- blank-frame fraction: `0.7961900066903764`;
+- emitted/reference characters: `0.39399873293785637`;
+- empty-hypothesis fraction: `0.2545168892380204`;
+- MA2450 p95: `12.0927212 ms`;
+- PyTorch/ONNX frame-argmax agreement: `1.0`;
+- training duration: `648.212656306001 s`.
+
+The candidate misses the v3-screen CER gate by `0.004837873639348067`
+absolute, about `0.61%` relative, so it is not promoted. It is retained as
+an efficiency Pareto point because it cuts p95 latency by roughly 28% while
+restoring emission behavior close to the v3 screen.
+
+The next candidate is `cnn_ctc_v10`, which keeps the complete v9 temporal
+geometry and changes only width from 96 to 112 channels.
 
 ## Commands
 
