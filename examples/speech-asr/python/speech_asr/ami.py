@@ -339,9 +339,9 @@ def _pcm16le_to_f32le_mono(data: bytes, *, channels: int) -> bytes:
             offset += 4
     else:
         for left, right in struct.iter_unpack("<hh", data):
-            # Deterministic equal-power-neutral arithmetic mean. This keeps the
-            # normalized mono contract at one output sample per input WAV frame
-            # without clipping either full-scale equal-channel endpoint.
+            # Deterministic arithmetic mean. This keeps the normalized mono
+            # contract at one output sample per input WAV frame without
+            # clipping either full-scale equal-channel endpoint.
             sample = (left + right) / 65536.0
             struct.pack_into("<f", out, offset, sample)
             offset += 4
