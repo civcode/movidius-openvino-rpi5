@@ -676,6 +676,15 @@ grep -q '"cnn_ctc_v7"' examples/speech-asr/tools/validate_cnn_ctc_ir.py || fail 
 grep -q 'DEFAULT_PARENT = "exp-63fdb8d218673527"' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 model-quality-v4 parent changed'
 grep -q 'MODEL_SPEC_SHA256 = "0282f70168765fba5c1d33d28d47e6db18bc0163d99a1b3a8b15f49312b6401d"' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 reviewed model spec changed'
 grep -q 'PARENT_CER = 0.7588550365720209' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 parent CER changed'
+grep -q 'acceptance-evaluation.json' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 parent acceptance evidence is not canonical'
+grep -q 'attempt.get("state") != "AWAIT_REVIEW"' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 parent lifecycle state is not verified'
+grep -q 'acceptance.get("status") != "accepted"' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 parent acceptance status is not verified'
+if grep -q 'result.get("acceptance")' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py; then
+    fail 'cnn_ctc_v7 reads acceptance from compact result.json'
+fi
+if grep -q 'result.get("model")' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py; then
+    fail 'cnn_ctc_v7 reads model identity from compact result.json'
+fi
 grep -q '"max_cer": PARENT_CER' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 CER decision gate missing'
 grep -q 'EXPECTED_PARAMETERS = 1818183' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 parameter count changed'
 grep -q 'EXPECTED_MACS = 235177984' examples/speech-asr/agent/init_cnn_ctc_v7_wide.py || fail 'cnn_ctc_v7 MAC count changed'
