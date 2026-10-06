@@ -497,3 +497,30 @@ moved to 30% of optimizer steps. This is still a 4x higher peak LR than the
 historical small-model schedule, but avoids reaching the maximum during the
 second epoch.
 
+
+
+## v13 stabilized large-capacity training retry
+
+The active candidate is `cnn_ctc_v13`. It keeps the exact v12 inference
+graph and changes only the OneCycle trajectory:
+
+- start LR: `3e-4`;
+- peak LR: `1.2e-3`;
+- peak position: 30% of optimizer steps;
+- final LR: `3e-5`;
+- Adam, gradient clipping 5.0, 12 epochs and validation-CER checkpoint
+  selection remain unchanged.
+
+Run:
+
+```bash
+INIT_JSON="$(./scripts/init-cnn-ctc-v13-stabilized-lr.sh)"
+EXP="$(printf '%s\n' "$INIT_JSON" |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])')"
+
+./scripts/run-speech-experiment.sh --experiment "$EXP" --worker edge
+./scripts/review-speech-experiment.sh --experiment "$EXP"
+```
+
+The model-quality-v4 data are already provisioned if the v12 run was executed
+on the same edge worker.

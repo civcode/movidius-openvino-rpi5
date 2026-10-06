@@ -605,3 +605,18 @@ pre-clip gradient norm of `36,104,904` and mean train loss `90.963`.
 The next experiment retains the exact v12 inference graph and changes only the
 learning-rate trajectory to `3e-4 -> 1.2e-3 -> 3e-5`, with a 30% OneCycle
 ramp.
+
+
+## v13 stabilized LR retry
+
+The active follow-up is `cnn_ctc_v13`, parented to completed v12 experiment
+`exp-4e16fd348004571b`. The inference graph is byte-for-byte equivalent in
+declared geometry to v12; only the optimizer schedule changes.
+
+Initialize with:
+
+```bash
+./scripts/init-cnn-ctc-v13-stabilized-lr.sh
+```
+
+The schedule is `3e-4 -> 1.2e-3 -> 3e-5` with a 30% OneCycle ramp.
