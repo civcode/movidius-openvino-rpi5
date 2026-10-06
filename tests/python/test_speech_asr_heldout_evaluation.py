@@ -348,6 +348,8 @@ class FrozenHeldoutControllerSourceTests(unittest.TestCase):
         self.assertIn("runtime image lacks persistent tensor-stream support", evaluator)
         self.assertIn('"custom-server"', evaluator)
         self.assertIn("CACHE_VERSION = 3", evaluator)
+        self.assertIn("if not parity_checked:", evaluator)
+        self.assertIn("cached = None", evaluator)
         self.assertIn('"execution_mode": EXECUTION_MODE', evaluator)
         self.assertIn('"feature_sha256"', evaluator)
         self.assertIn('"xml_sha256"', evaluator)
