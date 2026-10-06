@@ -1,6 +1,6 @@
 # ADR: model-quality-v4 architecture-screen-v1
 
-Status: implemented; v3 control pending
+Status: implemented; v3 control completed
 Date: 2026-10-06
 
 ## Problem
@@ -59,9 +59,27 @@ A screen result is directional evidence, not a final promotion result.
 Candidates that materially beat the screen control should be confirmed at a
 larger budget before a full 32-epoch / 100%-data run.
 
-No fixed relative-CER promotion threshold is frozen before the v3 screen
-control exists. The first control determines the proxy baseline and the
-observed variance/trajectory available for later promotion rules.
+The v3 control completed as `exp-00e6b1e434d187d8/attempt-0001` with:
+
+- screen train manifest SHA-256:
+  `0528db59eec36d00d710b3090b0c6404dbdbf548ae7e13d3daf3d5152eacfc8b`;
+- 3,904 training records / 6,407.372 seconds;
+- all 48 training meetings represented;
+- best checkpoint: epoch 12;
+- hardware CER: `0.7984219316938317`;
+- hardware WER: `0.9930900453465774`;
+- empty-hypothesis fraction: `0.26865671641791045`;
+- emitted/reference character ratio: `0.39250129585901056`;
+- MA2450 p95: `16.7866342 ms`;
+- training duration: `404.94855711700075 s`.
+
+A screen candidate must at minimum beat the v3 CER to pass the screen
+acceptance gate. Promotion to a larger-budget confirmation requires a stronger
+3% relative CER improvement, i.e. CER <= `0.7744692737430167`, together with
+healthy emission diagnostics.
+
+The first candidate under this frozen screen is `cnn_ctc_v8`, documented in
+`model-quality-v4-cnn-ctc-v8-screen.md`.
 
 ## Commands
 
