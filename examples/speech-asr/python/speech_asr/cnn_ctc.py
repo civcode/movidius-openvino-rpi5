@@ -106,6 +106,15 @@ def load_spec(path: Path) -> dict:
             raise ValueError(f"{model_id} network.stem must contain two layers")
         if not isinstance(blocks, list) or len(blocks) != 5:
             raise ValueError(f"{model_id} residual_blocks must contain five blocks")
+        expected_stem_channels = (
+            [48, 64]
+            if model_id == "cnn_ctc_v5"
+            else ([64, 112] if model_id == "cnn_ctc_v7" else [64, 96])
+        )
+        if [int(layer.get("channels", 0)) for layer in stem] != expected_stem_channels:
+            raise ValueError(
+                f"{model_id} stem channels must remain {expected_stem_channels}"
+            )
         expected_norm = "batchnorm" if model_id == "cnn_ctc_v2" else "none"
         if network.get("normalization") != expected_norm:
             raise ValueError(f"{model_id} normalization must be {expected_norm}")
@@ -131,7 +140,7 @@ def load_spec(path: Path) -> dict:
                 "cnn_ctc_v4",
                 "cnn_ctc_v5",
                 "cnn_ctc_v6",
-        "cnn_ctc_v7",
+                "cnn_ctc_v7",
             }
             and network.get("residual_projection_init") != "kaiming_scaled_0.01"
         ):
