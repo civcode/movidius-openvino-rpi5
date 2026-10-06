@@ -622,44 +622,48 @@ Initialize with:
 The schedule is `3e-4 -> 1.2e-3 -> 3e-5` with a 30% OneCycle ramp.
 
 
-## v13-v15 result and v16 QuartzNet architecture reset
+## v13-v16 result and v17 QuartzNet training alignment
 
-`cnn_ctc_v13` completed as `exp-968150d44c4479ac/attempt-0001`; its
-OneCycle trajectory returned to near-total blank emission.
+`cnn_ctc_v14` remains the strongest large-model acoustic result at CER
+`0.7898404653573691`, while the much smaller `cnn_ctc_v11` remains the
+accuracy/latency Pareto point at CER `0.7865576225306686` and MA2450 p95
+`14.9809824 ms`. `cnn_ctc_v15` BatchNorm regressed to physical CER
+`0.8428267004549905`.
 
-`cnn_ctc_v14` completed as `exp-1e2478b84317ab02/attempt-0001` using the
-stable `3e-4 -> 3e-5` cosine schedule. It selected epoch 8 at validation CER
-`0.7898404653573691`, with deployed MA2450 p95 `103.8884392 ms`.
+`cnn_ctc_v16` reset the acoustic graph to QuartzNet-15x5. The important
+result is mixed but clear:
 
-`cnn_ctc_v15` completed as `exp-5d1209f5120388f8/attempt-0001` at deployed
-CER `0.8428267004549905`, WER `0.9941697257611747`, blank-frame fraction
-`0.8668262967005881`, and MA2450 p95 `103.8926016 ms`. BatchNorm therefore
-failed the v15 decision rule: it regressed against v14 and remained behind the
-much smaller v11 accuracy/latency point. Further local tuning of the v12-v15
-large residual topology is closed.
+- the fixed `[1,64,512] -> [1,256,39]` QuartzNet graph exported to ONNX and
+  converted to OpenVINO 2020.3 successfully;
+- the initialized physical MYRIAD gate achieved frame-argmax agreement
+  `1.0` with max absolute error `7.482245564460754e-06`;
+- training with the inherited Adam/dropout-0.2 recipe was unstable;
+- best validation CER was only `0.9297356447618499` at epoch 5;
+- epoch 12 returned to CER `1.0`, validation loss `43.97023439682033`
+  and near-total blank emission;
+- full-corpus edge evaluation then lost its persistent MYRIAD server after
+  806 successful requests. That is an execution-session failure, not evidence
+  that the graph is unsupported.
 
-The active follow-up is `cnn_ctc_v16`, parented to completed v15 evidence but
-replacing its acoustic graph with the published QuartzNet-15x5 topology:
+The evaluator now restarts a failed persistent MYRIAD session and retries the
+current uncached sample, retaining the existing per-sample cache.
 
-- C1 256 channels, kernel 33, stride 2;
-- B1-B5 kernels `33/39/51/63/75`, each block type repeated 3 times and each
-  block containing 5 time-channel-separable modules;
-- channels `256/256/512/512/512`;
-- projected residuals with BatchNorm/ReLU/dropout;
-- C2 512 channels, kernel 87, dilation 2;
-- C3 1024 channels, kernel 1;
-- project to the frozen 39-token character CTC vocabulary;
-- 18,934,631 trainable parameters and `[1,256,39]` output.
+The active candidate is `cnn_ctc_v17`. It keeps the QuartzNet inference
+topology and corrects the training recipe instead of inventing another graph:
+dropout `0.0`, NovoGrad at peak LR `0.01`, betas `0.8/0.5`, weight
+decay `0.001`, a 12% step warmup, then cosine decay to `1e-5`. The exact
+12-epoch screen data/budget, batch size 1, standard CTC and validation-CER
+checkpoint selection remain frozen.
 
-The VPU boundary ends at CTC logits. Greedy decoding remains the architecture
-screen decoder; CPU prefix-beam search and language-model scoring are deferred
-to the next isolated system experiment if v16 improves acoustic quality.
-
-Initialize with:
+Run:
 
 ```bash
-./scripts/init-cnn-ctc-v16-quartznet.sh
+INIT_JSON="$(./scripts/init-cnn-ctc-v17-quartznet-reference-training.sh)"
+EXP="$(printf '%s\n' "$INIT_JSON" |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])')"
+
+./scripts/run-speech-experiment.sh --experiment "$EXP" --worker edge
+./scripts/review-speech-experiment.sh --experiment "$EXP"
 ```
 
-See
-`../docs/adr/model-quality-v4-cnn-ctc-v16-quartznet.md`.
+See `docs/adr/model-quality-v4-cnn-ctc-v17-quartznet-reference-training.md`.

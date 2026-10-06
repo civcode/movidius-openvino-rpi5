@@ -1,6 +1,6 @@
 # ADR: cnn_ctc_v16 QuartzNet-15x5 architecture reset
 
-Status: implemented; execution pending
+Status: executed; graph compatible; training rejected; full evaluation interrupted
 Date: 2026-10-06
 Parent: `exp-5d1209f5120388f8/attempt-0001`
 
@@ -34,6 +34,31 @@ Sources:
 - https://arxiv.org/abs/1910.10261
 - https://docs.openvino.ai/2023.3/omz_models_model_quartznet_15x5_en.html
 - https://docs.nvidia.com/nemo-framework/user-guide/24.07/nemotoolkit/asr/configs.html
+
+## Result
+
+`cnn_ctc_v16` ran as `exp-4d7f92c301064c45/attempt-0001`.
+
+The operator/deployment question was answered positively. PyTorch/ONNX
+frame-argmax agreement was `1.0`; the pre-training physical MYRIAD comparison
+also had agreement `1.0`, zero argmax mismatches and max absolute error
+`7.482245564460754e-06`.
+
+The training question was negative under the inherited recipe. The best
+validation CER was `0.9297356447618499` at epoch 5. By epoch 12,
+validation CER was `1.0`, blank-frame fraction `0.9945766610634345`,
+empty-hypothesis fraction `0.9960722702278083`, and validation loss
+`43.97023439682033`. Epoch 1 recorded a maximum pre-clip gradient norm of
+`923102.125`, consistent with severe early optimization instability.
+
+The final edge corpus evaluation was interrupted after 806 persistent-server
+requests with a short input write / server EOF. The first-sample persistent
+parity gate passed exactly, and hundreds of samples had already completed.
+This is recorded as `hardware_execution`, not as a model compatibility
+rejection. The evaluator is now restart-capable for this failure mode.
+
+The follow-up is v17: same QuartzNet inference topology, reference-aligned
+NovoGrad/warmup/weight-decay training, and no training-time dropout.
 
 ## Decision
 
