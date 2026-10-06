@@ -87,19 +87,53 @@ def repo_relative(path: pathlib.Path) -> str:
 
 def validate_parent() -> dict:
     parent = ROOT / "work" / "speech-asr" / "experiments" / DEFAULT_PARENT
-    result_path = parent / "attempts" / PARENT_ATTEMPT / "results" / "result.json"
-    if not result_path.is_file():
-        raise ValueError(f"reviewed model-quality-v4 parent result is missing: {result_path}")
+    attempt_dir = parent / "attempts" / PARENT_ATTEMPT
+    request_path = parent / "request" / "experiment.json"
+    model_spec_path = parent / "request" / "model-spec.json"
+    attempt_path = attempt_dir / "attempt.json"
+    acceptance_path = attempt_dir / "results" / "acceptance-evaluation.json"
+    result_path = attempt_dir / "results" / "result.json"
+    required_paths = (
+        request_path,
+        model_spec_path,
+        attempt_path,
+        acceptance_path,
+        result_path,
+    )
+    missing = [str(path) for path in required_paths if not path.is_file()]
+    if missing:
+        raise ValueError(
+            "reviewed model-quality-v4 parent evidence is missing: "
+            + ", ".join(missing)
+        )
+
+    request = load_json(request_path)
+    model_spec = load_json(model_spec_path)
+    attempt = load_json(attempt_path)
+    acceptance = load_json(acceptance_path)
     result = load_json(result_path)
-    if result.get("outcome") != "completed" or result.get("acceptance") != "accepted":
-        raise ValueError("model-quality-v4 parent is not a completed accepted execution")
-    if result.get("model") != "cnn_ctc_v3":
+
+    if request.get("experiment_id") != DEFAULT_PARENT:
+        raise ValueError("model-quality-v4 parent request identity changed")
+    if model_spec.get("model_id") != "cnn_ctc_v3":
         raise ValueError("model-quality-v4 parent model is not cnn_ctc_v3")
-    benchmark = result.get("benchmark", {})
+    if attempt.get("attempt_id") != PARENT_ATTEMPT:
+        raise ValueError("model-quality-v4 parent attempt identity changed")
+    if attempt.get("state") != "AWAIT_REVIEW":
+        raise ValueError("model-quality-v4 parent must remain in AWAIT_REVIEW")
+    if attempt.get("outcome") != "completed":
+        raise ValueError("model-quality-v4 parent attempt did not complete")
+    if acceptance.get("status") != "accepted":
+        raise ValueError("model-quality-v4 parent acceptance policy did not pass")
+    if result.get("outcome") != "completed":
+        raise ValueError("model-quality-v4 parent result did not complete")
+
+    benchmark = request.get("benchmark", {})
     if benchmark.get("id") != "ami-model-quality-v4-es2011-validation":
         raise ValueError("model-quality-v4 parent benchmark id changed")
     if benchmark.get("manifest_sha256") != VALIDATION_MANIFEST_SHA256:
         raise ValueError("model-quality-v4 parent validation manifest changed")
+
     metrics = result.get("metrics", {})
     if metrics.get("cer") != PARENT_CER:
         raise ValueError("model-quality-v4 parent CER changed")
@@ -107,7 +141,14 @@ def validate_parent() -> dict:
         raise ValueError("model-quality-v4 parent WER changed")
     if metrics.get("inference_latency_p95_ms") != PARENT_P95_MS:
         raise ValueError("model-quality-v4 parent p95 latency changed")
-    return result
+
+    return {
+        "request": request,
+        "model_spec": model_spec,
+        "attempt": attempt,
+        "acceptance": acceptance,
+        "result": result,
+    }
 
 
 def validate_inputs() -> dict:
@@ -365,9 +406,9 @@ def main() -> int:
         "parent": DEFAULT_PARENT,
         "attempt": PARENT_ATTEMPT,
         "validation_manifest_sha256": VALIDATION_MANIFEST_SHA256,
-        "cer": parent["metrics"]["cer"],
-        "wer": parent["metrics"]["wer"],
-        "latency_p95_ms": parent["metrics"]["inference_latency_p95_ms"],
+        "cer": parent["result"]["metrics"]["cer"],
+        "wer": parent["result"]["metrics"]["wer"],
+        "latency_p95_ms": parent["result"]["metrics"]["inference_latency_p95_ms"],
     }
     output["qualification"] = {
         "train_records": qualification["train"]["stats"]["records"],
