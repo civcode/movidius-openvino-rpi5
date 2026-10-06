@@ -525,6 +525,78 @@ if grep -q '"ctc_objective": {' examples/speech-asr/agent/init_cnn_ctc_v3_scaled
     fail 'scaled-data experiment must use standard CTC'
 fi
 
+# Fresh model-quality-v4 Full-corpus-ASR development boundary.
+for f in \
+    examples/speech-asr/datasets/ami/splits/model-quality-v4-edinburgh-v1.json \
+    examples/speech-asr/datasets/ami/freeze_model_quality_v4_sources.py \
+    examples/speech-asr/tools/qualify_model_quality_v4.py \
+    examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py \
+    examples/speech-asr/docs/adr/model-quality-v4-fresh-development.md \
+    tests/python/test_speech_asr_model_quality_v4.py; do
+    test -f "$f" || fail "model-quality-v4 file missing: $f"
+done
+for f in \
+    scripts/prepare-speech-model-data-v4.sh \
+    scripts/qualify-speech-model-data-v4.sh \
+    scripts/provision-speech-model-data-v4-edge.sh \
+    scripts/init-cnn-ctc-v3-model-quality-v4.sh; do
+    test -x "$f" || fail "model-quality-v4 shell entry point is not executable: $f"
+done
+python3 - <<'PY_MQV4'
+import json
+from pathlib import Path
+
+path = Path("examples/speech-asr/datasets/ami/splits/model-quality-v4-edinburgh-v1.json")
+value = json.loads(path.read_text())
+assert value["id"] == "ami-model-quality-v4-edinburgh-full-corpus-asr-v1"
+assert value["authority"]["partition_name"] == "Full-corpus-ASR"
+assert set(value["train_groups"]) == {
+    "ES2003",
+    "ES2005",
+    "ES2006",
+    "ES2007",
+    "ES2008",
+    "ES2009",
+    "ES2010",
+    "ES2012",
+    "ES2013",
+    "ES2014",
+    "ES2015",
+    "ES2016",
+}
+assert set(value["validation_groups"]) == {"ES2011"}
+assert set(value["excluded_prior_selection_groups"]) == {"ES2002"}
+assert set(value["sealed_test_groups"]) == {"EN2002", "ES2004", "IS1009", "TS3003"}
+assert value["policy"]["training_allowed_on_train"] is True
+assert value["policy"]["training_allowed_on_validation"] is False
+assert value["policy"]["checkpoint_selection_allowed_on_validation"] is True
+assert value["policy"]["heldout_metrics_allowed_for_model_selection"] is False
+PY_MQV4
+grep -q 'fetch_official_for_freeze' examples/speech-asr/datasets/ami/freeze_model_quality_v4_sources.py || fail 'model-quality-v4 source freeze does not acquire fresh official bytes'
+grep -q 'KNOWN_PINNED_TRAIN_SPLIT' examples/speech-asr/datasets/ami/freeze_model_quality_v4_sources.py || fail 'model-quality-v4 source freeze does not reuse existing pinned source identities'
+grep -q 'partially present; refuse to overwrite' examples/speech-asr/datasets/ami/freeze_model_quality_v4_sources.py || fail 'model-quality-v4 source lock is not immutable'
+grep -q 'FORBIDDEN_GROUPS' examples/speech-asr/tools/qualify_model_quality_v4.py || fail 'model-quality-v4 qualifier lacks forbidden held-out/selection meetings'
+grep -q 'training population did not expand beyond v3' examples/speech-asr/tools/qualify_model_quality_v4.py || fail 'model-quality-v4 qualifier does not require data expansion'
+grep -q 'source_lock_sha256' examples/speech-asr/tools/qualify_model_quality_v4.py || fail 'model-quality-v4 qualification lacks source-lock provenance'
+grep -q 'DEFAULT_PARENT = "exp-87538823d2bf1562"' examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py || fail 'model-quality-v4 baseline parent changed'
+grep -q '"model_id": "cnn_ctc_v3"' examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py || fail 'model-quality-v4 baseline changed model'
+grep -q '"frontend": {"kind": "logmel-v1"}' examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py || fail 'model-quality-v4 baseline changed frontend'
+grep -q '"checkpoint_selection": "validation_cer"' examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py || fail 'model-quality-v4 baseline changed checkpoint selection'
+grep -q '"max_wer": None' examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py || fail 'model-quality-v4 baseline must establish a new WER baseline'
+grep -q '"max_cer": None' examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py || fail 'model-quality-v4 baseline must establish a new CER baseline'
+grep -q 'heldout_metrics_allowed_for_model_selection' examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py || fail 'model-quality-v4 initializer does not enforce held-out isolation'
+if grep -q '"augmentation": {' examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py; then
+    fail 'model-quality-v4 baseline must not add augmentation'
+fi
+if grep -q '"ctc_objective": {' examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py; then
+    fail 'model-quality-v4 baseline must use standard CTC'
+fi
+grep -q 'BatchMode=yes' scripts/provision-speech-model-data-v4-edge.sh || fail 'model-quality-v4 provisioning is not non-interactive'
+if grep -q 'StrictHostKeyChecking=no' scripts/provision-speech-model-data-v4-edge.sh; then
+    fail 'model-quality-v4 provisioning disables host-key verification'
+fi
+grep -q -- '--verify-only' scripts/provision-speech-model-data-v4-edge.sh || fail 'model-quality-v4 provisioning does not verify the frozen boundary'
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
 for name in [
@@ -551,6 +623,7 @@ for name in [
     "examples/speech-asr/agent/init_cnn_ctc_v6_interctc.py",
     "examples/speech-asr/agent/init_cnn_ctc_v3_expanded_data.py",
     "examples/speech-asr/agent/init_cnn_ctc_v3_scaled_data.py",
+    "examples/speech-asr/agent/init_cnn_ctc_v3_model_quality_v4.py",
     "examples/speech-asr/agent/run_frozen_heldout_evaluation.py",
     "examples/speech-asr/agent/review_heldout_evaluation.py",
     "examples/speech-asr/agent/review_experiment.py",
@@ -561,6 +634,8 @@ for name in [
     "examples/speech-asr/tools/qualify_model_quality_manifests.py",
     "examples/speech-asr/tools/qualify_expanded_model_quality_manifests.py",
     "examples/speech-asr/tools/qualify_heldout_evaluation_manifest.py",
+    "examples/speech-asr/tools/qualify_model_quality_v4.py",
+    "examples/speech-asr/datasets/ami/freeze_model_quality_v4_sources.py",
     "examples/speech-asr/training/cnn_ctc_v1.py",
     "examples/speech-asr/training/train_cnn_ctc_v1.py",
     "examples/speech-asr/training/export_cnn_ctc_v1.py",
