@@ -901,6 +901,58 @@ grep -q 'PROMOTION_CER = 0.7744692737430167' examples/speech-asr/agent/init_cnn_
 grep -q '"max_cer": PARENT_CER' examples/speech-asr/agent/init_cnn_ctc_v10_architecture_screen.py || fail 'cnn_ctc_v10 screen CER gate missing'
 grep -q '"event": "training_progress"' examples/speech-asr/training/train_cnn_ctc_v10.py || fail 'cnn_ctc_v10 live training progress missing'
 
+# cnn_ctc_v11 128-channel deep-dilated architecture screen.
+for f in \
+    examples/speech-asr/models/cnn_ctc_v11/model_spec.json \
+    examples/speech-asr/models/cnn_ctc_v11/vocab.json \
+    examples/speech-asr/models/cnn_ctc_v11/README.md \
+    examples/speech-asr/training/cnn_ctc_v11.py \
+    examples/speech-asr/training/train_cnn_ctc_v11.py \
+    examples/speech-asr/training/export_cnn_ctc_v11.py \
+    examples/speech-asr/evaluation/compare_cnn_ctc_v11_onnx.py \
+    examples/speech-asr/evaluation/evaluate_cnn_ctc_v11.py \
+    examples/speech-asr/agent/init_cnn_ctc_v11_architecture_screen.py \
+    examples/speech-asr/docs/adr/model-quality-v4-cnn-ctc-v11-screen.md \
+    tests/python/test_speech_asr_cnn_ctc_v11.py; do
+    test -f "$f" || fail "cnn_ctc_v11 file missing: $f"
+done
+for f in \
+    scripts/init-cnn-ctc-v11-architecture-screen.sh \
+    scripts/train-cnn-ctc-v11.sh \
+    scripts/probe-cnn-ctc-v11.sh \
+    scripts/prepare-cnn-ctc-v11.sh \
+    scripts/evaluate-cnn-ctc-v11.sh; do
+    test -x "$f" || fail "cnn_ctc_v11 shell entry point is not executable: $f"
+done
+python3 - <<'PY_V11'
+import hashlib
+import json
+from pathlib import Path
+spec = json.loads(Path("examples/speech-asr/models/cnn_ctc_v11/model_spec.json").read_text())
+canonical = hashlib.sha256(
+    json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+).hexdigest()
+assert canonical == "0a63c74a2414a26a04bf06da1cc8493b2886257077b451281e0d1da2b107f73a"
+assert spec["input_contract"]["shape"] == [1,64,512]
+assert spec["output_contract"]["shape"] == [1,128,39]
+assert [x["stride"] for x in spec["network"]["stem"]] == [2,2]
+assert [x["channels"] for x in spec["network"]["stem"]] == [64,128]
+assert len(spec["network"]["residual_blocks"]) == 8
+assert [x["kernel"] for x in spec["network"]["residual_blocks"]] == [7] * 8
+assert [x["dilation"] for x in spec["network"]["residual_blocks"]] == [1,2,3,4,4,3,2,1]
+assert spec["network"]["estimated_parameters"] == 1117287
+assert spec["network"]["estimated_macs_fixed_input"] == 145342464
+assert spec["network"]["receptive_field_feature_frames"] == 493
+PY_V11
+grep -q 'V11_ARCHITECTURE' examples/speech-asr/python/speech_asr/orchestration.py || fail 'cnn_ctc_v11 architecture registration missing'
+grep -q '"cnn_ctc_v11": "train-cnn-ctc-v11.sh"' examples/speech-asr/python/speech_asr/orchestration.py || fail 'cnn_ctc_v11 training registration missing'
+grep -q '"cnn_ctc_v11": "evaluate-cnn-ctc-v11.sh"' examples/speech-asr/agent/edge_worker.py || fail 'cnn_ctc_v11 edge evaluator registration missing'
+grep -q 'DEFAULT_PARENT = "exp-00e6b1e434d187d8"' examples/speech-asr/agent/init_cnn_ctc_v11_architecture_screen.py || fail 'cnn_ctc_v11 screen parent changed'
+grep -q 'SCREEN_MANIFEST_SHA256 = "0528db59eec36d00d710b3090b0c6404dbdbf548ae7e13d3daf3d5152eacfc8b"' examples/speech-asr/agent/init_cnn_ctc_v11_architecture_screen.py || fail 'cnn_ctc_v11 screen manifest changed'
+grep -q 'PROMOTION_CER = 0.7744692737430167' examples/speech-asr/agent/init_cnn_ctc_v11_architecture_screen.py || fail 'cnn_ctc_v11 promotion rule changed'
+grep -q '"max_cer": PARENT_CER' examples/speech-asr/agent/init_cnn_ctc_v11_architecture_screen.py || fail 'cnn_ctc_v11 screen CER gate missing'
+grep -q '"event": "training_progress"' examples/speech-asr/training/train_cnn_ctc_v11.py || fail 'cnn_ctc_v11 live training progress missing'
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
 for name in [
@@ -933,6 +985,7 @@ for name in [
     "examples/speech-asr/agent/init_cnn_ctc_v8_architecture_screen.py",
     "examples/speech-asr/agent/init_cnn_ctc_v9_architecture_screen.py",
     "examples/speech-asr/agent/init_cnn_ctc_v10_architecture_screen.py",
+    "examples/speech-asr/agent/init_cnn_ctc_v11_architecture_screen.py",
     "examples/speech-asr/agent/run_frozen_heldout_evaluation.py",
     "examples/speech-asr/agent/review_heldout_evaluation.py",
     "examples/speech-asr/agent/review_experiment.py",
@@ -971,8 +1024,11 @@ for name in [
     "examples/speech-asr/training/train_cnn_ctc_v9.py",
     "examples/speech-asr/training/export_cnn_ctc_v9.py",
     "examples/speech-asr/training/cnn_ctc_v10.py",
+    "examples/speech-asr/training/cnn_ctc_v11.py",
     "examples/speech-asr/training/train_cnn_ctc_v10.py",
+    "examples/speech-asr/training/train_cnn_ctc_v11.py",
     "examples/speech-asr/training/export_cnn_ctc_v10.py",
+    "examples/speech-asr/training/export_cnn_ctc_v11.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v1_onnx.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v1_tensor.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v1.py",
@@ -994,7 +1050,9 @@ for name in [
     "examples/speech-asr/evaluation/compare_cnn_ctc_v9_onnx.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v9.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v10_onnx.py",
+    "examples/speech-asr/evaluation/compare_cnn_ctc_v11_onnx.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v10.py",
+    "examples/speech-asr/evaluation/evaluate_cnn_ctc_v11.py",
     "examples/speech-asr/evaluation/evaluate_frozen_cnn_ctc_v3_reference.py",
 ]:
     src = Path(name).read_text()

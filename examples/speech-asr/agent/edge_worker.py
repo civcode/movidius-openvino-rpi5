@@ -176,6 +176,7 @@ def require_supported_request(
         "cnn_ctc_v8",
         "cnn_ctc_v9",
         "cnn_ctc_v10",
+        "cnn_ctc_v11",
     }:
         raise WorkerError(
             f"unsupported Phase 11 model executor: {model_id!r}",
@@ -228,6 +229,7 @@ def run_evaluator(
         "cnn_ctc_v8": "evaluate-cnn-ctc-v8.sh",
         "cnn_ctc_v9": "evaluate-cnn-ctc-v9.sh",
         "cnn_ctc_v10": "evaluate-cnn-ctc-v10.sh",
+        "cnn_ctc_v11": "evaluate-cnn-ctc-v11.sh",
     }.get(model_id)
     if evaluator is None:
         raise WorkerError(
