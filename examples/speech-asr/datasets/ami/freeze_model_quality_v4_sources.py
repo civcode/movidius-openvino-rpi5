@@ -135,14 +135,12 @@ def validate_policy(policy: dict[str, Any]) -> None:
         raise ValueError("model-quality-v4 development boundary touches forbidden meetings")
 
 
-def fetch_unpinned_once(url: str, destination: pathlib.Path) -> pathlib.Path:
-    """Acquire an upstream file once; its digest becomes immutable in the source lock."""
-    if destination.exists():
-        return destination
+def fetch_official_for_freeze(url: str, destination: pathlib.Path) -> pathlib.Path:
+    """Fetch official bytes once and freeze their digest; never trust an unpinned cache."""
     destination.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(
         prefix=destination.name + ".",
-        suffix=".part",
+        suffix=".official.part",
         dir=destination.parent,
     )
     os.close(fd)
@@ -154,7 +152,16 @@ def fetch_unpinned_once(url: str, destination: pathlib.Path) -> pathlib.Path:
         )
         with urllib.request.urlopen(request, timeout=120) as response, tmp.open("wb") as output:
             shutil.copyfileobj(response, output)
-        tmp.replace(destination)
+        official_sha = sha256_file(tmp)
+        if destination.exists():
+            cached_sha = sha256_file(destination)
+            if cached_sha != official_sha:
+                raise ValueError(
+                    f"cached source differs from official first acquisition for "
+                    f"{destination.name}: {cached_sha} != {official_sha}"
+                )
+        else:
+            tmp.replace(destination)
     finally:
         if tmp.exists():
             tmp.unlink()
@@ -328,7 +335,7 @@ def freeze(
     for meeting in train_meetings + validation_meetings:
         filename = f"{meeting}.Mix-Headset.wav"
         url = str(policy["audio"]["url_template"]).format(meeting=meeting)
-        path = fetch_unpinned_once(url, cache / filename)
+        path = fetch_official_for_freeze(url, cache / filename)
         digest = sha256_file(path)
         audio_sha[meeting] = digest
         print(f"[model-quality-v4] source {meeting} sha256={digest}", flush=True)
