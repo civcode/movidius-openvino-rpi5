@@ -95,6 +95,7 @@ def main() -> int:
                 },
             },
             "cross_runtime_delta": result["cross_runtime_delta"],
+            "supersedes": result.get("supersedes"),
             "result": str(path),
         }
     except Exception as exc:
