@@ -151,6 +151,9 @@ V12_ARCHITECTURE = {
 }
 
 
+V13_ARCHITECTURE = dict(V12_ARCHITECTURE)
+
+
 def executor_model_basename(model_id: str) -> str:
     if model_id in {
         "cnn_ctc_v1",
@@ -165,6 +168,7 @@ def executor_model_basename(model_id: str) -> str:
         "cnn_ctc_v10",
         "cnn_ctc_v11",
         "cnn_ctc_v12",
+        "cnn_ctc_v13",
     }:
         return model_id
     raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
@@ -188,6 +192,7 @@ def validate_model_executor_request(
         "cnn_ctc_v10",
         "cnn_ctc_v11",
         "cnn_ctc_v12",
+        "cnn_ctc_v13",
     }:
         raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
     if model_spec.get("family") != "cnn_ctc":
@@ -214,6 +219,7 @@ def validate_model_executor_request(
         "cnn_ctc_v10": V10_ARCHITECTURE,
         "cnn_ctc_v11": V11_ARCHITECTURE,
         "cnn_ctc_v12": V12_ARCHITECTURE,
+        "cnn_ctc_v13": V13_ARCHITECTURE,
     }[model_id]
     if model_spec.get("architecture") != expected_architecture:
         raise ValueError(
@@ -308,6 +314,7 @@ def compatibility_probe_command(
         "cnn_ctc_v10",
         "cnn_ctc_v11",
         "cnn_ctc_v12",
+        "cnn_ctc_v13",
     }:
         return [
             str(root / "scripts" / f"probe-{model_id.replace('_', '-')}.sh"),
@@ -342,6 +349,7 @@ def training_command(
         "cnn_ctc_v10": "train-cnn-ctc-v10.sh",
         "cnn_ctc_v11": "train-cnn-ctc-v11.sh",
         "cnn_ctc_v12": "train-cnn-ctc-v12.sh",
+        "cnn_ctc_v13": "train-cnn-ctc-v13.sh",
     }.get(model_id)
     if executable is None:
         raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
