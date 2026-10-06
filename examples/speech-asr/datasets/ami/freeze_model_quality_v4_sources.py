@@ -27,6 +27,7 @@ from speech_asr.ami import (  # noqa: E402
 from speech_asr.contracts import canonical_json_sha256  # noqa: E402
 
 POLICY = HERE / "splits" / "model-quality-v4-edinburgh-v1.json"
+KNOWN_PINNED_TRAIN_SPLIT = HERE / "splits" / "train-es2005-es2007-v1.json"
 DEFAULT_CACHE = ROOT / "work" / "speech-asr" / "ami" / "downloads"
 DEFAULT_OUTPUT = (
     ROOT / "work" / "speech-asr" / "ami" / "model-quality-v4-source-lock"
@@ -329,13 +330,26 @@ def freeze(
         annotations["sha256"],
     )
 
+    known_split = load_json(KNOWN_PINNED_TRAIN_SPLIT)
+    known_audio_sha = {
+        str(source["meeting"]): str(source["audio"]["sha256"])
+        for source in known_split.get("sources", [])
+    }
+
     train_meetings = expand_groups(policy["train_groups"])
     validation_meetings = expand_groups(policy["validation_groups"])
     audio_sha: dict[str, str] = {}
     for meeting in train_meetings + validation_meetings:
         filename = f"{meeting}.Mix-Headset.wav"
         url = str(policy["audio"]["url_template"]).format(meeting=meeting)
-        path = fetch_official_for_freeze(url, cache / filename)
+        if meeting in known_audio_sha:
+            path = download_verified(
+                url,
+                cache / filename,
+                known_audio_sha[meeting],
+            )
+        else:
+            path = fetch_official_for_freeze(url, cache / filename)
         digest = sha256_file(path)
         audio_sha[meeting] = digest
         print(f"[model-quality-v4] source {meeting} sha256={digest}", flush=True)
