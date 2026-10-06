@@ -118,6 +118,9 @@ class CnnCtcV17Tests(unittest.TestCase):
             source,
         )
         self.assertIn("V16_BEST_VALIDATION_CER = 0.9297356447618499", source)
+        self.assertIn('compatibility.get("pretraining_myriad_probe")', source)
+        self.assertIn('comparison.get("frame_argmax_agreement")', source)
+        self.assertIn('probe.get("numerical_gate", {}).get("status")', source)
         self.assertIn('"failure_class") != "hardware_execution"', source)
         self.assertIn("SCREEN_EPOCHS = 12", source)
         self.assertIn('"kind": "novograd"', source)
