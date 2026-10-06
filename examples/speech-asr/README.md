@@ -494,3 +494,18 @@ Screen results rank architecture directions only; they do not replace the
 larger-budget confirmation and full model-quality-v4 evaluation needed before
 promotion. The sealed held-out benchmark remains unavailable for selection.
 
+
+
+## v11 result and large-capacity transition
+
+`cnn_ctc_v11` completed as `exp-4fb0f93165d0f76d/attempt-0001` with CER
+`0.7865576225306686`, WER `1.0205139278773483`, emitted/reference
+characters `0.4790646777630594`, empty-hypothesis fraction
+`0.22152395915161036`, and MA2450 p95 `14.9809824 ms`. The selected
+checkpoint was epoch 12.
+
+v11 passes the frozen architecture-screen CER gate but misses the stronger
+promotion target. The project will not continue with small width increments.
+The next candidate is a large-capacity MYRIAD feasibility/quality probe, and
+its latency is measured rather than rejected against the inherited 25 ms
+screen threshold.

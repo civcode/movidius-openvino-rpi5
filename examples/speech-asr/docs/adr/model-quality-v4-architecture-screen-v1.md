@@ -94,12 +94,22 @@ rose to `0.4818867707193457` and empty hypotheses fell to
 `0.24509033778476041`.
 
 v10 does not meet the stronger promotion threshold of
-`0.7744692737430167`. Because its best CER is still at epoch 12 and the
-96 -> 112 width step improved the same frozen topology, the active fourth
-candidate is `cnn_ctc_v11`: one final width-only step from 112 to 128
-channels before changing topology or training policy. Its frozen estimate is
-1,117,287 parameters and 145,342,464 fixed-input MACs. See
-`model-quality-v4-cnn-ctc-v11-screen.md`.
+`0.7744692737430167`. One final width-only step was therefore run at 128
+channels.
+
+The fourth candidate, `cnn_ctc_v11`, completed as
+`exp-4fb0f93165d0f76d/attempt-0001` with CER
+`0.7865576225306686`, WER `1.0205139278773483`, emitted/reference
+characters `0.4790646777630594`, empty hypotheses
+`0.22152395915161036`, and MA2450 p95 `14.9809824 ms`. It passes the
+frozen v3-screen CER gate but still misses the stronger promotion CER.
+
+The 112 -> 128 step produced only a small additional CER gain while retaining
+very large hardware throughput margin. The small width sweep is therefore
+closed. The next experiment is a deliberately large capacity probe; the
+inherited 25 ms p95 value is no longer used as a rejection threshold for that
+probe. See `model-quality-v4-cnn-ctc-v11-screen.md` for the transition
+rationale.
 
 ## Commands
 
