@@ -71,6 +71,26 @@ def meetings(path: pathlib.Path) -> set[str]:
     return {str(record["metadata"]["meeting"]) for record in load_records(path)}
 
 
+def preparation_exclusions(manifest: pathlib.Path) -> list[dict[str, Any]]:
+    provenance_path = manifest.parent / "provenance.json"
+    provenance = load_json(provenance_path)
+    excluded = provenance.get("excluded_segments", [])
+    if not isinstance(excluded, list):
+        raise ValueError(f"{provenance_path}: excluded_segments must be an array")
+    values: list[dict[str, Any]] = []
+    for index, item in enumerate(excluded):
+        if not isinstance(item, dict):
+            raise ValueError(
+                f"{provenance_path}: excluded_segments[{index}] must be an object"
+            )
+        if item.get("reason") != "non_positive_annotated_segment_interval":
+            raise ValueError(
+                f"{provenance_path}: unsupported excluded segment reason"
+            )
+        values.append(dict(item))
+    return values
+
+
 def validate_policy(policy: dict[str, Any]) -> None:
     if policy.get("schema") != "speech-asr/model-quality-data-policy":
         raise ValueError("model-quality-v4 policy schema mismatch")
@@ -184,6 +204,8 @@ def boundary_document(
     lock: dict[str, Any],
     train_meetings: set[str],
     validation_meetings: set[str],
+    train_exclusions: list[dict[str, Any]],
+    validation_exclusions: list[dict[str, Any]],
 ) -> dict[str, Any]:
     return {
         "id": policy["id"],
@@ -200,6 +222,10 @@ def boundary_document(
         "training_allowed_on_validation": False,
         "checkpoint_selection_allowed_on_validation": True,
         "heldout_metrics_allowed_for_model_selection": False,
+        "source_exclusions": {
+            "train": train_exclusions,
+            "validation": validation_exclusions,
+        },
     }
 
 
@@ -220,6 +246,8 @@ def qualify_v4(
         train_manifest=train_source,
         validation_manifest=validation_source,
     )
+    train_exclusions = preparation_exclusions(train_source)
+    validation_exclusions = preparation_exclusions(validation_source)
 
     try:
         result = qualify_base(
@@ -243,6 +271,8 @@ def qualify_v4(
             lock=lock,
             train_meetings=train_meetings,
             validation_meetings=validation_meetings,
+            train_exclusions=train_exclusions,
+            validation_exclusions=validation_exclusions,
         )
         qualification_path = output_dir / "qualification.json"
         qualification_path.write_text(
@@ -278,6 +308,8 @@ def verify_existing(
         train_manifest=train_source,
         validation_manifest=validation_source,
     )
+    train_exclusions = preparation_exclusions(train_source)
+    validation_exclusions = preparation_exclusions(validation_source)
 
     qualification_path = output_dir / "qualification.json"
     train_path = output_dir / "train.manifest.jsonl"
@@ -313,6 +345,8 @@ def verify_existing(
         lock=lock,
         train_meetings=train_meetings,
         validation_meetings=validation_meetings,
+        train_exclusions=train_exclusions,
+        validation_exclusions=validation_exclusions,
     )
     if result.get("boundary") != expected_boundary:
         raise ValueError("model-quality-v4 boundary metadata differs from policy")
