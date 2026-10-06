@@ -112,6 +112,36 @@ class CnnCtcV3ContractTests(unittest.TestCase):
         )
 
 
+class CnnCtcV3ProgressTests(unittest.TestCase):
+    def test_trainer_reports_progress_and_eta(self):
+        source = (
+            SPEECH / "training" / "train_cnn_ctc_v3.py"
+        ).read_text(encoding="utf-8")
+        for marker in (
+            '"event": "training_start"',
+            '"event": "epoch_start"',
+            '"event": "training_progress"',
+            '"event": "validation_start"',
+            '"event": "validation_progress"',
+            '"event": "epoch_complete"',
+            '"eta_seconds"',
+            '"steps_per_second"',
+            '"running_train_loss"',
+            'default=250',
+        ):
+            self.assertIn(marker, source)
+
+    def test_controller_streams_training_stdout_live(self):
+        source = (
+            SPEECH / "agent" / "run_experiment.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("stream_output: bool = False", source)
+        self.assertIn("subprocess.Popen(", source)
+        self.assertIn('print(line, end="", flush=True)', source)
+        self.assertIn("stream_output=True", source)
+        self.assertIn('controller-training.log', source)
+
+
 class CnnCtcV3ExecutorTests(unittest.TestCase):
     def test_reviewed_v3_request_is_supported(self):
         validate_model_executor_request(experiment_model_spec(), train_config())
