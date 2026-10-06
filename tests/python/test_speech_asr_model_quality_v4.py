@@ -124,6 +124,18 @@ class ModelQualityV4ImplementationTests(unittest.TestCase):
         self.assertIn("training source exclusions are not allowed", source)
         self.assertIn("exactly one reviewed validation exclusion", source)
         self.assertIn('"meeting": "ES2011c"', source)
+        self.assertIn(
+            'TRAIN_MANIFEST_SHA256 = "6025d17f08c1815d1710c3ab56cea51a34365f398e9877b4aefec234e64e4096"',
+            source,
+        )
+        self.assertIn(
+            'VALIDATION_MANIFEST_SHA256 = "fbd72a648826b2e200f9244b4dc73be425cada2e304be92d513f7033a8de4088"',
+            source,
+        )
+        self.assertIn("TRAIN_RECORDS = 15738", source)
+        self.assertIn("TRAIN_AUDIO_SECONDS = 25846.327", source)
+        self.assertIn("VALIDATION_RECORDS = 1273", source)
+        self.assertIn("VALIDATION_AUDIO_SECONDS = 2279.385", source)
 
     def test_shell_entrypoints_exist(self):
         for relative in (
