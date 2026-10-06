@@ -240,14 +240,26 @@ def apply_specaugment_v1(
     }
 
 
-def evaluate_validation(model, loader, loss_fn, device, vocab) -> dict:
+def evaluate_validation(
+    model,
+    loader,
+    loss_fn,
+    device,
+    vocab,
+    *,
+    progress_interval: int = 0,
+    epoch: int | None = None,
+    epochs: int | None = None,
+) -> dict:
     model.eval()
     losses = []
     word_counts = []
     char_counts = []
     samples = []
+    validation_started = time.monotonic()
+    validation_batches = len(loader)
     with torch.no_grad():
-        for batch in loader:
+        for batch_index, batch in enumerate(loader, start=1):
             features = batch["features"].to(device)
             logits = model(features)
             loss = deterministic_ctc_loss(loss_fn, logits, batch)
@@ -279,6 +291,37 @@ def evaluate_validation(model, loader, loss_fn, device, vocab) -> dict:
                             if key != "hypothesis"
                         },
                     }
+                )
+
+            if (
+                progress_interval > 0
+                and (
+                    batch_index == 1
+                    or batch_index % progress_interval == 0
+                    or batch_index == validation_batches
+                )
+            ):
+                elapsed = time.monotonic() - validation_started
+                rate = batch_index / max(elapsed, 1e-9)
+                remaining = validation_batches - batch_index
+                print(
+                    json.dumps(
+                        {
+                            "event": "validation_progress",
+                            "epoch": epoch,
+                            "epochs": epochs,
+                            "batch": batch_index,
+                            "batches": validation_batches,
+                            "percent": (
+                                100.0 * batch_index / max(1, validation_batches)
+                            ),
+                            "elapsed_seconds": elapsed,
+                            "batches_per_second": rate,
+                            "eta_seconds": remaining / max(rate, 1e-9),
+                        },
+                        sort_keys=True,
+                    ),
+                    flush=True,
                 )
 
     decoder_summary = aggregate_decoder_diagnostics(samples)
@@ -327,6 +370,12 @@ def main() -> int:
     parser.add_argument("--time-max-fraction", type=float)
     parser.add_argument("--augmentation-mask-value", type=float)
     parser.add_argument("--augmentation-seed-offset", type=int)
+    parser.add_argument(
+        "--progress-interval",
+        type=int,
+        default=250,
+        help="emit training/validation progress every N batches; 0 disables",
+    )
     parser.add_argument("--init-only", action="store_true")
     args = parser.parse_args()
 
@@ -382,6 +431,8 @@ def main() -> int:
             raise ValueError(
                 "epochs must be >= 0, batch size >= 1 and learning rate > 0"
             )
+        if args.progress_interval < 0:
+            raise ValueError("progress_interval must be >= 0")
         if gradient_clip_norm <= 0:
             raise ValueError("gradient_clip_norm must be > 0")
         if not 0 <= min_learning_rate <= learning_rate:
@@ -546,14 +597,45 @@ def main() -> int:
         start = time.monotonic()
 
         if not args.init_only:
+            total_train_steps = epochs * len(train_loader)
+            print(
+                json.dumps(
+                    {
+                        "event": "training_start",
+                        "epochs": epochs,
+                        "batch_size": batch_size,
+                        "train_samples": len(train_dataset),
+                        "validation_samples": len(validation_dataset),
+                        "train_batches_per_epoch": len(train_loader),
+                        "validation_batches_per_epoch": len(validation_loader),
+                        "total_train_steps": total_train_steps,
+                        "progress_interval": args.progress_interval,
+                    },
+                    sort_keys=True,
+                ),
+                flush=True,
+            )
             assert train_loader is not None
             assert validation_loader is not None
             for epoch in range(epochs):
+                epoch_started = time.monotonic()
                 model.train()
                 batch_losses = []
                 gradient_norms = []
                 current_lr = float(optimizer.param_groups[0]["lr"])
-                for batch in train_loader:
+                print(
+                    json.dumps(
+                        {
+                            "event": "epoch_start",
+                            "epoch": epoch + 1,
+                            "epochs": epochs,
+                            "learning_rate": current_lr,
+                        },
+                        sort_keys=True,
+                    ),
+                    flush=True,
+                )
+                for batch_index, batch in enumerate(train_loader, start=1):
                     features = batch["features"]
                     if augmentation_policy is not None:
                         assert augmentation_generator is not None
@@ -589,12 +671,69 @@ def main() -> int:
                     batch_losses.append(float(loss.detach().cpu()))
                     gradient_norms.append(float(gradient_norm.detach().cpu()))
 
+                    if (
+                        args.progress_interval > 0
+                        and (
+                            batch_index == 1
+                            or batch_index % args.progress_interval == 0
+                            or batch_index == len(train_loader)
+                        )
+                    ):
+                        elapsed = time.monotonic() - start
+                        completed_steps = epoch * len(train_loader) + batch_index
+                        rate = completed_steps / max(elapsed, 1e-9)
+                        remaining_steps = total_train_steps - completed_steps
+                        print(
+                            json.dumps(
+                                {
+                                    "event": "training_progress",
+                                    "epoch": epoch + 1,
+                                    "epochs": epochs,
+                                    "batch": batch_index,
+                                    "batches_per_epoch": len(train_loader),
+                                    "completed_steps": completed_steps,
+                                    "total_steps": total_train_steps,
+                                    "percent": (
+                                        100.0
+                                        * completed_steps
+                                        / max(1, total_train_steps)
+                                    ),
+                                    "elapsed_seconds": elapsed,
+                                    "steps_per_second": rate,
+                                    "eta_seconds": (
+                                        remaining_steps / max(rate, 1e-9)
+                                    ),
+                                    "running_train_loss": float(
+                                        sum(batch_losses) / len(batch_losses)
+                                    ),
+                                    "learning_rate": current_lr,
+                                },
+                                sort_keys=True,
+                            ),
+                            flush=True,
+                        )
+
+                print(
+                    json.dumps(
+                        {
+                            "event": "validation_start",
+                            "epoch": epoch + 1,
+                            "epochs": epochs,
+                            "validation_batches": len(validation_loader),
+                        },
+                        sort_keys=True,
+                    ),
+                    flush=True,
+                )
                 validation = evaluate_validation(
                     model,
                     validation_loader,
                     loss_fn,
                     device,
                     vocab,
+                    progress_interval=args.progress_interval,
+                    epoch=epoch + 1,
+                    epochs=epochs,
                 )
                 validation_loss = float(validation["loss"])
                 validation_cer = float(validation["cer"])
@@ -654,6 +793,41 @@ def main() -> int:
                     best_state_dict = copy.deepcopy(model.state_dict())
                     best_optimizer_state = copy.deepcopy(optimizer.state_dict())
                 scheduler.step()
+                epoch_elapsed = time.monotonic() - epoch_started
+                total_elapsed = time.monotonic() - start
+                completed_epochs = epoch + 1
+                mean_epoch_seconds = total_elapsed / completed_epochs
+                print(
+                    json.dumps(
+                        {
+                            "event": "epoch_complete",
+                            "epoch": completed_epochs,
+                            "epochs": epochs,
+                            "epoch_seconds": epoch_elapsed,
+                            "elapsed_seconds": total_elapsed,
+                            "eta_seconds": (
+                                mean_epoch_seconds * (epochs - completed_epochs)
+                            ),
+                            "train_loss": mean_train_loss,
+                            "validation_loss": validation_loss,
+                            "validation_cer": validation_cer,
+                            "validation_wer": validation_wer,
+                            "validation_blank_frame_fraction": decoder[
+                                "blank_frame_fraction"
+                            ],
+                            "validation_empty_hypothesis_fraction": decoder[
+                                "empty_hypothesis_fraction"
+                            ],
+                            "validation_emitted_to_reference_character_ratio": decoder[
+                                "emitted_to_reference_character_ratio"
+                            ],
+                            "best_epoch": best_epoch,
+                            "selected_metric_value": selected_metric_value,
+                        },
+                        sort_keys=True,
+                    ),
+                    flush=True,
+                )
 
             model.load_state_dict(best_state_dict)
             optimizer.load_state_dict(best_optimizer_state)
