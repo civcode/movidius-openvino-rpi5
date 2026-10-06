@@ -281,15 +281,20 @@ def _slice_items(
     return items[first : last + 1]
 
 
-def _read_pcm16_mono_clip(source: Path, start_sample: int, end_sample: int) -> bytes:
+def _read_pcm16_clip(
+    source: Path,
+    start_sample: int,
+    end_sample: int,
+) -> tuple[bytes, int]:
     with wave.open(str(source), "rb") as wav:
         if wav.getframerate() != SAMPLE_RATE:
             raise AmiPreparationError(
                 f"{source}: expected 16000 Hz, got {wav.getframerate()}"
             )
-        if wav.getnchannels() != 1:
+        channels = wav.getnchannels()
+        if channels not in (1, 2):
             raise AmiPreparationError(
-                f"{source}: expected mono, got {wav.getnchannels()} channels"
+                f"{source}: expected mono or stereo, got {channels} channels"
             )
         if wav.getsampwidth() != 2 or wav.getcomptype() != "NONE":
             raise AmiPreparationError(
@@ -306,22 +311,40 @@ def _read_pcm16_mono_clip(source: Path, start_sample: int, end_sample: int) -> b
             )
         wav.setpos(start_sample)
         data = wav.readframes(end_sample - start_sample)
-    expected = (end_sample - start_sample) * 2
+    expected = (end_sample - start_sample) * channels * 2
     if len(data) != expected:
         raise AmiPreparationError(
             f"{source}: short read: expected {expected} bytes, got {len(data)}"
         )
-    return data
+    return data, channels
 
 
-def _pcm16le_to_f32le(data: bytes) -> bytes:
-    if len(data) % 2:
-        raise AmiPreparationError("PCM16 payload has odd byte length")
-    out = bytearray((len(data) // 2) * 4)
+def _pcm16le_to_f32le_mono(data: bytes, *, channels: int) -> bytes:
+    if channels not in (1, 2):
+        raise AmiPreparationError(
+            f"PCM16 normalization supports only 1 or 2 channels, got {channels}"
+        )
+    frame_bytes = channels * 2
+    if len(data) % frame_bytes:
+        raise AmiPreparationError(
+            f"PCM16 payload size {len(data)} is not a whole {channels}-channel frame"
+        )
+
+    frames = len(data) // frame_bytes
+    out = bytearray(frames * 4)
     offset = 0
-    for (sample,) in struct.iter_unpack("<h", data):
-        struct.pack_into("<f", out, offset, sample / 32768.0)
-        offset += 4
+    if channels == 1:
+        for (sample,) in struct.iter_unpack("<h", data):
+            struct.pack_into("<f", out, offset, sample / 32768.0)
+            offset += 4
+    else:
+        for left, right in struct.iter_unpack("<hh", data):
+            # Deterministic equal-power-neutral arithmetic mean. This keeps the
+            # normalized mono contract at one output sample per input WAV frame
+            # without clipping either full-scale equal-channel endpoint.
+            sample = (left + right) / 65536.0
+            struct.pack_into("<f", out, offset, sample)
+            offset += 4
     return bytes(out)
 
 
@@ -353,8 +376,12 @@ def render_segment(
 
     source_start = seconds_to_samples(segment["start"])
     source_end = seconds_to_samples(segment["end"])
-    pcm16 = _read_pcm16_mono_clip(source_audio, source_start, source_end)
-    f32 = _pcm16le_to_f32le(pcm16)
+    pcm16, source_channels = _read_pcm16_clip(
+        source_audio,
+        source_start,
+        source_end,
+    )
+    f32 = _pcm16le_to_f32le_mono(pcm16, channels=source_channels)
     output_audio.parent.mkdir(parents=True, exist_ok=True)
     output_audio.write_bytes(f32)
 
@@ -415,6 +442,14 @@ def render_segment(
             "source_audio_sha256": source_audio_sha256,
             "annotation_sha256": annotation_sha256,
             "normalized_audio_sha256": hashlib.sha256(f32).hexdigest(),
+            **(
+                {
+                    "source_audio_channels": source_channels,
+                    "channel_normalization": "stereo-average-v1",
+                }
+                if source_channels == 2
+                else {}
+            ),
         },
     }
     validate_speech_sample(document)
