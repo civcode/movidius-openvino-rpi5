@@ -452,6 +452,23 @@ EXP="$(
 ./scripts/review-speech-experiment.sh --experiment "$EXP"
 ```
 
+The v3 proxy completed as `exp-00e6b1e434d187d8/attempt-0001` with
+CER `0.7984219316938317` in about 6.75 minutes of training. The first
+architecture candidate is `cnn_ctc_v8`, which doubles the CTC time axis to
+256 frames while narrowing the encoder to 72 channels and using dilated
+residual context.
+
+Run it with:
+
+```bash
+./scripts/provision-speech-model-data-v4-edge.sh
+INIT_JSON="$(./scripts/init-cnn-ctc-v8-architecture-screen.sh)"
+EXP="$(printf '%s\n' "$INIT_JSON" |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])')"
+./scripts/run-speech-experiment.sh --experiment "$EXP" --worker edge
+./scripts/review-speech-experiment.sh --experiment "$EXP"
+```
+
 Screen results rank architecture directions only; they do not replace the
 larger-budget confirmation and full model-quality-v4 evaluation needed before
 promotion. The sealed held-out benchmark remains unavailable for selection.
