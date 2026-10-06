@@ -135,7 +135,9 @@ case "${MODE}" in
         ENTRY=(/opt/openvino/bin/hello_myriad --device MYRIAD "$@")
         ;;
     custom-server)
-        DOCKER_ARGS+=(-i -v "${ROOT}/work:/work")
+        # Binary tensor protocol: container-entry.sh must not write its banner
+        # to stdout or the client will consume text bytes as float32 logits.
+        DOCKER_ARGS+=(-i -e OV_QUIET=1 -v "${ROOT}/work:/work")
         ENTRY=(/opt/openvino/bin/hello_myriad --device MYRIAD --stdin "$@")
         ;;
     speech-reference|speech-regress)
