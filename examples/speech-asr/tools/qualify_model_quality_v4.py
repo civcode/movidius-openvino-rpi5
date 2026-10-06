@@ -50,6 +50,12 @@ EXPECTED_TRAIN_GROUPS = {
 }
 EXPECTED_VALIDATION_GROUPS = {"ES2011"}
 FORBIDDEN_GROUPS = {"ES2002", "EN2002", "ES2004", "IS1009", "TS3003"}
+EXPECTED_VALIDATION_INVALID_INTERVAL = {
+    "meeting": "ES2011c",
+    "reason": "non_positive_annotated_segment_interval",
+    "source_start_sample": 1249952,
+    "source_end_sample": 1248016,
+}
 
 
 def load_json(path: pathlib.Path) -> dict[str, Any]:
@@ -89,6 +95,29 @@ def preparation_exclusions(manifest: pathlib.Path) -> list[dict[str, Any]]:
             )
         values.append(dict(item))
     return values
+
+
+def validate_source_exclusions(
+    *,
+    train_exclusions: list[dict[str, Any]],
+    validation_exclusions: list[dict[str, Any]],
+) -> None:
+    if train_exclusions:
+        raise ValueError(
+            "model-quality-v4 training source contains invalid segment intervals"
+        )
+    if len(validation_exclusions) != 1:
+        raise ValueError(
+            "model-quality-v4 expects exactly one reviewed validation source "
+            "exclusion"
+        )
+    exclusion = validation_exclusions[0]
+    for key, expected in EXPECTED_VALIDATION_INVALID_INTERVAL.items():
+        if exclusion.get(key) != expected:
+            raise ValueError(
+                "model-quality-v4 validation exclusion differs from reviewed "
+                f"ES2011c anomaly: {key}={exclusion.get(key)!r} != {expected!r}"
+            )
 
 
 def validate_policy(policy: dict[str, Any]) -> None:
@@ -248,6 +277,10 @@ def qualify_v4(
     )
     train_exclusions = preparation_exclusions(train_source)
     validation_exclusions = preparation_exclusions(validation_source)
+    validate_source_exclusions(
+        train_exclusions=train_exclusions,
+        validation_exclusions=validation_exclusions,
+    )
 
     try:
         result = qualify_base(
@@ -310,6 +343,10 @@ def verify_existing(
     )
     train_exclusions = preparation_exclusions(train_source)
     validation_exclusions = preparation_exclusions(validation_source)
+    validate_source_exclusions(
+        train_exclusions=train_exclusions,
+        validation_exclusions=validation_exclusions,
+    )
 
     qualification_path = output_dir / "qualification.json"
     train_path = output_dir / "train.manifest.jsonl"
