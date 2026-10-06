@@ -170,11 +170,21 @@ def validate_parent() -> dict:
         raise ValueError("cnn_ctc_v16 final validation CER changed")
     if last.get("validation_loss") != V16_LAST_VALIDATION_LOSS:
         raise ValueError("cnn_ctc_v16 final validation loss changed")
-    if compatibility.get("pretraining_myriad_frame_argmax_agreement") != V16_PRETRAINING_MYRIAD_AGREEMENT:
+    probe = compatibility.get("pretraining_myriad_probe")
+    if not isinstance(probe, dict):
+        raise ValueError("cnn_ctc_v16 pretraining MYRIAD probe evidence is missing")
+    if probe.get("schema") != "speech-asr/pretraining-myriad-probe":
+        raise ValueError("cnn_ctc_v16 pretraining MYRIAD probe schema changed")
+    if probe.get("status") != "completed" or probe.get("model_id") != "cnn_ctc_v16":
+        raise ValueError("cnn_ctc_v16 pretraining MYRIAD probe did not complete")
+    comparison = probe.get("comparison")
+    if not isinstance(comparison, dict):
+        raise ValueError("cnn_ctc_v16 pretraining MYRIAD comparison is missing")
+    if comparison.get("frame_argmax_agreement") != V16_PRETRAINING_MYRIAD_AGREEMENT:
         raise ValueError("cnn_ctc_v16 pretraining MYRIAD agreement changed")
-    if compatibility.get("pretraining_myriad_max_abs_error") != V16_PRETRAINING_MYRIAD_MAX_ABS_ERROR:
+    if comparison.get("max_abs_error") != V16_PRETRAINING_MYRIAD_MAX_ABS_ERROR:
         raise ValueError("cnn_ctc_v16 pretraining MYRIAD max error changed")
-    if compatibility.get("pretraining_myriad_numerical_gate", {}).get("status") != "accepted":
+    if probe.get("numerical_gate", {}).get("status") != "accepted":
         raise ValueError("cnn_ctc_v16 pretraining MYRIAD gate is not accepted")
     return docs
 
@@ -406,6 +416,8 @@ def main() -> int:
     output = json.loads(proc.stdout)
     training = parent["training"]
     compatibility = parent["compatibility"]
+    probe = compatibility["pretraining_myriad_probe"]
+    probe_comparison = probe["comparison"]
     output["quartznet_training_reference"] = {
         "parent": DEFAULT_PARENT,
         "attempt": PARENT_ATTEMPT,
@@ -415,8 +427,8 @@ def main() -> int:
         "v16_best_validation_cer_epoch": training["best_validation_cer_epoch"],
         "v16_best_validation_loss": training["best_validation_loss"],
         "v16_best_validation_loss_epoch": training["best_validation_loss_epoch"],
-        "v16_pretraining_myriad_frame_argmax_agreement": compatibility["pretraining_myriad_frame_argmax_agreement"],
-        "v16_pretraining_myriad_max_abs_error": compatibility["pretraining_myriad_max_abs_error"],
+        "v16_pretraining_myriad_frame_argmax_agreement": probe_comparison["frame_argmax_agreement"],
+        "v16_pretraining_myriad_max_abs_error": probe_comparison["max_abs_error"],
         "v15_physical_cer": 0.8428267004549905,
         "v14_physical_cer": 0.7898404653573691,
         "v11_physical_cer": 0.7865576225306686,
