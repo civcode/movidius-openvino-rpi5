@@ -120,10 +120,15 @@ dev-clean source-pipeline reproduction.
 
 This phase performs no OpenVINO conversion and no MYRIAD execution.
 
+That boundary describes this completed source-domain qualification only. After
+the clean reference was reproduced and selected as the product-quality target,
+a separate deployment qualification was created in
+`quartznet15x5-librispeech-myriad-qualification.md`. The frozen 3.79% source
+evidence remains unchanged.
+
 The repository already has sufficient evidence that compatible acoustic graphs
 can be carried through ONNX/OpenVINO to MA2450 once their reference semantics
-are correct. Hardware work therefore resumes only after the zero-training
-source-domain reference is understood.
+are correct.
 
 ## Command
 

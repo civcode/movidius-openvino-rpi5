@@ -705,3 +705,44 @@ returns to REVIEW with domain/data adaptation as the next problem to solve.
 
 See
 `docs/adr/quartznet15x5-ami-adaptation-attribution.md`.
+
+## Clean QuartzNet Pi/MYRIAD qualification
+
+LibriSpeech clean speech is now the primary deployment-quality reference. The
+already-qualified 29-class NVIDIA QuartzNet source model is carried unchanged
+through ONNX -> OpenVINO 2020.3 FP16 -> Pi 5 -> MA2450/MYRIAD.
+
+The source frontend remains variable-length. A fixed 512-frame ONNX is used
+only as a Model Optimizer carrier; the generic `hello_myriad` runner reshapes
+the OpenVINO network to each exact source padded time length before
+`LoadNetwork`. No utterance is truncated or expanded into a larger inference
+bucket.
+
+Before hardware execution, the Pi-safe NumPy implementation of the historical
+NeMo frontend must reproduce the full 2,703-utterance clean reference within
+`0.001` absolute WER of the qualified PyTorch WER
+`0.037939781625675524`.
+
+Physical acceptance requires:
+
+- first-sample ONNX/MYRIAD frame argmax agreement `1.0`;
+- maximum frame total-variation distance <= `0.002`;
+- full dev-clean WER <= `0.05`;
+- absolute WER drift from the qualified PyTorch result <= `0.005`;
+- all 2,703 utterances;
+- zero training.
+
+First run:
+
+```bash
+./scripts/run-quartznet15x5-reference-myriad-edge.sh \
+  --device cuda \
+  --refresh-runtime
+```
+
+`--refresh-runtime` is needed when the Pi's extracted host runtime predates
+the new `hello_myriad --reshape-time` support.
+
+See
+`docs/adr/quartznet15x5-librispeech-myriad-qualification.md`.
+

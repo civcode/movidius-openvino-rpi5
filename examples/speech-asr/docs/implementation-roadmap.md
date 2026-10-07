@@ -1076,7 +1076,38 @@ The qualified source model's LibriSpeech dev-clean WER is
 recognizer is exposed to AMI itself, before the AMI-specific frontend/head and
 training steps.
 
-Return to REVIEW. Do not change the qualified QuartzNet architecture, the fixed
-AMI frontend, or the 39-class head to address this evidence. The next
-controlled work should target domain/data adaptation and must remain
-CPU/CUDA-reference-first; keep OpenVINO/MYRIAD deferred.
+REVIEW determined that AMI meeting audio is not the primary product-quality
+target. LibriSpeech clean speech is materially closer to the intended input
+quality, and the qualified source model already reproduces NVIDIA at WER
+`0.037939781625675524`.
+
+The next controlled step is therefore deployment qualification of that exact
+29-class source recognizer on Pi 5 + MA2450/MYRIAD, not further AMI
+fine-tuning.
+
+Implemented deployment path:
+
+- requalify the historical NeMo frontend with an edge-safe NumPy
+  implementation;
+- export the untouched source weights to dynamic ONNX for semantic reference;
+- export a fixed 512-frame carrier ONNX and convert it to OpenVINO 2020.3 FP16;
+- reshape the carrier IR at runtime to each exact source padded time length;
+- require first-sample ONNX/MYRIAD frame argmax agreement `1.0` and maximum
+  frame TV <= `0.002`;
+- evaluate all 2,703 LibriSpeech dev-clean utterances;
+- require physical WER <= `0.05` and absolute WER drift <= `0.005` from the
+  qualified PyTorch WER.
+
+No training or AMI adaptation belongs to this step.
+
+Run the first physical qualification with:
+
+```bash
+./ci/verify-static.sh
+./scripts/test-speech-asr-quartznet-reference-myriad.sh
+./scripts/run-quartznet15x5-reference-myriad-edge.sh \
+  --device cuda \
+  --refresh-runtime
+```
+
+Return to REVIEW after the full edge result is recorded.
