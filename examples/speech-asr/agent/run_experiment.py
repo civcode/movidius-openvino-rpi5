@@ -390,6 +390,7 @@ def physical_compatibility_probe(
         "cnn_ctc_v16",
         "cnn_ctc_v17",
         "cnn_ctc_v18",
+        "cnn_ctc_v19",
     }:
         return None
 
