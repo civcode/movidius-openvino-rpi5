@@ -133,7 +133,11 @@ def logmel_features(samples: Sequence[float], spec: dict):
     hop_samples = int(frontend["hop_samples"])
     fft_size = int(frontend["fft_size"])
     fixed_frames = int(frontend["fixed_frames"])
-    log_floor = float(frontend["log_floor"])
+    log_floor = (
+        None
+        if frontend.get("kind") == "logmel-v3"
+        else float(frontend["log_floor"])
+    )
 
     audio, original_samples = fixed_audio(samples, spec)
     expected = window_samples + (fixed_frames - 1) * hop_samples
@@ -185,6 +189,7 @@ def logmel_features(samples: Sequence[float], spec: dict):
         logged = np.log(mel + guard).astype(np.float32)
     else:
         mel = mel_filterbank(spec) @ power.T
+        assert log_floor is not None
         logged = np.log(np.maximum(mel, log_floor)).astype(np.float32)
 
     normalization = frontend.get("normalization")
