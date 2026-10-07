@@ -1052,5 +1052,31 @@ Run:
 ./scripts/evaluate-quartznet15x5-ami-attribution.sh --device cuda
 ```
 
-Return to REVIEW after `result.json` is recorded. Do not alter the source
-architecture, AMI frontend, vocabulary/head, or training policy before then.
+The attribution run is complete and its frozen self-checks passed exactly.
+
+Measured WER/CER by stage:
+
+1. source head + source frontend on AMI:
+   `0.7806089397538328 / 0.6027184242354432`;
+2. source head + AMI fixed frontend:
+   `0.7393651479162168 / 0.5776651500316765`;
+3. epoch-zero 39-class AMI head:
+   `0.7393651479162168 / 0.5776651500316765`;
+4. selected best-epoch-5 v19:
+   `0.5983588857698121 / 0.46201693255773774`.
+
+Attribution:
+
+- the fixed frontend improves WER by `0.04124379183761606`;
+- the 39-class head causes no measurable WER/CER change at epoch zero;
+- v19 fine-tuning improves WER by `0.14100626214640466`.
+
+The qualified source model's LibriSpeech dev-clean WER is
+`0.037939781625675524`, so the dominant problem appears when the source
+recognizer is exposed to AMI itself, before the AMI-specific frontend/head and
+training steps.
+
+Return to REVIEW. Do not change the qualified QuartzNet architecture, the fixed
+AMI frontend, or the 39-class head to address this evidence. The next
+controlled work should target domain/data adaptation and must remain
+CPU/CUDA-reference-first; keep OpenVINO/MYRIAD deferred.

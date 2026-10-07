@@ -1,6 +1,6 @@
 # ADR: isolate AMI adaptation loss from the qualified QuartzNet source recognizer
 
-Status: implemented; measurement pending
+Status: complete; AMI loss attributed primarily to domain/adaptation
 Date: 2026-10-07
 Qualified source reference: `quartznet15x5_nvidia_ref`
 Frozen AMI reference: `cnn_ctc_v19` from
@@ -113,6 +113,47 @@ recognizer behaves on AMI.
 
 The result includes per-stage hypothesis JSONL files so high-error utterances
 can be compared across adjacent stages after the aggregate attribution is known.
+
+## Attribution result
+
+The full 1,273-utterance run completed with frozen-evidence self-checks passing
+exactly.
+
+Measured stages:
+
+- stage 0, source head + source frontend on AMI:
+  WER `0.7806089397538328`, CER `0.6027184242354432`;
+- stage 1, source head + AMI fixed frontend:
+  WER `0.7393651479162168`, CER `0.5776651500316765`;
+- stage 2, 39-class AMI head at epoch zero:
+  WER `0.7393651479162168`, CER `0.5776651500316765`;
+- stage 3, selected v19 fine-tuned checkpoint:
+  WER `0.5983588857698121`, CER `0.46201693255773774`.
+
+Adjacent effects:
+
+- fixed frontend: WER delta `-0.04124379183761606`, CER delta
+  `-0.025053274203766684`;
+- 39-class head expansion/remap: WER delta `0.0`, CER delta `0.0`;
+- existing v19 fine-tuning: WER delta `-0.14100626214640466`, CER delta
+  `-0.11564821747393877`.
+
+The source-domain LibriSpeech dev-clean WER is
+`0.037939781625675524`, while the untouched source recognizer reaches only
+`0.7806089397538328` on the frozen AMI validation set. These values are not
+a same-dataset causal delta, but together they show that the dominant quality
+problem appears before the AMI frontend, expanded head, and fine-tuning are
+introduced.
+
+The fixed frontend is not the cause of the collapse; it improves WER by about
+4.12 absolute percentage points. The 39-class head expansion/remap is neutral
+at epoch zero. The existing fine-tuning is beneficial, improving WER by about
+14.10 absolute percentage points, but it is insufficient to overcome the
+source-to-AMI domain gap.
+
+The next REVIEW should therefore focus on domain/data adaptation rather than
+changing the qualified source architecture, reverting the fixed frontend, or
+removing the 39-class head.
 
 ## Hardware boundary
 

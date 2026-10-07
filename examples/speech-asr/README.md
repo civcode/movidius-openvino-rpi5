@@ -687,5 +687,21 @@ Run:
 This path performs no new optimizer updates, OpenVINO conversion, Docker
 execution, SSH, or MYRIAD inference.
 
+The full attribution is complete:
+
+- source head + source frontend on AMI: WER `0.7806089397538328`, CER
+  `0.6027184242354432`;
+- source head + fixed AMI frontend: WER `0.7393651479162168`, CER
+  `0.5776651500316765`;
+- 39-class AMI head at epoch zero: identical WER/CER
+  `0.7393651479162168 / 0.5776651500316765`;
+- selected v19 fine-tuning: WER `0.5983588857698121`, CER
+  `0.46201693255773774`.
+
+The fixed frontend improves, rather than harms, the source model on AMI. The
+39-class head is neutral at epoch zero. Existing fine-tuning is also beneficial
+but does not close the large source-to-AMI domain gap. The project therefore
+returns to REVIEW with domain/data adaptation as the next problem to solve.
+
 See
 `docs/adr/quartznet15x5-ami-adaptation-attribution.md`.
