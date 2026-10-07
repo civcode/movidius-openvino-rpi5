@@ -315,10 +315,15 @@ int runInference(Core& ie, const std::string& modelXml, const std::string& model
         std::cout << "model has no inputs\n";
         return 3;
     }
+    const ov203::DeviceSpec deviceSpec = ov203::parseDeviceSpec(device);
     for (auto& item : inputs) {
-        // the VPU wants FP16 activations; asking for anything else makes the
-        // MYRIAD compiler fail or inserts a conversion node
-        item.second->setPrecision(Precision::FP16);
+        // MYRIAD wants FP16 activations. CPU inference keeps FP32 because the
+        // OpenVINO 2020.3 MKLDNN plugin does not accept FP16 input images.
+        if (deviceSpec.usesMyriad) {
+            item.second->setPrecision(Precision::FP16);
+        } else {
+            item.second->setPrecision(Precision::FP32);
+        }
         item.second->setLayout(
             TensorDesc::getLayoutByDims(item.second->getInputData()->getDims()));
         // InputInfo exposes precision/layout only; the shape comes from its Data.
@@ -334,7 +339,7 @@ int runInference(Core& ie, const std::string& modelXml, const std::string& model
                   << " " << item.second->getPrecision().name() << "\n";
     }
 
-    std::cout << "loading on      : " << device << " (first load compiles the graph on the VPU)\n";
+    std::cout << "loading on      : " << device << " (first load compiles the graph on the selected device)\n";
     const auto t0 = std::chrono::steady_clock::now();
     ExecutableNetwork executable = ie.LoadNetwork(network, device);
     const auto t1 = std::chrono::steady_clock::now();
@@ -350,16 +355,25 @@ int runInference(Core& ie, const std::string& modelXml, const std::string& model
         const auto& item = *inputs.begin();
         Blob::Ptr blob = request.GetBlob(item.first);
         const auto values = readF32(tensorPath, blob->size());
-        if (blob->byteSize() != values.size() * sizeof(uint16_t)) {
-            throw std::runtime_error("MYRIAD input blob is not FP16-sized");
-        }
+        const size_t elemBytes =
+            values.empty() ? 0 : blob->byteSize() / values.size();
         uint8_t* raw = blob->buffer().as<uint8_t*>();
-        for (size_t i = 0; i < values.size(); ++i) {
-            const uint16_t h = floatToHalf(values[i]);
-            std::memcpy(raw + 2 * i, &h, sizeof(h));
+        if (elemBytes == sizeof(uint16_t)) {
+            for (size_t i = 0; i < values.size(); ++i) {
+                const uint16_t h = floatToHalf(values[i]);
+                std::memcpy(raw + 2 * i, &h, sizeof(h));
+            }
+            std::cout << "input tensor    : " << tensorPath << " (" << values.size()
+                      << " f32 values -> FP16)\n";
+        } else if (elemBytes == sizeof(float)) {
+            std::memcpy(raw, values.data(), values.size() * sizeof(float));
+            std::cout << "input tensor    : " << tensorPath << " (" << values.size()
+                      << " f32 values -> FP32)\n";
+        } else {
+            std::ostringstream oss;
+            oss << "unsupported input blob width " << elemBytes << " B/element";
+            throw std::runtime_error(oss.str());
         }
-        std::cout << "input tensor    : " << tensorPath << " (" << values.size()
-                  << " f32 values -> FP16)\n";
     } else {
         // deterministic, cheap input pattern: every activation = 0x3c3c
         for (const auto& item : inputs) {
