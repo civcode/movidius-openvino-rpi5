@@ -999,6 +999,18 @@ def main() -> int:
         )
         attempt_id = start["attempt_id"]
         attempt_state = str(start["state"])
+        if start.get("status") == "resumed":
+            print(
+                json.dumps(
+                    {
+                        "event": "resume_attempt",
+                        "attempt_id": attempt_id,
+                        "state": attempt_state,
+                    },
+                    sort_keys=True,
+                ),
+                flush=True,
+            )
         if attempt_state not in {"APPROVED", "EXECUTE", "EVALUATE"}:
             raise ExecutionFailure(
                 f"cannot resume attempt {attempt_id} from state {attempt_state!r}",
