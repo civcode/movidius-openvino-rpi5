@@ -1,0 +1,231 @@
+{
+  "schema": "speech-asr/custom-model-spec",
+  "version": 1,
+  "id": "cnn_ctc_v19",
+  "family": "cnn_ctc",
+  "purpose": "model-quality-v4 conservative pretrained QuartzNet-15x5 fine-tuning: preserve the strong epoch-zero transfer baseline, freeze BatchNorm running statistics, use batch 8 and a 1e-4 cosine fine-tuning rate",
+  "frontend": {
+    "kind": "logmel-v3",
+    "sample_rate_hz": 16000,
+    "window_samples": 320,
+    "hop_samples": 160,
+    "fft_size": 512,
+    "mel_bins": 64,
+    "fmin_hz": 0,
+    "fmax_hz": 8000,
+    "preemphasis": 0.97,
+    "window": "hann-periodic",
+    "power": 2,
+    "mel_scale": "slaney",
+    "mel_norm": "slaney",
+    "log_guard": 5.960464477539063e-8,
+    "dither": 0,
+    "source_training_dither": 0.00001,
+    "normalization": "per_mel_bin_mean_std_valid_zero_pad",
+    "normalization_eps": 0.00001,
+    "fixed_frames": 512,
+    "fixed_audio_samples": 82160
+  },
+  "input_contract": {
+    "name": "features",
+    "layout": "NCT",
+    "dtype": "float32",
+    "shape": [
+      1,
+      64,
+      512
+    ]
+  },
+  "network": {
+    "kind": "quartznet-15x5-v1",
+    "source": "NVIDIA QuartzNet15x5Base-En / NeMo JasperEncoder",
+    "normalization": "batchnorm",
+    "batchnorm_eps": 0.001,
+    "activation": "relu",
+    "dropout": 0,
+    "separable_convolution": "depthwise-pointwise",
+    "prologue": {
+      "name": "C1",
+      "channels": 256,
+      "kernel": 33,
+      "stride": 2,
+      "dilation": 1,
+      "padding": 16,
+      "separable": true
+    },
+    "block_groups": [
+      {
+        "name": "B1",
+        "channels": 256,
+        "kernel": 33,
+        "block_repeats": 3,
+        "module_repeats": 5,
+        "stride": 1,
+        "dilation": 1,
+        "padding": 16
+      },
+      {
+        "name": "B2",
+        "channels": 256,
+        "kernel": 39,
+        "block_repeats": 3,
+        "module_repeats": 5,
+        "stride": 1,
+        "dilation": 1,
+        "padding": 19
+      },
+      {
+        "name": "B3",
+        "channels": 512,
+        "kernel": 51,
+        "block_repeats": 3,
+        "module_repeats": 5,
+        "stride": 1,
+        "dilation": 1,
+        "padding": 25
+      },
+      {
+        "name": "B4",
+        "channels": 512,
+        "kernel": 63,
+        "block_repeats": 3,
+        "module_repeats": 5,
+        "stride": 1,
+        "dilation": 1,
+        "padding": 31
+      },
+      {
+        "name": "B5",
+        "channels": 512,
+        "kernel": 75,
+        "block_repeats": 3,
+        "module_repeats": 5,
+        "stride": 1,
+        "dilation": 1,
+        "padding": 37
+      }
+    ],
+    "residual_projection": "pointwise-conv-batchnorm",
+    "epilogue": [
+      {
+        "name": "C2",
+        "channels": 512,
+        "kernel": 87,
+        "stride": 1,
+        "dilation": 2,
+        "padding": 86,
+        "separable": true
+      },
+      {
+        "name": "C3",
+        "channels": 1024,
+        "kernel": 1,
+        "stride": 1,
+        "dilation": 1,
+        "padding": 0,
+        "separable": false
+      }
+    ],
+    "projection_kernel": 1,
+    "estimated_parameters": 18934631,
+    "estimated_macs_fixed_input": 4827463680,
+    "receptive_field_feature_frames": 8057
+  },
+  "output_contract": {
+    "name": "logits",
+    "layout": "NTV",
+    "dtype": "float32",
+    "shape": [
+      1,
+      256,
+      39
+    ],
+    "semantics": "unnormalized CTC logits"
+  },
+  "decoder": {
+    "kind": "ctc-greedy-v1",
+    "blank_index": 0,
+    "vocab": "vocab.json"
+  },
+  "transfer": {
+    "kind": "nvidia-quartznet15x5-base-en-v2",
+    "source_name": "QuartzNet15x5-En-Base.nemo",
+    "source_url": "https://storage.openvinotoolkit.org/repositories/open_model_zoo/public/2022.1/quartznet-15x5-en/QuartzNet15x5-En-Base.nemo",
+    "original_source_url": "https://api.ngc.nvidia.com/v2/models/nvidia/multidataset_quartznet15x5/versions/2/files/QuartzNet15x5-En-Base.nemo",
+    "source_size_bytes": 71083664,
+    "source_sha384": "74e8284e77098906afb7a15a861ef60ec14db1a4acb206fa719492fa43050ad69a91c245652c05c5f0ded38b5903ed55",
+    "source_license": "Apache-2.0",
+    "source_encoder_member": ".nemo_tmp/JasperEncoder.pt",
+    "source_decoder_member": ".nemo_tmp/JasperDecoderForCTC.pt",
+    "source_vocab": [
+      " ",
+      "a",
+      "b",
+      "c",
+      "d",
+      "e",
+      "f",
+      "g",
+      "h",
+      "i",
+      "j",
+      "k",
+      "l",
+      "m",
+      "n",
+      "o",
+      "p",
+      "q",
+      "r",
+      "s",
+      "t",
+      "u",
+      "v",
+      "w",
+      "x",
+      "y",
+      "z",
+      "'",
+      "<blank>"
+    ],
+    "policy": "load all encoder tensors and remap every shared source decoder symbol; retain deterministic initialization for target-only digits",
+    "fine_tune": "all_parameters"
+  },
+  "training": {
+    "seed": 1337,
+    "batch_size": 8,
+    "learning_rate": 0.0001,
+    "epochs": 12,
+    "optimizer": "novograd",
+    "optimizer_betas": [
+      0.95,
+      0.25
+    ],
+    "optimizer_eps": 1e-8,
+    "weight_decay": 0.001,
+    "loss": "ctc",
+    "zero_infinity": true,
+    "gradient_clip_norm": 5,
+    "lr_schedule": "cosine",
+    "warmup_ratio": 0,
+    "min_learning_rate": 0.000001,
+    "checkpoint_selection": "best_validation_cer",
+    "freeze_batchnorm_running_stats": true,
+    "initial_validation_checkpoint_candidate": true
+  },
+  "export": {
+    "framework": "pytorch",
+    "onnx_opset": 11,
+    "fixed_shapes": true,
+    "precision": "FP32 source -> FP16 OpenVINO IR"
+  },
+  "deployment": {
+    "target": "MYRIAD",
+    "openvino_version": "2020.3.2",
+    "precision": "FP16",
+    "split": {
+      "vpu": "QuartzNet acoustic model through CTC logits",
+      "cpu": "NeMo-aligned log-mel frontend and CTC decoding; prefix beam search/language-model stage follows acoustic validation"
+    }
+  }
+}
