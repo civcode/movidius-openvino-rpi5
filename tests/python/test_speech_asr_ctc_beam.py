@@ -187,8 +187,10 @@ class CtcBeamTests(unittest.TestCase):
         self.assertIn('"selected_wer": 0.5497732671129346', freeze)
         self.assertIn('"selected_cer": 0.4634567759027818', freeze)
         self.assertIn('"--decoder-artifact"', evaluator)
-        self.assertIn("decode_with_artifact(", evaluator)
-        self.assertIn("decode_with_artifact(", runtime)
+        self.assertIn("FrozenCtcDecoder.from_artifact(", evaluator)
+        self.assertIn("runtime_decoder.decode(", evaluator)
+        self.assertIn("FrozenCtcDecoder.from_artifact(", runtime)
+        self.assertIn("runtime_decoder.decode(", runtime)
 
     def test_decoder_entrypoints_exist(self):
         for name in (
