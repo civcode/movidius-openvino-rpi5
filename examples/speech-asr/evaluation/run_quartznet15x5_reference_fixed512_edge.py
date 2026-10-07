@@ -108,7 +108,7 @@ def main() -> int:
     parser.add_argument("--worker", default="edge")
     parser.add_argument("--edge-repo")
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
-    parser.add_argument("--cpuset", default="0-3")
+    parser.add_argument("--cpuset", default="0-15")
     parser.add_argument("--hop-output-frames", type=int, default=128)
     parser.add_argument("--max-samples", type=int)
     parser.add_argument("--refresh-runtime", action="store_true")

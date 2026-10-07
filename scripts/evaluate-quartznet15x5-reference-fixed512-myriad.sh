@@ -8,7 +8,7 @@ DYNAMIC_ONNX="$ROOT/work/speech-asr/quartznet15x5-reference/myriad/dynamic/quart
 WORK_DIR="$ROOT/work/speech-asr/quartznet15x5-reference/fixed512-evaluation"
 OUTPUT="$WORK_DIR/result.json"
 LOG="$WORK_DIR/evaluator.log"
-CPUSET="${SPEECH_DECODER_CPUSET:-0-3}"
+CPUSET="${SPEECH_DECODER_CPUSET:-0-15}"
 MAX_SAMPLES=""
 HOP_OUTPUT_FRAMES=128
 FRESH=0
@@ -132,7 +132,13 @@ args=(
 [[ -n "$MAX_SAMPLES" ]] && args+=(--max-samples "$MAX_SAMPLES")
 
 set +e
-OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 taskset -c "$CPUSET"     "$ROOT/scripts/python-apps.sh"     "$ROOT/examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_fixed512.py"     "${args[@]}" 2>&1 | tee "$LOG"
+OMP_NUM_THREADS=16 \
+MKL_NUM_THREADS=16 \
+OPENBLAS_NUM_THREADS=16 \
+taskset -c "$CPUSET" \
+    "$ROOT/scripts/python-apps.sh" \
+    "$ROOT/examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_fixed512.py" \
+    "${args[@]}" 2>&1 | tee "$LOG"
 status="${PIPESTATUS[0]}"
 set -e
 exit "$status"
