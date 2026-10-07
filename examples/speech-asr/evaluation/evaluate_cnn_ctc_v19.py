@@ -105,6 +105,33 @@ def sum_rate(counts) -> float:
     return errors / max(1, refs)
 
 
+def write_f32_file_exact(path: pathlib.Path, values: np.ndarray) -> None:
+    """Write a complete little-endian float32 tensor despite short OS writes."""
+    array = np.ascontiguousarray(values, dtype="<f4")
+    payload = memoryview(array).cast("B")
+    temporary = path.with_name(path.name + ".tmp")
+    try:
+        with temporary.open("wb", buffering=0) as handle:
+            written = 0
+            while written < len(payload):
+                count = handle.write(payload[written:])
+                if count is None:
+                    count = 0
+                if count <= 0:
+                    raise OSError(
+                        f"short tensor-file write: {len(payload)} bytes requested, "
+                        f"{written} written"
+                    )
+                written += count
+        os.replace(temporary, path)
+    except Exception:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+
+
 def require_persistent_runtime(platform: str) -> None:
     proc = subprocess.run(
         [
@@ -721,7 +748,7 @@ def main() -> int:
                 reused_samples += 1
                 logits_flat = np.fromfile(logits_path, dtype=np.float32)
             else:
-                feature_values.tofile(feature_path)
+                write_f32_file_exact(feature_path, feature_values)
 
                 single_shot = None
                 parity_output_path = sample_dir / "parity-single-shot.f32"
@@ -799,7 +826,7 @@ def main() -> int:
                         flush=True,
                     )
 
-                logits_flat.astype(np.float32, copy=False).tofile(logits_path)
+                write_f32_file_exact(logits_path, logits_flat)
                 write_sample_cache(
                     cache_path=cache_path,
                     record_id=str(record["id"]),
