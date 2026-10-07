@@ -170,6 +170,24 @@ class CnnCtcV19Tests(unittest.TestCase):
         )
         self.assertIn("except RuntimeError as exc:", source)
         self.assertIn("MAX_SERVER_RESTARTS = 4", source)
+        self.assertIn('"--progress-interval"', source)
+        self.assertIn("default=25", source)
+        self.assertIn("percent=", source)
+        self.assertIn("rate=", source)
+        self.assertIn("eta=", source)
+        self.assertIn("restarts=", source)
+
+    def test_controller_streams_edge_worker_output_live(self):
+        source = (
+            SPEECH / "agent" / "run_experiment.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("stream_output: bool = False", source)
+        self.assertIn("stream_output=stream_output", source)
+        self.assertIn(
+            'log_path=logs_dir / "edge-worker-ssh.log",\n'
+            '        stream_output=True,',
+            source,
+        )
 
     def test_v19_uses_pretrained_semantic_myriad_gate(self):
         result = pretraining_myriad_compatibility(
