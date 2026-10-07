@@ -73,9 +73,17 @@ class CharacterNgramLM:
             characters += len(text)
             history = [START] * history_width
             for char in text:
-                context = tuple(history[-history_width:]) if history_width else ()
-                counts[context][char] += 1
-                totals[context] += 1
+                full_context = (
+                    tuple(history[-history_width:]) if history_width else ()
+                )
+                for context_length in range(len(full_context) + 1):
+                    context = (
+                        full_context[-context_length:]
+                        if context_length
+                        else ()
+                    )
+                    counts[context][char] += 1
+                    totals[context] += 1
                 if history_width:
                     history.append(char)
 
@@ -99,6 +107,8 @@ class CharacterNgramLM:
             context = tuple(context_values)
         else:
             context = ()
+        while context not in self.counts and context:
+            context = context[1:]
         token_counts = self.counts.get(context)
         count = 0 if token_counts is None else int(token_counts.get(token, 0))
         total = int(self.totals.get(context, 0))
