@@ -1025,8 +1025,32 @@ mismatches in 256 tested frames, and maximum absolute logit error
 This closes the source architecture/frontend/import diagnostic. Do not modify
 the qualified source QuartzNet path to explain AMI performance.
 
-Return to REVIEW now. The next controlled question is which AMI-specific change
-caused the quality collapse relative to the qualified source recognizer:
-vocabulary/head expansion, fixed-shape frontend adaptation, fine-tuning/data
-domain, or their interaction. Keep OpenVINO/MYRIAD deferred until that CPU
-reference analysis identifies the adaptation boundary.
+REVIEW selected a staged AMI adaptation attribution before any further model
+change.
+
+The implemented CPU/CUDA-only analysis evaluates the same frozen 1,273-record
+ES2011 validation set through:
+
+1. qualified source 29-class head + original NeMo frontend;
+2. source 29-class head + AMI fixed `logmel-v3` frontend;
+3. seeded epoch-zero 39-class AMI head + fixed frontend;
+4. existing selected best-epoch-5 v19 checkpoint + fixed frontend.
+
+Adjacent deltas isolate the fixed frontend, 39-class head expansion/remap, and
+the already-completed fine-tuning respectively. Stage 0 measures the AMI domain
+gap of the untouched source recognizer.
+
+The full run must also reproduce the frozen epoch-zero and selected-v19
+validation metrics before its attribution is trusted. No new training,
+OpenVINO, Docker, SSH, or MYRIAD execution is permitted.
+
+Run:
+
+```bash
+./ci/verify-static.sh
+./scripts/test-speech-asr-quartznet-ami-attribution.sh
+./scripts/evaluate-quartznet15x5-ami-attribution.sh --device cuda
+```
+
+Return to REVIEW after `result.json` is recorded. Do not alter the source
+architecture, AMI frontend, vocabulary/head, or training policy before then.

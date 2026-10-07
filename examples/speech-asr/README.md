@@ -653,3 +653,39 @@ source-pipeline reproduction.
 
 See
 `docs/adr/quartznet15x5-librispeech-reference-qualification.md`.
+
+## AMI adaptation attribution
+
+With the source QuartzNet pipeline qualified, the next measurement isolates the
+AMI-specific changes without any new training or hardware execution.
+
+The same frozen 1,273-record ES2011 validation set is evaluated through four
+ordered stages:
+
+1. original 29-class source head + original NeMo frontend;
+2. original 29-class source head + AMI fixed `logmel-v3` frontend;
+3. seeded epoch-zero 39-class AMI head + fixed frontend;
+4. existing selected best-epoch-5 v19 checkpoint + fixed frontend.
+
+Only adjacent deltas are interpreted causally: frontend, then head expansion,
+then the already-completed fine-tuning. Stage 0 itself measures the untouched
+source recognizer's AMI domain gap.
+
+The full run self-checks stage 2 against the frozen epoch-zero WER/CER
+`0.7393651479162168 / 0.5776651500316765` and stage 3 against the selected
+v19 validation WER/CER
+`0.5983588857698121 / 0.46201693255773774`.
+
+Run:
+
+```bash
+./ci/verify-static.sh
+./scripts/test-speech-asr-quartznet-ami-attribution.sh
+./scripts/evaluate-quartznet15x5-ami-attribution.sh --device cuda
+```
+
+This path performs no new optimizer updates, OpenVINO conversion, Docker
+execution, SSH, or MYRIAD inference.
+
+See
+`docs/adr/quartznet15x5-ami-adaptation-attribution.md`.
