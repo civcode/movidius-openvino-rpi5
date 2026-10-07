@@ -28,10 +28,10 @@ VALIDATION_MANIFEST = ROOT / "work" / "speech-asr" / "ami" / "model-quality-v4" 
 PRETRAINED = ROOT / "work" / "speech-asr" / "pretrained" / "quartznet15x5-en-base-v2" / "QuartzNet15x5-En-Base.nemo"
 PRETRAINED_IMPORT = PRETRAINED.parent / "import-verification.json"
 
-MODEL_SPEC_SHA256 = "4cf0403f533563e7977663b3ccbfc17450ed55be426457d53c5ead1fbf2cf6f8"
+MODEL_SPEC_SHA256 = "008416f73aa2f90e1eb7b60cb2021175cbc0826b09810aed9aebbe41fe6f422c"
 VOCAB_SHA256 = "79f4dc2b628f5f61b3d5361ca67fadff044a91569c24e0af3916786fd8ddce4f"
 PRETRAINED_SIZE = 71083664
-PRETRAINED_SHA512 = "74e8284e77098906afb7a15a861ef60ec14db1a4acb206fa719492fa43050ad69a91c245652c05c5f0ded38b5903ed55"
+PRETRAINED_SHA384 = "74e8284e77098906afb7a15a861ef60ec14db1a4acb206fa719492fa43050ad69a91c245652c05c5f0ded38b5903ed55"
 SCREEN_MANIFEST_SHA256 = "0528db59eec36d00d710b3090b0c6404dbdbf548ae7e13d3daf3d5152eacfc8b"
 VALIDATION_MANIFEST_SHA256 = "fbd72a648826b2e200f9244b4dc73be425cada2e304be92d513f7033a8de4088"
 SCREEN_RECORDS = 3904
@@ -62,8 +62,8 @@ def sha256_path(path: pathlib.Path) -> str:
     return digest.hexdigest()
 
 
-def sha512_path(path: pathlib.Path) -> str:
-    digest = hashlib.sha512()
+def sha384_path(path: pathlib.Path) -> str:
+    digest = hashlib.sha384()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
@@ -129,9 +129,9 @@ def validate_pretrained() -> dict:
     size = PRETRAINED.stat().st_size
     if size != PRETRAINED_SIZE:
         raise ValueError(f"pretrained QuartzNet size changed: {size}")
-    digest = sha512_path(PRETRAINED)
-    if digest != PRETRAINED_SHA512:
-        raise ValueError("pretrained QuartzNet SHA-512 changed")
+    digest = sha384_path(PRETRAINED)
+    if digest != PRETRAINED_SHA384:
+        raise ValueError("pretrained QuartzNet SHA-384 changed")
 
     if not PRETRAINED_IMPORT.is_file():
         raise ValueError(
@@ -151,7 +151,7 @@ def validate_pretrained() -> dict:
         raise ValueError("pretrained QuartzNet import source evidence is missing")
     if source.get("size_bytes") != PRETRAINED_SIZE:
         raise ValueError("pretrained QuartzNet import source size changed")
-    if source.get("sha512") != PRETRAINED_SHA512:
+    if source.get("sha384") != PRETRAINED_SHA384:
         raise ValueError("pretrained QuartzNet import source hash changed")
     if verified.get("shared_decoder_symbol_count") != 29:
         raise ValueError("pretrained QuartzNet shared decoder mapping changed")
@@ -170,7 +170,7 @@ def validate_pretrained() -> dict:
     return {
         "path": repo_relative(PRETRAINED),
         "size_bytes": size,
-        "sha512": digest,
+        "sha384": digest,
         "import_verification": {
             "path": repo_relative(PRETRAINED_IMPORT),
             "acoustic_state_sha256": fingerprint,
@@ -241,7 +241,7 @@ def validate_model() -> dict:
     transfer = package.get("transfer", {})
     if transfer.get("source_size_bytes") != PRETRAINED_SIZE:
         raise ValueError("cnn_ctc_v18 pretrained source size contract changed")
-    if transfer.get("source_sha512") != PRETRAINED_SHA512:
+    if transfer.get("source_sha384") != PRETRAINED_SHA384:
         raise ValueError("cnn_ctc_v18 pretrained source hash contract changed")
     if transfer.get("fine_tune") != "all_parameters":
         raise ValueError("cnn_ctc_v18 must fine-tune all parameters")
@@ -305,7 +305,7 @@ def main() -> int:
             ),
             "changes": [
                 f"parent to completed v17 evidence experiment {DEFAULT_PARENT}",
-                "use the pinned NVIDIA QuartzNet15x5Base-En v2 NeMo archive with exact size and SHA-512 verification",
+                "use the pinned NVIDIA QuartzNet15x5Base-En v2 NeMo archive with exact size and SHA-384 verification",
                 "initialize the full QuartzNet encoder from pretrained tensors",
                 "remap all 29 shared source CTC symbols into the 39-symbol project projection and retain seeded initialization only for digits",
                 "align the acoustic frontend to 20 ms Hann, pre-emphasis 0.97, Slaney mel and per-feature mean/std normalization",
@@ -343,7 +343,7 @@ def main() -> int:
             "pretrained_source": {
                 "path": repo_relative(PRETRAINED),
                 "size_bytes": PRETRAINED_SIZE,
-                "sha512": PRETRAINED_SHA512,
+                "sha384": PRETRAINED_SHA384,
             },
             "training_manifest": {
                 "id": "ami-model-quality-v4-architecture-screen-v1-train",
@@ -377,7 +377,7 @@ def main() -> int:
         }
 
         draft = ROOT / "work" / "speech-asr" / "experiment-drafts" / (
-            f"cnn_ctc_v18-pretrained-transfer-{head[:8]}-{PRETRAINED_SHA512[:8]}"
+            f"cnn_ctc_v18-pretrained-transfer-{head[:8]}-{PRETRAINED_SHA384[:8]}"
         )
         paths = {
             "proposal": draft / "proposal.json",
