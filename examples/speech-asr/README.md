@@ -633,14 +633,23 @@ Run:
 ./scripts/qualify-quartznet15x5-reference.sh --device cuda
 ```
 
-The qualification downloads and verifies OpenSLR SLR12 `dev-clean`, evaluates
-all 2,703 utterances, exports the same untouched source reconstruction to ONNX,
-and checks PyTorch/ONNX frame-argmax parity. It performs **no training,
-OpenVINO conversion, or MYRIAD execution**.
+The qualification is complete. The full 2,703-utterance dev-clean run reached
+WER `0.037939781625675524` (3.793978%) versus NVIDIA's published `0.0379`
+(3.79%), with CER `0.012506494000177396`. All 29 source decoder symbols were
+loaded, no target-only rows existed, and no training was performed.
 
-Use `--max-samples 100` only for a diagnostic smoke run; a truncated run
-cannot pass the published-WER reproduction gate. LibriSpeech `test-clean`
-remains reserved for independent confirmation after dev-clean is understood.
+The same untouched reconstruction also passed PyTorch/ONNX parity with frame
+argmax agreement `1.0`, zero mismatches in 256 tested frames, and maximum
+absolute logit error `6.0677528381347656e-05`.
+
+This source-domain reproduction is now qualified. The original QuartzNet
+architecture/frontend/import path should not be changed to explain the AMI
+error rate; the next REVIEW must focus on the AMI-specific adaptation boundary.
+The qualification performed **no OpenVINO conversion or MYRIAD execution**.
+
+LibriSpeech `test-clean` remains available as an independent confirmation
+against NVIDIA's published 3.85% result, but dev-clean already establishes the
+source-pipeline reproduction.
 
 See
 `docs/adr/quartznet15x5-librispeech-reference-qualification.md`.

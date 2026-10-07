@@ -1,6 +1,6 @@
 # ADR: qualify the pinned NVIDIA QuartzNet source on LibriSpeech before further ASR work
 
-Status: implemented; physical deployment deliberately deferred
+Status: qualified; source-domain reproduction complete; physical deployment deferred
 Date: 2026-10-07
 Source: NVIDIA Multidataset QuartzNet15x5Base-En version 2
 
@@ -77,9 +77,44 @@ The result also records the exact absolute delta from `0.0379`.
 
 A `--max-samples` run is diagnostic only and cannot pass the full-corpus gate.
 
-LibriSpeech test-clean remains outside the iterative debugging loop. Once
-dev-clean reproduces closely enough, test-clean can be used as the independent
-confirmation against NVIDIA's published `0.0385` result.
+## Qualification result
+
+The full zero-training LibriSpeech dev-clean evaluation completed on 2026-10-07
+with all 2,703 utterances:
+
+- measured WER `0.037939781625675524` (3.793978%);
+- published NVIDIA WER `0.0379` (3.79%);
+- absolute WER delta `0.00003978162567552096`;
+- CER `0.012506494000177396`;
+- source decoder symbols loaded: 29/29;
+- target-only randomly initialized symbols: 0;
+- training performed: false;
+- qualification status: `pass`.
+
+This reproduces the published source-domain result essentially exactly. The
+remaining difference is about 0.004 percentage points absolute WER, far below
+the 5% reproduction ceiling.
+
+The zero-training PyTorch -> ONNX parity check also passed:
+
+- frame argmax agreement `1.0`;
+- frame argmax mismatches `0 / 256`;
+- maximum absolute logit error `6.0677528381347656e-05`;
+- maximum per-frame total-variation distance
+  `5.6905102316839574e-08`.
+
+The source QuartzNet architecture, 29-class CTC head, pretrained tensor import,
+historical NeMo frontend semantics, greedy decoder, and PyTorch/ONNX export path
+are therefore qualified. Do not change these components to explain the AMI
+error rate.
+
+The earlier AMI result must now be treated as an adaptation/domain problem:
+the source recognizer is correct before the AMI-specific 39-class head,
+fixed-shape adaptation, and fine-tuning policy are introduced.
+
+LibriSpeech test-clean remains available as an independent confirmation against
+NVIDIA's published `0.0385` result, but it is not required to establish the
+dev-clean source-pipeline reproduction.
 
 ## Hardware boundary
 

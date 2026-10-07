@@ -1006,20 +1006,27 @@ REVIEW selected a source-domain reproduction before any further AMI model
 changes. The next controlled step is the zero-training NVIDIA
 QuartzNet15x5Base-En reference qualification on LibriSpeech dev-clean.
 
-The qualification restores the source 29-class CTC head and historical NeMo
-frontend semantics, then measures full-corpus greedy WER against NVIDIA's
-published `0.0379` reference. The first reproduction gate is WER <= `0.05`.
-A dynamic-time ONNX export is checked for frame-argmax parity after the PyTorch
-reference run.
+The source-domain qualification is complete and passed.
 
-No OpenVINO conversion or MYRIAD measurement belongs to this phase. Hardware
-qualification resumes only after the source-domain reference pipeline is close
-to the published result. Do not train or alter the frozen v19 model while this
-diagnostic is in progress.
+Full LibriSpeech dev-clean evidence:
 
-Run:
+- 2,703 / 2,703 utterances;
+- measured WER `0.037939781625675524`;
+- NVIDIA published WER `0.0379`;
+- absolute WER delta `0.00003978162567552096`;
+- CER `0.012506494000177396`;
+- zero training;
+- exact 29-class source CTC head with no target-only rows.
 
-```bash
-./scripts/test-speech-asr-quartznet-reference.sh
-./scripts/qualify-quartznet15x5-reference.sh --device cuda
-```
+PyTorch -> ONNX parity also passed with frame argmax agreement `1.0`, zero
+mismatches in 256 tested frames, and maximum absolute logit error
+`6.0677528381347656e-05`.
+
+This closes the source architecture/frontend/import diagnostic. Do not modify
+the qualified source QuartzNet path to explain AMI performance.
+
+Return to REVIEW now. The next controlled question is which AMI-specific change
+caused the quality collapse relative to the qualified source recognizer:
+vocabulary/head expansion, fixed-shape frontend adaptation, fine-tuning/data
+domain, or their interaction. Keep OpenVINO/MYRIAD deferred until that CPU
+reference analysis identifies the adaptation boundary.
