@@ -191,6 +191,12 @@ V18_ARCHITECTURE = {
     "batchnorm_eps": 0.001,
 }
 
+V18_PRETRAINED_SOURCE = {
+    "path": "work/speech-asr/pretrained/quartznet15x5-en-base-v2/QuartzNet15x5-En-Base.nemo",
+    "size_bytes": 71083664,
+    "sha512": "74e8284e77098906afb7a15a861ef60ec14db1a4acb206fa719492fa43050ad69a91c245652c05c5f0ded38b5903ed55",
+}
+
 
 def executor_model_basename(model_id: str) -> str:
     if model_id in {
@@ -304,6 +310,11 @@ def validate_model_executor_request(
         raise ValueError(
             f"{model_id} executor requires optimizer {expected_optimizer_kind!r}"
         )
+    if model_id == "cnn_ctc_v18":
+        if train_config.get("pretrained_source") != V18_PRETRAINED_SOURCE:
+            raise ValueError(
+                "cnn_ctc_v18 requires the exact pinned pretrained source declaration"
+            )
 
     ctc_objective = train_config.get("ctc_objective")
     if ctc_objective is not None:
@@ -452,6 +463,11 @@ def training_command(
         command.extend([
             "--checkpoint-selection",
             str(checkpoint_selection),
+        ])
+    if model_id == "cnn_ctc_v18":
+        command.extend([
+            "--pretrained",
+            str(root / train_config["pretrained_source"]["path"]),
         ])
     ctc_objective = train_config.get("ctc_objective")
     if ctc_objective is not None:
