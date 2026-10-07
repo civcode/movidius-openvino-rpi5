@@ -47,13 +47,14 @@ def load_spec(path: Path) -> dict:
         "cnn_ctc_v16",
         "cnn_ctc_v17",
         "cnn_ctc_v18",
+        "cnn_ctc_v19",
     }:
         raise ValueError("unsupported cnn_ctc model spec id")
 
     frontend = value.get("frontend")
     expected_frontend_kind = (
         "logmel-v3"
-        if model_id == "cnn_ctc_v18"
+        if model_id in {"cnn_ctc_v18", "cnn_ctc_v19"}
         else ("logmel-v2" if model_id == "cnn_ctc_v4" else "logmel-v1")
     )
     if (
@@ -65,7 +66,7 @@ def load_spec(path: Path) -> dict:
         )
     expected = {
         "sample_rate_hz": 16000,
-        "window_samples": 320 if model_id == "cnn_ctc_v18" else 400,
+        "window_samples": 320 if model_id in {"cnn_ctc_v18", "cnn_ctc_v19"} else 400,
         "hop_samples": 160,
         "fft_size": 512,
         "mel_bins": 64,
@@ -77,7 +78,7 @@ def load_spec(path: Path) -> dict:
             raise ValueError(f"frontend.{key} must be {wanted!r}")
     expected_normalization = (
         "per_mel_bin_mean_std_valid_zero_pad"
-        if model_id == "cnn_ctc_v18"
+        if model_id in {"cnn_ctc_v18", "cnn_ctc_v19"}
         else (
             "per_mel_bin_mean_valid_zero_pad"
             if model_id == "cnn_ctc_v4"
@@ -89,7 +90,7 @@ def load_spec(path: Path) -> dict:
             f"{model_id} frontend.normalization must be "
             f"{expected_normalization}"
         )
-    if model_id == "cnn_ctc_v18":
+    if model_id in {"cnn_ctc_v18", "cnn_ctc_v19"}:
         expected_transfer_frontend = {
             "fmin_hz": 0,
             "fmax_hz": 8000,
@@ -113,7 +114,7 @@ def load_spec(path: Path) -> dict:
     output_contract = value.get("output_contract")
     expected_output_shape = (
         [1, 256, 39]
-        if model_id in {"cnn_ctc_v8", "cnn_ctc_v16", "cnn_ctc_v17", "cnn_ctc_v18"}
+        if model_id in {"cnn_ctc_v8", "cnn_ctc_v16", "cnn_ctc_v17", "cnn_ctc_v18", "cnn_ctc_v19"}
         else [1, 128, 39]
     )
     if not isinstance(output_contract, dict) or output_contract.get("shape") != expected_output_shape:
@@ -130,7 +131,7 @@ def load_spec(path: Path) -> dict:
             values = network.get(key)
             if not isinstance(values, list) or len(values) != 3:
                 raise ValueError(f"cnn_ctc_v1 network.{key} must contain three values")
-    elif model_id in {"cnn_ctc_v16", "cnn_ctc_v17", "cnn_ctc_v18"}:
+    elif model_id in {"cnn_ctc_v16", "cnn_ctc_v17", "cnn_ctc_v18", "cnn_ctc_v19"}:
         if network.get("kind") != "quartznet-15x5-v1":
             raise ValueError(f"{model_id} network.kind must be quartznet-15x5-v1")
         if network.get("normalization") != "batchnorm":
@@ -140,9 +141,9 @@ def load_spec(path: Path) -> dict:
         expected_dropout = 0.2 if model_id == "cnn_ctc_v16" else 0.0
         if network.get("dropout") != expected_dropout:
             raise ValueError(f"{model_id} dropout must be {expected_dropout}")
-        if model_id == "cnn_ctc_v18":
+        if model_id in {"cnn_ctc_v18", "cnn_ctc_v19"}:
             if network.get("batchnorm_eps") != 0.001:
-                raise ValueError("cnn_ctc_v18 batchnorm_eps must be 0.001")
+                raise ValueError(f"{model_id} batchnorm_eps must be 0.001")
         elif "batchnorm_eps" in network:
             raise ValueError(f"{model_id} must not declare batchnorm_eps")
         if network.get("separable_convolution") != "depthwise-pointwise":
@@ -565,7 +566,7 @@ def acoustic_output_length(feature_frames: int, spec: dict) -> int:
             )
         return length
 
-    if spec.get("id") in {"cnn_ctc_v16", "cnn_ctc_v17", "cnn_ctc_v18"}:
+    if spec.get("id") in {"cnn_ctc_v16", "cnn_ctc_v17", "cnn_ctc_v18", "cnn_ctc_v19"}:
         layer = network["prologue"]
         return conv1d_output_length(
             length,
@@ -621,7 +622,7 @@ def model_resource_estimate(spec: dict, vocab_size: int = 39) -> dict:
     parameters = 0
     macs = 0
 
-    if spec.get("id") in {"cnn_ctc_v16", "cnn_ctc_v17", "cnn_ctc_v18"}:
+    if spec.get("id") in {"cnn_ctc_v16", "cnn_ctc_v17", "cnn_ctc_v18", "cnn_ctc_v19"}:
         def add_tcs(in_ch: int, out_ch: int, layer: dict) -> None:
             nonlocal length, receptive_field, jump, parameters, macs
             kernel = int(layer["kernel"])
