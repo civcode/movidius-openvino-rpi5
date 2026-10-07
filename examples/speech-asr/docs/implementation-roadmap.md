@@ -1002,6 +1002,24 @@ Integrated deployment compute evidence:
 The paired latency distribution is authoritative and excludes frontend/IPC.
 Do not add independent acoustic and decoder percentiles.
 
-Return to REVIEW now. Do not change architecture, training policy, decoder
-parameters, benchmark data, or acceptance thresholds until that review selects
-the next controlled step.
+REVIEW selected a source-domain reproduction before any further AMI model
+changes. The next controlled step is the zero-training NVIDIA
+QuartzNet15x5Base-En reference qualification on LibriSpeech dev-clean.
+
+The qualification restores the source 29-class CTC head and historical NeMo
+frontend semantics, then measures full-corpus greedy WER against NVIDIA's
+published `0.0379` reference. The first reproduction gate is WER <= `0.05`.
+A dynamic-time ONNX export is checked for frame-argmax parity after the PyTorch
+reference run.
+
+No OpenVINO conversion or MYRIAD measurement belongs to this phase. Hardware
+qualification resumes only after the source-domain reference pipeline is close
+to the published result. Do not train or alter the frozen v19 model while this
+diagnostic is in progress.
+
+Run:
+
+```bash
+./scripts/test-speech-asr-quartznet-reference.sh
+./scripts/qualify-quartznet15x5-reference.sh --device cuda
+```

@@ -612,3 +612,35 @@ MYRIAD `Infer()` plus CPU decoder compute only, excluding frontend and IPC.
 See
 `docs/adr/model-quality-v4-cnn-ctc-v19-conservative-transfer.md` and
 `docs/adr/model-quality-v4-cnn-ctc-v19-decoder-v1.md`.
+
+## Pretrained QuartzNet source-domain qualification
+
+The next controlled step is no longer another AMI training or decoder
+experiment. The pinned NVIDIA Multidataset QuartzNet15x5Base-En checkpoint is
+now qualified first against its known source-domain benchmark, LibriSpeech
+`dev-clean`.
+
+This path is intentionally separate from v19. It restores the original
+29-class CTC projection and source token order (blank index 28), uses
+historical NeMo-style feature framing/normalization, performs zero training,
+and compares full-corpus greedy WER with NVIDIA's published `3.79%`
+dev-clean result. The initial reproduction gate is WER <= `5%`.
+
+Run:
+
+```bash
+./scripts/test-speech-asr-quartznet-reference.sh
+./scripts/qualify-quartznet15x5-reference.sh --device cuda
+```
+
+The qualification downloads and verifies OpenSLR SLR12 `dev-clean`, evaluates
+all 2,703 utterances, exports the same untouched source reconstruction to ONNX,
+and checks PyTorch/ONNX frame-argmax parity. It performs **no training,
+OpenVINO conversion, or MYRIAD execution**.
+
+Use `--max-samples 100` only for a diagnostic smoke run; a truncated run
+cannot pass the published-WER reproduction gate. LibriSpeech `test-clean`
+remains reserved for independent confirmation after dev-clean is understood.
+
+See
+`docs/adr/quartznet15x5-librispeech-reference-qualification.md`.
