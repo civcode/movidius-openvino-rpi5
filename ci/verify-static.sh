@@ -1339,6 +1339,64 @@ grep -q 'load_recorded_remote_execution' examples/speech-asr/agent/run_experimen
 grep -q '"max_cer": None' examples/speech-asr/agent/init_cnn_ctc_v17_quartznet_reference_training.py || fail 'cnn_ctc_v17 CER must be measured, not gated'
 grep -q '"max_latency_p95_ms": None' examples/speech-asr/agent/init_cnn_ctc_v17_quartznet_reference_training.py || fail 'cnn_ctc_v17 latency must be measured, not gated'
 
+# cnn_ctc_v18 pretrained QuartzNet transfer.
+for f in \
+    scripts/prepare-cnn-ctc-v18-pretrained.sh \
+    scripts/init-cnn-ctc-v18-pretrained-transfer.sh \
+    scripts/train-cnn-ctc-v18.sh \
+    scripts/probe-cnn-ctc-v18.sh \
+    scripts/prepare-cnn-ctc-v18.sh \
+    scripts/evaluate-cnn-ctc-v18.sh; do
+    test -x "$f" || fail "cnn_ctc_v18 shell entry point is not executable: $f"
+done
+python3 - <<'PY_V18'
+import hashlib
+import json
+from pathlib import Path
+spec = json.loads(Path("examples/speech-asr/models/cnn_ctc_v18/model_spec.json").read_text())
+canonical = hashlib.sha256(
+    json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+).hexdigest()
+assert canonical == "4cf0403f533563e7977663b3ccbfc17450ed55be426457d53c5ead1fbf2cf6f8"
+assert spec["input_contract"]["shape"] == [1,64,512]
+assert spec["output_contract"]["shape"] == [1,256,39]
+frontend = spec["frontend"]
+assert frontend["kind"] == "logmel-v3"
+assert frontend["window_samples"] == 320
+assert frontend["preemphasis"] == 0.97
+assert frontend["mel_scale"] == "slaney"
+assert frontend["mel_norm"] == "slaney"
+assert frontend["normalization"] == "per_mel_bin_mean_std_valid_zero_pad"
+network = spec["network"]
+assert network["kind"] == "quartznet-15x5-v1"
+assert network["batchnorm_eps"] == 0.001
+assert network["dropout"] == 0
+assert network["estimated_parameters"] == 18934631
+assert network["estimated_macs_fixed_input"] == 4827463680
+transfer = spec["transfer"]
+assert transfer["source_size_bytes"] == 71083664
+assert transfer["source_sha512"] == "74e8284e77098906afb7a15a861ef60ec14db1a4acb206fa719492fa43050ad69a91c245652c05c5f0ded38b5903ed55"
+assert len(transfer["source_vocab"]) == 29
+assert transfer["fine_tune"] == "all_parameters"
+training = spec["training"]
+assert training["optimizer"] == "novograd"
+assert training["learning_rate"] == 0.001
+assert training["optimizer_betas"] == [0.95,0.25]
+assert training["weight_decay"] == 0.001
+assert training["warmup_ratio"] == 0.12
+assert training["min_learning_rate"] == 0.000001
+assert training["checkpoint_selection"] == "best_validation_cer"
+PY_V18
+grep -q 'V18_ARCHITECTURE' examples/speech-asr/python/speech_asr/orchestration.py || fail 'cnn_ctc_v18 architecture registration missing'
+grep -q '"cnn_ctc_v18": "train-cnn-ctc-v18.sh"' examples/speech-asr/python/speech_asr/orchestration.py || fail 'cnn_ctc_v18 training registration missing'
+grep -q '"cnn_ctc_v18": "evaluate-cnn-ctc-v18.sh"' examples/speech-asr/agent/edge_worker.py || fail 'cnn_ctc_v18 edge evaluator registration missing'
+grep -q 'DEFAULT_PARENT = "exp-dbcda9a6f7ae7d7f"' examples/speech-asr/agent/init_cnn_ctc_v18_pretrained_transfer.py || fail 'cnn_ctc_v18 parent changed'
+grep -q 'PRETRAINED_SHA512' examples/speech-asr/agent/init_cnn_ctc_v18_pretrained_transfer.py || fail 'cnn_ctc_v18 source hash pin missing'
+grep -q 'load_pretrained_quartznet' examples/speech-asr/training/train_cnn_ctc_v18.py || fail 'cnn_ctc_v18 trainer does not require pretrained import'
+grep -q '"pretrained_initialization"' examples/speech-asr/training/train_cnn_ctc_v18.py || fail 'cnn_ctc_v18 pretrained evidence missing'
+grep -q '"initial_validation"' examples/speech-asr/training/train_cnn_ctc_v18.py || fail 'cnn_ctc_v18 zero-step validation evidence missing'
+grep -q 'MAX_SERVER_RESTARTS = 4' examples/speech-asr/evaluation/evaluate_cnn_ctc_v18.py || fail 'cnn_ctc_v18 persistent-server restart guard missing'
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
 for name in [
@@ -1378,6 +1436,7 @@ for name in [
     "examples/speech-asr/agent/init_cnn_ctc_v15_batchnorm_conditioning.py",
     "examples/speech-asr/agent/init_cnn_ctc_v16_quartznet.py",
     "examples/speech-asr/agent/init_cnn_ctc_v17_quartznet_reference_training.py",
+    "examples/speech-asr/agent/init_cnn_ctc_v18_pretrained_transfer.py",
     "examples/speech-asr/agent/run_frozen_heldout_evaluation.py",
     "examples/speech-asr/agent/review_heldout_evaluation.py",
     "examples/speech-asr/agent/review_experiment.py",
@@ -1423,6 +1482,9 @@ for name in [
     "examples/speech-asr/training/cnn_ctc_v15.py",
     "examples/speech-asr/training/cnn_ctc_v16.py",
     "examples/speech-asr/training/cnn_ctc_v17.py",
+    "examples/speech-asr/training/cnn_ctc_v18.py",
+    "examples/speech-asr/training/pretrained_cnn_ctc_v18.py",
+    "examples/speech-asr/training/prepare_cnn_ctc_v18_pretrained.py",
     "examples/speech-asr/training/novograd.py",
     "examples/speech-asr/training/train_cnn_ctc_v10.py",
     "examples/speech-asr/training/train_cnn_ctc_v11.py",
@@ -1432,6 +1494,7 @@ for name in [
     "examples/speech-asr/training/train_cnn_ctc_v15.py",
     "examples/speech-asr/training/train_cnn_ctc_v16.py",
     "examples/speech-asr/training/train_cnn_ctc_v17.py",
+    "examples/speech-asr/training/train_cnn_ctc_v18.py",
     "examples/speech-asr/training/export_cnn_ctc_v10.py",
     "examples/speech-asr/training/export_cnn_ctc_v11.py",
     "examples/speech-asr/training/export_cnn_ctc_v12.py",
@@ -1440,6 +1503,7 @@ for name in [
     "examples/speech-asr/training/export_cnn_ctc_v15.py",
     "examples/speech-asr/training/export_cnn_ctc_v16.py",
     "examples/speech-asr/training/export_cnn_ctc_v17.py",
+    "examples/speech-asr/training/export_cnn_ctc_v18.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v1_onnx.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v1_tensor.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v1.py",
@@ -1468,6 +1532,7 @@ for name in [
     "examples/speech-asr/evaluation/compare_cnn_ctc_v15_onnx.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v16_onnx.py",
     "examples/speech-asr/evaluation/compare_cnn_ctc_v17_onnx.py",
+    "examples/speech-asr/evaluation/compare_cnn_ctc_v18_onnx.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v10.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v11.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v12.py",
@@ -1476,6 +1541,7 @@ for name in [
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v15.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v16.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v17.py",
+    "examples/speech-asr/evaluation/evaluate_cnn_ctc_v18.py",
     "examples/speech-asr/evaluation/evaluate_frozen_cnn_ctc_v3_reference.py",
 ]:
     src = Path(name).read_text()
