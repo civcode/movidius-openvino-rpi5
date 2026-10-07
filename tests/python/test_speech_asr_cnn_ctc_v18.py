@@ -10,6 +10,7 @@ from speech_asr.cnn_ctc import load_spec, model_resource_estimate
 from speech_asr.orchestration import (
     V18_ARCHITECTURE,
     compatibility_probe_command,
+    pretraining_myriad_compatibility,
     training_command,
     validate_model_executor_request,
 )
@@ -177,6 +178,63 @@ class CnnCtcV18Tests(unittest.TestCase):
         self.assertIn("max_mismatched_reference_top2_margin=", controller)
         self.assertIn("MAX_SERVER_RESTARTS = 4", evaluator)
         self.assertIn("infer_with_restart(", evaluator)
+
+    def test_pretrained_myriad_gate_accepts_observed_semantic_parity(self):
+        result = pretraining_myriad_compatibility(
+            {
+                "max_abs_error": 0.7036104202270508,
+                "frame_argmax_agreement": 1.0,
+                "frame_argmax_mismatches": 0,
+                "min_reference_top2_margin": 5.668647766113281,
+                "max_softmax_abs_error": 0.0008063222413164928,
+                "max_frame_total_variation": 0.0009230391151051188,
+            },
+            model_id="cnn_ctc_v18",
+        )
+        self.assertEqual(result["status"], "accepted")
+        self.assertEqual(
+            result["gate_kind"],
+            "pretrained-semantic-parity-v1",
+        )
+        self.assertIsNone(result["max_abs_error_limit"])
+        self.assertEqual(
+            result["max_frame_total_variation_limit"],
+            0.002,
+        )
+
+    def test_pretrained_myriad_gate_rejects_any_argmax_change(self):
+        result = pretraining_myriad_compatibility(
+            {
+                "max_abs_error": 0.001,
+                "frame_argmax_agreement": 255 / 256,
+                "frame_argmax_mismatches": 1,
+                "min_reference_top2_margin": 0.01,
+                "max_softmax_abs_error": 0.0001,
+                "max_frame_total_variation": 0.0002,
+            },
+            model_id="cnn_ctc_v18",
+        )
+        self.assertEqual(result["status"], "rejected")
+        self.assertTrue(
+            any("frame_argmax" in reason for reason in result["reasons"])
+        )
+
+    def test_pretrained_myriad_gate_rejects_excess_probability_drift(self):
+        result = pretraining_myriad_compatibility(
+            {
+                "max_abs_error": 0.001,
+                "frame_argmax_agreement": 1.0,
+                "frame_argmax_mismatches": 0,
+                "min_reference_top2_margin": 1.0,
+                "max_softmax_abs_error": 0.001,
+                "max_frame_total_variation": 0.0021,
+            },
+            model_id="cnn_ctc_v18",
+        )
+        self.assertEqual(result["status"], "rejected")
+        self.assertTrue(
+            any("total_variation" in reason for reason in result["reasons"])
+        )
 
     def test_entrypoints_exist(self):
         for name in (
