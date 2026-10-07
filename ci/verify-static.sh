@@ -1543,6 +1543,7 @@ test -x scripts/qualify-quartznet15x5-reference-numpy.sh || fail 'QuartzNet NumP
 test -x scripts/prepare-quartznet15x5-reference-myriad.sh || fail 'QuartzNet MYRIAD artifact preparer missing'
 test -x scripts/evaluate-quartznet15x5-reference-myriad.sh || fail 'QuartzNet Pi MYRIAD evaluator missing'
 test -x scripts/run-quartznet15x5-reference-myriad-edge.sh || fail 'QuartzNet MYRIAD edge controller entry point missing'
+test -x scripts/diagnose-quartznet15x5-reference-myriad-static.sh || fail 'QuartzNet static-shape MYRIAD diagnostic missing'
 test -x scripts/test-speech-asr-quartznet-reference-myriad.sh || fail 'QuartzNet MYRIAD reference tests missing'
 grep -q 'EXPECTED_SAMPLES = 2703' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py || fail 'QuartzNet MYRIAD dev-clean sample boundary changed'
 grep -q 'QUALIFIED_WER = 0.037939781625675524' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py || fail 'QuartzNet MYRIAD source WER evidence changed'
@@ -1674,6 +1675,7 @@ for name in [
     "examples/speech-asr/evaluation/evaluate_quartznet15x5_ami_attribution.py",
     "examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py",
     "examples/speech-asr/evaluation/run_quartznet15x5_reference_myriad_edge.py",
+    "examples/speech-asr/evaluation/diagnose_quartznet15x5_reference_myriad_static.py",
     "tests/python/test_speech_asr_quartznet_reference.py",
     "tests/python/test_speech_asr_quartznet_reference_myriad.py",
     "tests/python/test_speech_asr_quartznet_ami_attribution.py",
