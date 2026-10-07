@@ -195,6 +195,7 @@ class CtcBeamTests(unittest.TestCase):
             "tune-cnn-ctc-v19-decoder.sh",
             "freeze-cnn-ctc-v19-decoder.sh",
             "decode-cnn-ctc-v19-logits.sh",
+            "benchmark-cnn-ctc-v19-decoder.sh",
         ):
             self.assertTrue((ROOT / "scripts" / name).is_file())
 
