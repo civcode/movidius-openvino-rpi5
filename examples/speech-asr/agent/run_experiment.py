@@ -532,7 +532,10 @@ def physical_compatibility_probe(
 
     comparison_doc = load_json(comparison_path)
     comparison_metrics = comparison_doc.get("comparison", {})
-    numerical_gate = pretraining_myriad_compatibility(comparison_metrics)
+    numerical_gate = pretraining_myriad_compatibility(
+        comparison_metrics,
+        model_id=model_id,
+    )
 
     evidence_path = collected / "probe.json"
     write_json(
