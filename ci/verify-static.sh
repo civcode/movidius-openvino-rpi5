@@ -1479,6 +1479,14 @@ grep -q 'class CharacterNgramLM' examples/speech-asr/python/speech_asr/ctc_beam.
 grep -q 'cache_dir = attempt / "edge" / "evaluation"' examples/speech-asr/evaluation/tune_cnn_ctc_v19_decoder.py || fail 'decoder sweep must use pulled MYRIAD logits'
 grep -q '"cached greedy WER' examples/speech-asr/evaluation/tune_cnn_ctc_v19_decoder.py || fail 'decoder sweep greedy WER parity check missing'
 grep -q '"schema": "speech-asr/ctc-decoder-sweep"' examples/speech-asr/evaluation/tune_cnn_ctc_v19_decoder.py || fail 'decoder sweep result schema missing'
+test -x scripts/freeze-cnn-ctc-v19-decoder.sh || fail 'v19 decoder artifact freezer missing'
+test -x scripts/decode-cnn-ctc-v19-logits.sh || fail 'v19 runtime decoder entry point missing'
+test -x scripts/benchmark-cnn-ctc-v19-decoder.sh || fail 'v19 CPU decoder benchmark entry point missing'
+grep -q 'def build_decoder_artifact' examples/speech-asr/python/speech_asr/ctc_beam.py || fail 'v19 decoder artifact builder missing'
+grep -q 'def decode_with_artifact' examples/speech-asr/python/speech_asr/ctc_beam.py || fail 'v19 runtime artifact decode missing'
+grep -q '0.5497732671129346' examples/speech-asr/tools/freeze_cnn_ctc_v19_decoder.py || fail 'v19 selected decoder WER evidence changed'
+grep -q '0.4634567759027818' examples/speech-asr/tools/freeze_cnn_ctc_v19_decoder.py || fail 'v19 selected decoder CER evidence changed'
+grep -q '"--decoder-artifact"' examples/speech-asr/evaluation/evaluate_cnn_ctc_v19.py || fail 'v19 physical evaluator decoder artifact option missing'
 
 python3 - <<'PY_CHECK'
 from pathlib import Path
@@ -1634,6 +1642,9 @@ for name in [
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v18.py",
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v19.py",
     "examples/speech-asr/evaluation/tune_cnn_ctc_v19_decoder.py",
+    "examples/speech-asr/evaluation/benchmark_cnn_ctc_v19_decoder.py",
+    "examples/speech-asr/runtime/decode_cnn_ctc_v19_logits.py",
+    "examples/speech-asr/tools/freeze_cnn_ctc_v19_decoder.py",
     "examples/speech-asr/evaluation/evaluate_frozen_cnn_ctc_v3_reference.py",
 ]:
     src = Path(name).read_text()
