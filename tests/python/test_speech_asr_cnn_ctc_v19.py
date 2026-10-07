@@ -176,6 +176,9 @@ class CnnCtcV19Tests(unittest.TestCase):
         self.assertIn("rate=", source)
         self.assertIn("eta=", source)
         self.assertIn("restarts=", source)
+        self.assertIn("def write_f32_file_exact(", source)
+        self.assertIn("os.replace(temporary, path)", source)
+        self.assertNotIn(".tofile(", source)
 
     def test_controller_streams_edge_worker_output_live(self):
         source = (
