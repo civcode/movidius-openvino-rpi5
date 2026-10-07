@@ -18,7 +18,7 @@ sys.path.insert(0, str(SPEECH_ROOT / "python"))
 
 from speech_asr.cnn_ctc import load_spec, load_vocab  # noqa: E402
 from speech_asr.ctc_beam import (  # noqa: E402
-    decode_with_artifact,
+    FrozenCtcDecoder,
     load_decoder_artifact,
 )
 
@@ -51,9 +51,13 @@ def main() -> int:
                 f"logits contain {values.size} elements, expected {expected}"
             )
         artifact = load_decoder_artifact(args.decoder_artifact, vocab=vocab)
+        runtime_decoder = FrozenCtcDecoder.from_artifact(
+            artifact,
+            vocab=vocab,
+        )
         logits = values.reshape(shape)[0, : args.valid_output_frames, :]
         started = time.perf_counter()
-        decoded = decode_with_artifact(logits, vocab, artifact)
+        decoded = runtime_decoder.decode(logits, vocab)
         decode_ms = (time.perf_counter() - started) * 1000.0
         result = {
             "schema": "speech-asr/ctc-runtime-decode",
