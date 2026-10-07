@@ -51,6 +51,29 @@ It may not:
 
 Model-specific behavior is selected through the model contract/adapter.
 
+## cnn_ctc_v19 CPU decoder
+
+The frozen cnn_ctc_v19 acoustic model still ends at CTC logits on MYRIAD. The
+selected post-acoustic runtime decoder is a separate, hashed artifact so the
+validated v19 model spec and OpenVINO IR identity do not change.
+
+The selected decoder is CTC prefix beam width 8 with per-frame token top-k 12,
+a suffix-backoff character 5-gram LM, LM weight 0.30 and word-boundary bonus
+-0.20. Its development sweep reduced validation WER from 0.598575 (greedy) to
+0.549773.
+
+Build the runtime artifact from the frozen sweep result with
+`scripts/freeze-cnn-ctc-v19-decoder.sh`. The artifact serializes the trained LM
+counts and all selected decoder parameters, so the Raspberry Pi does not need
+the AMI training manifest at runtime.
+
+`scripts/decode-cnn-ctc-v19-logits.sh` is the model-backed decoder boundary for
+one physical logits tensor. `scripts/benchmark-cnn-ctc-v19-decoder.sh` measures
+the same decoder over a cached physical-logit corpus and reports CPU decoder
+p50/p95 latency plus WER/CER. Greedy remains available in the physical evaluator
+when no decoder artifact is supplied, preserving historical acoustic-baseline
+comparability.
+
 
 ## Evaluation worker
 
