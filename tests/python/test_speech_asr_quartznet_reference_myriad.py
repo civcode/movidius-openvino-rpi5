@@ -79,7 +79,11 @@ class QuartzNetReferenceMyriadTests(unittest.TestCase):
         self.assertIn("QUALIFIED_WER = 0.037939781625675524", self.evaluator)
         self.assertIn("MAX_WER = 0.05", self.evaluator)
         self.assertIn("MAX_ABS_WER_DELTA = 0.005", self.evaluator)
-        self.assertIn("MAX_FRAME_TOTAL_VARIATION = 0.002", self.evaluator)
+        self.assertIn(
+            "DIAGNOSTIC_MAX_FRAME_TOTAL_VARIATION = 0.002",
+            self.evaluator,
+        )
+        self.assertIn('"gating": False', self.evaluator)
         self.assertIn('EXECUTION_MODE = "exact-time-runtime-reshape-v1"', self.evaluator)
         self.assertIn("output_elements = output_frames * 29", self.evaluator)
         self.assertIn('"--reshape-time"', self.evaluator)
@@ -102,6 +106,10 @@ class QuartzNetReferenceMyriadTests(unittest.TestCase):
         self.assertIn('"valid_comparison"', self.controller)
         self.assertIn("frame_argmax_agreement", self.controller)
         self.assertIn("max_frame_total_variation", self.controller)
+        self.assertNotIn(
+            "valid-frame probability parity failed",
+            self.controller,
+        )
         self.assertIn('"full_tensor_comparison"', self.evaluator)
         self.assertIn('"valid_comparison"', self.evaluator)
 

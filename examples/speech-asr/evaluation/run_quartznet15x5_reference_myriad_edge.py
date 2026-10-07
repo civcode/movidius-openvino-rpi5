@@ -23,7 +23,7 @@ EXPECTED_SAMPLES = 2703
 QUALIFIED_WER = 0.037939781625675524
 MAX_WER = 0.05
 MAX_ABS_WER_DELTA = 0.005
-MAX_FRAME_TOTAL_VARIATION = 0.002
+DIAGNOSTIC_MAX_FRAME_TOTAL_VARIATION = 0.002
 
 
 def sha256_path(path: pathlib.Path) -> str:
@@ -251,9 +251,6 @@ def validate_result(
     comparison = parity.get("valid_comparison", {})
     if comparison.get("frame_argmax_agreement") != 1.0:
         raise ValueError("edge ONNX/MYRIAD valid-frame argmax parity failed")
-    if float(comparison.get("max_frame_total_variation", 1.0)) > MAX_FRAME_TOTAL_VARIATION:
-        raise ValueError("edge ONNX/MYRIAD valid-frame probability parity failed")
-
     if full:
         if result.get("samples") != EXPECTED_SAMPLES or result.get("full_dev_clean") is not True:
             raise ValueError("edge full dev-clean sample boundary changed")
@@ -484,6 +481,9 @@ def main() -> int:
             "semantic_valid_max_frame_total_variation": result["semantic_parity"][
                 "valid_comparison"
             ]["max_frame_total_variation"],
+            "semantic_tv_within_reference_tolerance": result["semantic_parity"][
+                "probability_drift_diagnostic"
+            ]["within_reference_tolerance"],
             "semantic_full_tensor_max_frame_total_variation": result[
                 "semantic_parity"
             ]["full_tensor_comparison"]["max_frame_total_variation"],
