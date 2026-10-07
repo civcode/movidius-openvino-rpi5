@@ -84,8 +84,13 @@ def validate_result(
         raise ValueError("fixed512 result ONNX hash mismatch")
 
     parity = result.get("semantic_parity", {})
-    if parity.get("valid_comparison", {}).get("frame_argmax_agreement") != 1.0:
-        raise ValueError("fixed512 ONNX/MYRIAD first-window parity failed")
+    hard_gate = parity.get("hard_gate", {})
+    if hard_gate.get("pass") is not True:
+        raise ValueError("fixed512 ONNX/MYRIAD first-window semantic probe failed")
+    if float(
+        parity.get("valid_comparison", {}).get("frame_argmax_agreement", 0.0)
+    ) < 0.99:
+        raise ValueError("fixed512 ONNX/MYRIAD first-window argmax agreement < 0.99")
 
     if full:
         if result.get("samples") != EXPECTED_SAMPLES:

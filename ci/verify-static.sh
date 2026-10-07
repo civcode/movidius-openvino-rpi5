@@ -104,6 +104,7 @@ grep -q 'single_global_ctc_collapse_after_logit_stitch' examples/speech-asr/pyth
 test -f examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_fixed512.py || fail 'QuartzNet fixed512 evaluator missing'
 grep -q 'PersistentMyriadServer' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_fixed512.py || fail 'QuartzNet fixed512 evaluator lacks persistent MYRIAD session'
 grep -q 'network_loads.*1' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_fixed512.py || fail 'QuartzNet fixed512 evaluator must use one network load'
+grep -q 'MIN_SEMANTIC_ARGMAX_AGREEMENT = 0.99' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_fixed512.py || fail 'QuartzNet fixed512 semantic smoke threshold changed'
 test -x scripts/evaluate-quartznet15x5-reference-fixed512.sh || fail 'QuartzNet fixed512 local wrapper missing'
 test -x scripts/evaluate-quartznet15x5-reference-fixed512-myriad.sh || fail 'QuartzNet fixed512 MYRIAD wrapper missing'
 test -f examples/speech-asr/evaluation/run_quartznet15x5_reference_fixed512_edge.py || fail 'QuartzNet fixed512 edge controller missing'

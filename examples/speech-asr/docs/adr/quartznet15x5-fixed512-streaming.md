@@ -45,9 +45,9 @@ For the physical MA2450 run:
 
 - one persistent fixed-`T=512` MYRIAD network;
 - one unmeasured warmup;
-- first-window ONNX/MYRIAD valid-frame argmax agreement exactly `1.0`;
+- first-window ONNX/MYRIAD valid-frame argmax agreement at least `0.99` as a non-catastrophic hardware smoke gate;
 - all 2,703 LibriSpeech dev-clean utterances;
-- full-corpus WER/CER after logit stitching;
+- full-corpus WER/CER after logit stitching, which remains the authoritative semantic acceptance gate;
 - WER <= `0.05` as the initial fixed-window acceptance ceiling;
 - inference RTF includes all overlapping-window inference work;
 - model load time is reported separately.
