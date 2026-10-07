@@ -17,6 +17,12 @@ DEFAULT_EVIDENCE = (
     / "quartznet15x5-reference-libri-dev-clean"
 )
 
+# Same-sample exact-static MYRIAD sweep on 2026-10-07:
+# T=3088 remained non-catastrophic; T=3104 and every tested larger shape
+# collapsed to zero valid-frame argmax agreement with ~630 raw-logit error.
+MYRIAD_CATASTROPHIC_ONSET_FRAMES = 3104
+MYRIAD_LAST_NONCATASTROPHIC_FRAMES = 3088
+
 
 def rate(items: list[dict], key: str) -> float:
     errors = sum(int(item[key]["errors"]) for item in items)
@@ -97,6 +103,21 @@ def main() -> int:
         value.update({"tensor_feature_frames": frames})
         by_shape.append(value)
 
+    below_catastrophic_onset = [
+        item
+        for item in rows
+        if int(item["tensor_feature_frames"]) < MYRIAD_CATASTROPHIC_ONSET_FRAMES
+    ]
+    at_or_above_catastrophic_onset = [
+        item
+        for item in rows
+        if int(item["tensor_feature_frames"]) >= MYRIAD_CATASTROPHIC_ONSET_FRAMES
+    ]
+    long_below_catastrophic_onset = [
+        item
+        for item in rows
+        if 2048 < int(item["tensor_feature_frames"]) < MYRIAD_CATASTROPHIC_ONSET_FRAMES
+    ]
     by_error_contribution = sorted(
         by_shape,
         key=lambda value: (value["word_errors"], value["reference_words"]),
@@ -125,6 +146,17 @@ def main() -> int:
         "source_cer": result.get("quality", {}).get("cer"),
         "samples": len(rows),
         "overall": aggregate(rows),
+        "myriad_shape_boundary": {
+            "same_sample_last_noncatastrophic_frames": MYRIAD_LAST_NONCATASTROPHIC_FRAMES,
+            "same_sample_catastrophic_onset_frames": MYRIAD_CATASTROPHIC_ONSET_FRAMES,
+            "below_catastrophic_onset": aggregate(below_catastrophic_onset),
+            "at_or_above_catastrophic_onset": aggregate(
+                at_or_above_catastrophic_onset
+            ),
+            "long_below_catastrophic_onset": aggregate(
+                long_below_catastrophic_onset
+            ),
+        },
         "by_length_bin": by_bin,
         "worst_shapes_by_word_error_contribution": by_error_contribution,
         "worst_shapes_by_wer_min_20_reference_words": by_wer,
@@ -147,6 +179,26 @@ def main() -> int:
 
     print("QuartzNet MYRIAD length analysis")
     print(f"overall: samples={analysis['overall']['samples']} wer={analysis['overall']['wer']:.6f} cer={analysis['overall']['cer']:.6f}")
+    print()
+    boundary = analysis["myriad_shape_boundary"]
+    print("MYRIAD temporal-shape boundary attribution")
+    for label in (
+        "below_catastrophic_onset",
+        "long_below_catastrophic_onset",
+        "at_or_above_catastrophic_onset",
+    ):
+        value = boundary[label]
+        print(
+            f"{label:>31}  samples={value['samples']:4d}  "
+            f"words={value['reference_words']:5d}  "
+            f"errors={value['word_errors']:4d}  "
+            f"wer={value['wer']:.6f}  cer={value['cer']:.6f}"
+        )
+    print(
+        "same-sample transition: "
+        f"T={boundary['same_sample_last_noncatastrophic_frames']} non-catastrophic, "
+        f"T={boundary['same_sample_catastrophic_onset_frames']} catastrophic"
+    )
     print()
     print("by tensor-feature length")
     for value in by_bin:

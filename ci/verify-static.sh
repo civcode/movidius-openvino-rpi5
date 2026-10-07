@@ -1553,6 +1553,8 @@ grep -q 'MAX_ABS_WER_DELTA = 0.005' examples/speech-asr/evaluation/evaluate_quar
 grep -q 'DIAGNOSTIC_MAX_FRAME_TOTAL_VARIATION = 0.002' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py || fail 'QuartzNet MYRIAD probability-drift diagnostic reference changed'
 grep -q -- '"--tensor-frames"' examples/speech-asr/evaluation/diagnose_quartznet15x5_reference_myriad_static.py || fail 'QuartzNet static diagnostic lacks exact tensor-frame selection'
 grep -q -- '"--force-tensor-frames"' examples/speech-asr/evaluation/diagnose_quartznet15x5_reference_myriad_static.py || fail 'QuartzNet static diagnostic lacks same-sample shape isolation'
+grep -q 'MYRIAD_CATASTROPHIC_ONSET_FRAMES = 3104' examples/speech-asr/evaluation/analyze_quartznet15x5_reference_myriad_lengths.py || fail 'QuartzNet MYRIAD catastrophic boundary attribution changed'
+grep -q 'MYRIAD_LAST_NONCATASTROPHIC_FRAMES = 3088' examples/speech-asr/evaluation/analyze_quartznet15x5_reference_myriad_lengths.py || fail 'QuartzNet MYRIAD last non-catastrophic boundary attribution changed'
 grep -q '"gating": False' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py || fail 'QuartzNet MYRIAD probability drift unexpectedly became a hard gate'
 grep -q 'exact-time-runtime-reshape-v1' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py || fail 'QuartzNet MYRIAD exact-time execution policy changed'
 grep -q -- '"--reshape-time"' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py || fail 'QuartzNet MYRIAD evaluator does not request exact time reshape'

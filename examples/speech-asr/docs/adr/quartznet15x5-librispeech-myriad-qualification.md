@@ -118,8 +118,28 @@ IR as the cause of the catastrophic long-shape corruption. Runtime reshape is
 also exonerated because this diagnostic used a model exported and converted
 directly at `T=3264`. The remaining fault domain is the MYRIAD
 compiler/runtime/device execution path for large QuartzNet temporal tensors.
-The exact onset boundary is characterized separately; `T=2048` is not
-declared a hardware limit without that boundary evidence.
+
+A same-sample exact-static sweep then held the original `T=592` LibriSpeech
+features fixed and changed only the zero-extended static tensor length in
+16-frame increments. `T=3088` remained non-catastrophic (one mismatch in 293
+valid output frames), while `T=3104` and every tested larger shape through
+`T=3264` collapsed to zero valid-frame argmax agreement with the same
+approximately `630.52` maximum raw-logit error. This establishes the observed
+catastrophic transition between `T=3088` and `T=3104` for this model and
+OpenVINO 2020.3 + MA2450 stack.
+
+The full-corpus length analysis also shows that the apparent long-utterance
+quality collapse is dominated by those unsupported shapes. The nine corpus
+utterances on catastrophic `T>=3152` shapes contributed 767 word errors on
+767 reference words. Removing those cases leaves the remaining `T>2048`
+utterances at about `3.77%` WER, consistent with the ordinary-duration
+corpus. The model itself therefore does not show an acoustic-quality collapse
+on long clean speech below the MYRIAD execution boundary.
+
+This boundary is an execution-safety finding, not a recommended production
+window. A production deployment should use a substantially smaller validated
+fixed or streaming window for latency and margin rather than operating close to
+`T=3088`.
 
 ## Full clean-speech quality gate
 
