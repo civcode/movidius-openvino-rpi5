@@ -290,13 +290,22 @@ class PersistentMyriadServer:
                     "persistent MYRIAD server response timed out:\n"
                     + "\n".join(self._stderr_tail[-30:])
                 )
-            ready, _, _ = select.select([fd], [], [], timeout)
-            if not ready:
+            try:
+                ready, _, _ = select.select([fd], [], [], timeout)
+                if not ready:
+                    raise RuntimeError(
+                        "persistent MYRIAD server response timed out:\n"
+                        + "\n".join(self._stderr_tail[-30:])
+                    )
+                chunk = os.read(fd, remaining)
+            except RuntimeError:
+                raise
+            except (OSError, ValueError) as exc:
                 raise RuntimeError(
-                    "persistent MYRIAD server response timed out:\n"
+                    "persistent MYRIAD server output pipe read failed: "
+                    f"{exc}\n"
                     + "\n".join(self._stderr_tail[-30:])
-                )
-            chunk = os.read(fd, remaining)
+                ) from exc
             if not chunk:
                 raise RuntimeError(
                     "persistent MYRIAD server closed its output pipe:\n"
@@ -322,17 +331,26 @@ class PersistentMyriadServer:
         assert self.proc.stdin is not None
         payload = memoryview(values).cast("B")
         sent = 0
-        while sent < len(payload):
-            count = self.proc.stdin.write(payload[sent:])
-            if count is None:
-                count = 0
-            if count <= 0:
-                raise RuntimeError(
-                    "persistent MYRIAD server input pipe closed:\n"
-                    + "\n".join(self._stderr_tail[-30:])
-                )
-            sent += count
-        self.proc.stdin.flush()
+        try:
+            while sent < len(payload):
+                count = self.proc.stdin.write(payload[sent:])
+                if count is None:
+                    count = 0
+                if count <= 0:
+                    raise RuntimeError(
+                        "persistent MYRIAD server input pipe closed:\n"
+                        + "\n".join(self._stderr_tail[-30:])
+                    )
+                sent += count
+            self.proc.stdin.flush()
+        except RuntimeError:
+            raise
+        except (BrokenPipeError, OSError, ValueError) as exc:
+            raise RuntimeError(
+                "persistent MYRIAD server input pipe write failed: "
+                f"{exc}\n"
+                + "\n".join(self._stderr_tail[-30:])
+            ) from exc
 
         raw = self._read_exact(self.output_bytes)
         try:
