@@ -201,6 +201,14 @@ def main() -> int:
         type=int,
         help="diagnose the first manifest record with this exact padded feature length",
     )
+    parser.add_argument(
+        "--force-tensor-frames",
+        type=int,
+        help=(
+            "zero-extend the selected sample to this exact padded feature length; "
+            "used to isolate shape effects with identical source audio"
+        ),
+    )
     parser.add_argument("--output-dir", type=pathlib.Path, default=DEFAULT_OUTPUT_DIR)
     args = parser.parse_args()
 
@@ -213,6 +221,17 @@ def main() -> int:
         spec = json.loads(args.spec.read_text(encoding="utf-8"))
         if args.tensor_frames is not None and args.tensor_frames <= 0:
             raise ValueError("--tensor-frames must be positive")
+        if args.force_tensor_frames is not None and args.force_tensor_frames <= 0:
+            raise ValueError("--force-tensor-frames must be positive")
+        if args.tensor_frames is not None and args.force_tensor_frames is not None:
+            raise ValueError(
+                "--tensor-frames and --force-tensor-frames are mutually exclusive"
+            )
+        if (
+            args.force_tensor_frames is not None
+            and args.force_tensor_frames % 16 != 0
+        ):
+            raise ValueError("--force-tensor-frames must be a multiple of 16")
         record = select_record(
             args.manifest,
             sample_id=args.sample_id,
@@ -220,7 +239,20 @@ def main() -> int:
             spec=spec,
         )
         sample_count = int(record["sample_count"])
-        valid_frames, tensor_frames = reference_feature_lengths(sample_count, spec)
+        valid_frames, natural_tensor_frames = reference_feature_lengths(
+            sample_count,
+            spec,
+        )
+        tensor_frames = (
+            args.force_tensor_frames
+            if args.force_tensor_frames is not None
+            else natural_tensor_frames
+        )
+        if tensor_frames < natural_tensor_frames:
+            raise ValueError(
+                "--force-tensor-frames cannot truncate the source frontend tensor: "
+                f"{tensor_frames} < {natural_tensor_frames}"
+            )
         valid_out = output_frames(valid_frames, spec)
         tensor_out = output_frames(tensor_frames, spec)
 
@@ -235,9 +267,21 @@ def main() -> int:
         if len(samples) != sample_count:
             raise ValueError("first LibriSpeech sample count changed")
         features, observed_valid = nemo_reference_features_numpy(samples, spec)
-        if observed_valid != valid_frames or int(features.shape[2]) != tensor_frames:
-            raise ValueError("first-sample frontend geometry changed")
+        if (
+            observed_valid != valid_frames
+            or int(features.shape[2]) != natural_tensor_frames
+        ):
+            raise ValueError("selected-sample frontend geometry changed")
+        if tensor_frames > natural_tensor_frames:
+            features = np.pad(
+                features,
+                ((0, 0), (0, 0), (0, tensor_frames - natural_tensor_frames)),
+                mode="constant",
+                constant_values=0.0,
+            )
         features = np.ascontiguousarray(features, dtype=np.float32)
+        if int(features.shape[2]) != tensor_frames:
+            raise ValueError("diagnostic tensor geometry changed")
 
         sample_tag = str(record["id"]).replace("/", "_")
         out = args.output_dir.resolve() / sample_tag
@@ -256,7 +300,11 @@ def main() -> int:
                     "sample_id": record["id"],
                     "sample_count": sample_count,
                     "valid_feature_frames": valid_frames,
+                    "source_tensor_feature_frames": natural_tensor_frames,
                     "tensor_feature_frames": tensor_frames,
+                    "zero_extended_for_shape_isolation": (
+                        tensor_frames > natural_tensor_frames
+                    ),
                     "valid_output_frames": valid_out,
                     "tensor_output_frames": tensor_out,
                     "runtime_reshape_used": False,
@@ -451,7 +499,11 @@ def main() -> int:
             "sample_id": record["id"],
             "sample_count": sample_count,
             "valid_feature_frames": valid_frames,
+            "source_tensor_feature_frames": natural_tensor_frames,
             "tensor_feature_frames": tensor_frames,
+            "zero_extended_for_shape_isolation": (
+                tensor_frames > natural_tensor_frames
+            ),
             "valid_output_frames": valid_out,
             "tensor_output_frames": tensor_out,
             "runtime_reshape_used": False,
