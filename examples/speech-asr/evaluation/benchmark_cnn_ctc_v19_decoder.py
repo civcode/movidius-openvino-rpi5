@@ -24,7 +24,7 @@ from speech_asr.cnn_ctc import (  # noqa: E402
 )
 from speech_asr.contracts import validate_speech_sample  # noqa: E402
 from speech_asr.ctc_beam import (  # noqa: E402
-    decode_with_artifact,
+    FrozenCtcDecoder,
     load_decoder_artifact,
 )
 from speech_asr.evaluation import (  # noqa: E402
@@ -65,6 +65,10 @@ def main() -> int:
         spec = load_spec(args.spec)
         vocab = load_vocab(args.vocab)
         artifact = load_decoder_artifact(args.decoder_artifact, vocab=vocab)
+        runtime_decoder = FrozenCtcDecoder.from_artifact(
+            artifact,
+            vocab=vocab,
+        )
         output_shape = tuple(int(v) for v in spec["output_contract"]["shape"])
         output_elements = int(np.prod(output_shape))
 
@@ -93,7 +97,7 @@ def main() -> int:
                 0, : int(decision["valid_output_frames"]), :
             ]
             decode_started = time.perf_counter()
-            decoded = decode_with_artifact(logits, vocab, artifact)
+            decoded = runtime_decoder.decode(logits, vocab)
             decode_ms = (time.perf_counter() - decode_started) * 1000.0
             latencies.append(decode_ms)
 
