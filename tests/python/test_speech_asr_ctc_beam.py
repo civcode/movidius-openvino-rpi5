@@ -9,7 +9,13 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 SPEECH = ROOT / "examples" / "speech-asr"
 sys.path.insert(0, str(SPEECH / "python"))
 
-from speech_asr.ctc_beam import CharacterNgramLM, prefix_beam_decode
+from speech_asr.ctc_beam import (
+    CharacterNgramLM,
+    build_decoder_artifact,
+    decode_with_artifact,
+    validate_decoder_artifact,
+    prefix_beam_decode,
+)
 
 
 VOCAB = {
@@ -104,6 +110,42 @@ class CtcBeamTests(unittest.TestCase):
             lm.log_prob(["c", "c", "a"], "c"),
         )
 
+    def test_lm_artifact_round_trip_and_runtime_decode(self):
+        lm = CharacterNgramLM.train(
+            ["ac", "ac", "ab"],
+            alphabet=VOCAB["tokens"][1:],
+            order=5,
+            smoothing=0.1,
+        )
+        artifact = build_decoder_artifact(
+            acoustic_model="cnn_ctc_v19",
+            vocab=VOCAB,
+            config={
+                "kind": "prefix-beam",
+                "beam_width": 8,
+                "token_top_k": 12,
+                "lm_weight": 0.3,
+                "word_bonus": -0.2,
+            },
+            lm=lm,
+            provenance={"test": True},
+        )
+        validated = validate_decoder_artifact(artifact, vocab=VOCAB)
+        self.assertEqual(validated["decoder"]["beam_width"], 8)
+        restored = CharacterNgramLM.from_dict(validated["lm"])
+        self.assertEqual(restored.to_dict(), lm.to_dict())
+
+        logits = np.stack(
+            [
+                frame(a=8.0),
+                frame(**{"<blank>": 8.0}),
+                frame(b=3.0, c=3.0),
+            ]
+        )
+        decoded = decode_with_artifact(logits, VOCAB, artifact)
+        self.assertEqual(decoded["kind"], "ctc-prefix-beam-char-ngram-v1")
+        self.assertEqual(decoded["beam_width"], 8)
+
     def test_decoder_sweep_is_frozen_to_physical_v19_logits(self):
         source = (
             SPEECH / "evaluation" / "tune_cnn_ctc_v19_decoder.py"
@@ -132,9 +174,29 @@ class CtcBeamTests(unittest.TestCase):
         self.assertEqual(defaults["--jobs"], 16)
         self.assertIn('"schema": "speech-asr/ctc-decoder-sweep"', source)
 
-    def test_decoder_entrypoint_exists(self):
-        path = ROOT / "scripts" / "tune-cnn-ctc-v19-decoder.sh"
-        self.assertTrue(path.is_file())
+    def test_runtime_decoder_wiring_exists(self):
+        freeze = (
+            SPEECH / "tools" / "freeze_cnn_ctc_v19_decoder.py"
+        ).read_text(encoding="utf-8")
+        evaluator = (
+            SPEECH / "evaluation" / "evaluate_cnn_ctc_v19.py"
+        ).read_text(encoding="utf-8")
+        runtime = (
+            SPEECH / "runtime" / "decode_cnn_ctc_v19_logits.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('"selected_wer": 0.5497732671129346', freeze)
+        self.assertIn('"selected_cer": 0.4634567759027818', freeze)
+        self.assertIn('"--decoder-artifact"', evaluator)
+        self.assertIn("decode_with_artifact(", evaluator)
+        self.assertIn("decode_with_artifact(", runtime)
+
+    def test_decoder_entrypoints_exist(self):
+        for name in (
+            "tune-cnn-ctc-v19-decoder.sh",
+            "freeze-cnn-ctc-v19-decoder.sh",
+            "decode-cnn-ctc-v19-logits.sh",
+        ):
+            self.assertTrue((ROOT / "scripts" / name).is_file())
 
 
 if __name__ == "__main__":
