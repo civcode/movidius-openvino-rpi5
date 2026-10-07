@@ -15,7 +15,7 @@ import urllib.request
 
 SOURCE_NAME = "QuartzNet15x5-En-Base.nemo"
 SOURCE_SIZE = 71083664
-SOURCE_SHA512 = "74e8284e77098906afb7a15a861ef60ec14db1a4acb206fa719492fa43050ad69a91c245652c05c5f0ded38b5903ed55"
+SOURCE_SHA384 = "74e8284e77098906afb7a15a861ef60ec14db1a4acb206fa719492fa43050ad69a91c245652c05c5f0ded38b5903ed55"
 URLS = (
     "https://storage.openvinotoolkit.org/repositories/open_model_zoo/public/2022.1/quartznet-15x5-en/QuartzNet15x5-En-Base.nemo",
     "https://api.ngc.nvidia.com/v2/models/nvidia/multidataset_quartznet15x5/versions/2/files/QuartzNet15x5-En-Base.nemo",
@@ -27,8 +27,8 @@ REQUIRED_MEMBERS = (
 )
 
 
-def sha512(path: pathlib.Path) -> str:
-    digest = hashlib.sha512()
+def sha384(path: pathlib.Path) -> str:
+    digest = hashlib.sha384()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
@@ -41,9 +41,9 @@ def verify(path: pathlib.Path) -> dict:
     size = path.stat().st_size
     if size != SOURCE_SIZE:
         raise ValueError(f"pretrained archive size mismatch: {size} != {SOURCE_SIZE}")
-    digest = sha512(path)
-    if digest != SOURCE_SHA512:
-        raise ValueError(f"pretrained archive SHA-512 mismatch: {digest}")
+    digest = sha384(path)
+    if digest != SOURCE_SHA384:
+        raise ValueError(f"pretrained archive SHA-384 mismatch: {digest}")
     with tarfile.open(path, mode="r:gz") as archive:
         names = set(archive.getnames())
     missing = [name for name in REQUIRED_MEMBERS if name not in names]
@@ -56,7 +56,7 @@ def verify(path: pathlib.Path) -> dict:
         "source_name": SOURCE_NAME,
         "path": str(path),
         "size_bytes": size,
-        "sha512": digest,
+        "sha384": digest,
         "required_members": list(REQUIRED_MEMBERS),
         "license": "Apache-2.0",
         "provenance": "NVIDIA NGC artifact pinned by Open Model Zoo quartznet-15x5-en",
