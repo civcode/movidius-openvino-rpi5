@@ -354,28 +354,57 @@ def load_decoder_artifact(
     return validate_decoder_artifact(value, vocab=vocab)
 
 
+@dataclass
+class FrozenCtcDecoder:
+    acoustic_model: str
+    config: dict[str, Any]
+    lm: CharacterNgramLM
+
+    @classmethod
+    def from_artifact(
+        cls,
+        artifact: Mapping[str, Any],
+        *,
+        vocab: Mapping[str, Any],
+    ) -> "FrozenCtcDecoder":
+        validated = validate_decoder_artifact(artifact, vocab=vocab)
+        return cls(
+            acoustic_model=str(validated["acoustic_model"]),
+            config=dict(validated["decoder"]),
+            lm=CharacterNgramLM.from_dict(validated["lm"]),
+        )
+
+    def decode(
+        self,
+        logits: Sequence[Sequence[float]] | np.ndarray,
+        vocab: dict,
+    ) -> dict:
+        result = prefix_beam_decode(
+            logits,
+            vocab,
+            beam_width=int(self.config["beam_width"]),
+            token_top_k=int(self.config["token_top_k"]),
+            lm=self.lm,
+            lm_weight=float(self.config["lm_weight"]),
+            word_bonus=float(self.config["word_bonus"]),
+        )
+        return {
+            **result,
+            "kind": "ctc-prefix-beam-char-ngram-v1",
+            "acoustic_model": self.acoustic_model,
+        }
+
+
 def decode_with_artifact(
     logits: Sequence[Sequence[float]] | np.ndarray,
     vocab: dict,
     artifact: Mapping[str, Any],
 ) -> dict:
-    validated = validate_decoder_artifact(artifact, vocab=vocab)
-    config = validated["decoder"]
-    lm = CharacterNgramLM.from_dict(validated["lm"])
-    result = prefix_beam_decode(
-        logits,
-        vocab,
-        beam_width=int(config["beam_width"]),
-        token_top_k=int(config["token_top_k"]),
-        lm=lm,
-        lm_weight=float(config["lm_weight"]),
-        word_bonus=float(config["word_bonus"]),
-    )
-    return {
-        **result,
-        "kind": "ctc-prefix-beam-char-ngram-v1",
-        "acoustic_model": validated["acoustic_model"],
-    }
+    """One-shot convenience wrapper; repeated runtime decoding should reuse FrozenCtcDecoder."""
+    return FrozenCtcDecoder.from_artifact(
+        artifact,
+        vocab=vocab,
+    ).decode(logits, vocab)
 
 
 def prefix_beam_decode(
