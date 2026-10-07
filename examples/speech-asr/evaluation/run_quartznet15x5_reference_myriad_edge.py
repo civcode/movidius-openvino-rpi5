@@ -68,6 +68,16 @@ def run_stream(argv: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess(argv, returncode, "".join(lines), None)
 
 
+def run_stream_checked(argv: list[str], label: str) -> subprocess.CompletedProcess[str]:
+    proc = run_stream(argv)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"{label} failed ({proc.returncode}):\n"
+            + "\n".join(proc.stdout.splitlines()[-60:])
+        )
+    return proc
+
+
 def remote_text(worker: str, argv: list[str]) -> str:
     proc = run_capture(ssh_command(worker, argv))
     lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
@@ -96,22 +106,26 @@ def require_main_and_clean() -> str:
 
 
 def run_local_reference_preparation(device: str) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path]:
-    run_stream([str(ROOT / "scripts" / "prepare-cnn-ctc-v18-pretrained.sh")])
-    run_stream([str(ROOT / "scripts" / "prepare-librispeech-dev-clean.sh")])
-    qual = run_stream(
+    run_stream_checked(
+        [str(ROOT / "scripts" / "prepare-cnn-ctc-v18-pretrained.sh")],
+        "pretrained source preparation",
+    )
+    run_stream_checked(
+        [str(ROOT / "scripts" / "prepare-librispeech-dev-clean.sh")],
+        "LibriSpeech dev-clean preparation",
+    )
+    qual = run_stream_checked(
         [
             str(ROOT / "scripts" / "qualify-quartznet15x5-reference-numpy.sh"),
             "--device",
             device,
-        ]
+        ],
+        "NumPy source-reference qualification",
     )
-    if qual.returncode != 0:
-        raise RuntimeError("NumPy source-reference qualification failed")
-    prepared = run_stream(
-        [str(ROOT / "scripts" / "prepare-quartznet15x5-reference-myriad.sh")]
+    prepared = run_stream_checked(
+        [str(ROOT / "scripts" / "prepare-quartznet15x5-reference-myriad.sh")],
+        "QuartzNet MYRIAD artifact preparation",
     )
-    if prepared.returncode != 0:
-        raise RuntimeError("QuartzNet MYRIAD artifact preparation failed")
 
     dataset = ROOT / "work" / "speech-asr" / "librispeech" / "dev-clean"
     myriad = ROOT / "work" / "speech-asr" / "quartznet15x5-reference" / "myriad"
@@ -335,26 +349,29 @@ def main() -> int:
         )
 
         print("[quartznet-edge] staging LibriSpeech dev-clean", flush=True)
-        run_stream(
+        run_stream_checked(
             rsync_push_command(
                 worker=args.worker,
                 sources=[dataset],
                 remote_dir=remote_dataset_parent,
-            )
+            ),
+            "LibriSpeech staging",
         )
-        run_stream(
+        run_stream_checked(
             rsync_push_command(
                 worker=args.worker,
                 sources=[xml, binary, artifacts_json],
                 remote_dir=remote_ir,
-            )
+            ),
+            "OpenVINO artifact staging",
         )
-        run_stream(
+        run_stream_checked(
             rsync_push_command(
                 worker=args.worker,
                 sources=[dynamic],
                 remote_dir=remote_dynamic,
-            )
+            ),
+            "dynamic ONNX staging",
         )
 
         remote_manifest = f"{remote_dataset_parent}/dev-clean/manifest.jsonl"
