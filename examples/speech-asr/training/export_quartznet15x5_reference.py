@@ -55,6 +55,11 @@ def main() -> int:
     parser.add_argument("--spec", type=pathlib.Path, default=DEFAULT_SPEC)
     parser.add_argument("--vocab", type=pathlib.Path, default=DEFAULT_VOCAB)
     parser.add_argument("--output-dir", type=pathlib.Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--fixed-time-frames",
+        type=int,
+        help="export a static time axis instead of the default dynamic time axis",
+    )
     args = parser.parse_args()
     try:
         spec = load_reference_spec(args.spec)
@@ -62,7 +67,17 @@ def main() -> int:
         model, imported = load_reference_model(args.archive, spec=spec, vocab=vocab)
         model.cpu().eval()
 
-        features = torch.linspace(-1.0, 1.0, 64 * 512, dtype=torch.float32).reshape(1, 64, 512)
+        time_frames = 512 if args.fixed_time_frames is None else int(args.fixed_time_frames)
+        if time_frames < 16 or time_frames % int(spec["frontend"]["pad_to"]) != 0:
+            raise ValueError(
+                "--fixed-time-frames must be a positive multiple of frontend pad_to"
+            )
+        features = torch.linspace(
+            -1.0,
+            1.0,
+            64 * time_frames,
+            dtype=torch.float32,
+        ).reshape(1, 64, time_frames)
         with torch.inference_mode():
             golden = model(features).detach().cpu().numpy().astype(np.float32)
         if golden.shape[-1] != 29:
@@ -70,6 +85,14 @@ def main() -> int:
 
         args.output_dir.mkdir(parents=True, exist_ok=True)
         onnx_path = args.output_dir / "quartznet15x5_nvidia_ref.onnx"
+        dynamic_axes = (
+            {
+                "features": {2: "feature_frames"},
+                "logits": {1: "output_frames"},
+            }
+            if args.fixed_time_frames is None
+            else None
+        )
         torch.onnx.export(
             model,
             features,
@@ -79,10 +102,7 @@ def main() -> int:
             do_constant_folding=True,
             input_names=["features"],
             output_names=["logits"],
-            dynamic_axes={
-                "features": {2: "feature_frames"},
-                "logits": {1: "output_frames"},
-            },
+            dynamic_axes=dynamic_axes,
         )
         onnx.checker.check_model(onnx.load(str(onnx_path)))
 
@@ -98,7 +118,17 @@ def main() -> int:
             "source": imported["source"],
             "input": {"name": "features", "shape": list(features.shape), "sha256": sha256_path(input_path)},
             "output": {"name": "logits", "shape": list(golden.shape), "sha256": sha256_path(output_path)},
-            "onnx": {"path": str(onnx_path), "sha256": sha256_path(onnx_path), "opset": 11, "dynamic_time_axis": True},
+            "onnx": {
+                "path": str(onnx_path),
+                "sha256": sha256_path(onnx_path),
+                "opset": 11,
+                "dynamic_time_axis": args.fixed_time_frames is None,
+                "fixed_time_frames": (
+                    None
+                    if args.fixed_time_frames is None
+                    else time_frames
+                ),
+            },
             "runtime": {
                 "python_version": platform.python_version(),
                 "torch_version": torch.__version__,
