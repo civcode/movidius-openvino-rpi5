@@ -1459,6 +1459,10 @@ grep -q 'frozen_batchnorm_modules = freeze_batchnorm_running_stats(model)' examp
 grep -q 'best_epoch = 0' examples/speech-asr/training/train_cnn_ctc_v19.py || fail 'cnn_ctc_v19 epoch-zero checkpoint candidate missing'
 grep -q 'persistent MYRIAD server input pipe write failed:' examples/speech-asr/evaluation/evaluate_cnn_ctc_v19.py || fail 'cnn_ctc_v19 pipe-write restart normalization missing'
 grep -q 'persistent MYRIAD server output pipe read failed:' examples/speech-asr/evaluation/evaluate_cnn_ctc_v19.py || fail 'cnn_ctc_v19 pipe-read restart normalization missing'
+grep -q '"--progress-interval"' examples/speech-asr/evaluation/evaluate_cnn_ctc_v19.py || fail 'cnn_ctc_v19 evaluation progress option missing'
+grep -q 'default=25' examples/speech-asr/evaluation/evaluate_cnn_ctc_v19.py || fail 'cnn_ctc_v19 evaluation progress cadence changed'
+grep -q 'f"elapsed={elapsed:.1f}s eta={eta_seconds:.1f}s"' examples/speech-asr/evaluation/evaluate_cnn_ctc_v19.py || fail 'cnn_ctc_v19 evaluation ETA missing'
+grep -q 'stream_output=True' examples/speech-asr/agent/run_experiment.py || fail 'edge worker progress is buffered by controller'
 grep -q '"initial_validation_checkpoint_candidate": True' examples/speech-asr/training/train_cnn_ctc_v19.py || fail 'cnn_ctc_v19 epoch-zero evidence missing'
 grep -q 'model_id in {"cnn_ctc_v18", "cnn_ctc_v19"}' examples/speech-asr/python/speech_asr/orchestration.py || fail 'cnn_ctc_v19 pretrained semantic MYRIAD gate missing'
 
