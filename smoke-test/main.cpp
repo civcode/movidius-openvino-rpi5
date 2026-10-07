@@ -24,6 +24,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -109,8 +110,39 @@ void writeF32(const std::string& path, const std::vector<float>& values) {
 }
 
 
+void reshapeTimeIfRequested(CNNNetwork& network, size_t reshapeTime) {
+    if (reshapeTime == 0) return;
+
+    ICNNNetwork::InputShapes shapes = network.getInputShapes();
+    if (shapes.size() != 1) {
+        throw std::runtime_error("--reshape-time requires a model with exactly one input");
+    }
+    auto item = shapes.begin();
+    SizeVector dims = item->second;
+    if (dims.size() != 3) {
+        std::ostringstream oss;
+        oss << "--reshape-time requires a rank-3 input, got " << dims.size();
+        throw std::runtime_error(oss.str());
+    }
+    if (dims[0] != 1) {
+        throw std::runtime_error("--reshape-time currently requires batch size 1");
+    }
+    const size_t originalTime = dims[2];
+    dims[2] = reshapeTime;
+    item->second = dims;
+    network.reshape(shapes);
+    std::fprintf(
+        stderr,
+        "RESHAPE input=%s time=%zu->%zu\n",
+        item->first.c_str(),
+        originalTime,
+        reshapeTime);
+    std::fflush(stderr);
+}
+
 int runStreamInference(const std::string& modelXml, const std::string& modelBin,
-                       const std::string& device, int warmupIterations) {
+                       const std::string& device, int warmupIterations,
+                       size_t reshapeTime) {
     Core ie;
     const ov203::DeviceSpec deviceSpec = ov203::parseDeviceSpec(device);
     std::vector<std::string> devices;
@@ -122,6 +154,7 @@ int runStreamInference(const std::string& modelXml, const std::string& modelBin,
     }
 
     CNNNetwork network = ie.ReadNetwork(modelXml, modelBin);
+    reshapeTimeIfRequested(network, reshapeTime);
     InputsDataMap inputs = network.getInputsInfo();
     OutputsDataMap outputs = network.getOutputsInfo();
     if (inputs.size() != 1 || outputs.size() != 1) {
@@ -267,12 +300,14 @@ int runStreamInference(const std::string& modelXml, const std::string& modelBin,
 
 int runInference(Core& ie, const std::string& modelXml, const std::string& modelBin,
                  const std::string& device, int iterations,
-                 const std::string& tensorPath, const std::string& outputPath) {
+                 const std::string& tensorPath, const std::string& outputPath,
+                 size_t reshapeTime) {
     std::cout << "\nreading model   : " << modelXml;
     if (!modelBin.empty()) std::cout << " + " << modelBin;
     std::cout << "\n";
 
     CNNNetwork network = ie.ReadNetwork(modelXml, modelBin);
+    reshapeTimeIfRequested(network, reshapeTime);
     std::cout << "network         : " << network.getName() << "\n";
 
     InputsDataMap inputs = network.getInputsInfo();
@@ -409,6 +444,7 @@ int main(int argc, char** argv) {
     std::string modelXml, modelBin, device = "MYRIAD", tensorPath, outputPath;
     int iterations = 1;
     int warmupIterations = 1;
+    size_t reshapeTime = 0;
     bool listOnly = false;
     bool streamMode = false;
 
@@ -439,19 +475,26 @@ int main(int argc, char** argv) {
             streamMode = true;
         } else if (arg == "--warmup") {
             warmupIterations = std::max(0, std::stoi(next("--warmup")));
+        } else if (arg == "--reshape-time") {
+            const long long value = std::stoll(next("--reshape-time"));
+            if (value <= 0) {
+                std::cerr << "--reshape-time must be positive\n";
+                return 4;
+            }
+            reshapeTime = static_cast<size_t>(value);
         } else if (arg == "-h" || arg == "--help") {
             std::cout << "usage: hello_myriad [--model <IR.xml>] [--weights <IR.bin>]"
                       << " [--device MYRIAD] [--iterations N] [--tensor input.f32]"
-                      << " [--output output.f32] [--list-only]\n"
+                      << " [--output output.f32] [--reshape-time T] [--list-only]\n"
                       << "       hello_myriad --model <IR.xml> [--weights <IR.bin>]"
-                      << " [--device MYRIAD] --stdin [--warmup N]\n"
+                      << " [--device MYRIAD] --stdin [--warmup N] [--reshape-time T]\n"
                       << "stream protocol: repeated little-endian float32 input tensors"
                       << " on stdin; one float32 output tensor per request on stdout\n";
             return 0;
         } else {
             std::cerr << "usage: hello_myriad [--model <IR.xml>] [--weights <IR.bin>]"
                       << " [--device MYRIAD] [--iterations N] [--tensor input.f32]"
-                      << " [--output output.f32] [--list-only|--stdin]\n";
+                      << " [--output output.f32] [--reshape-time T] [--list-only|--stdin]\n";
             return 4;
         }
     }
@@ -467,7 +510,7 @@ int main(int argc, char** argv) {
                 return 4;
             }
             return runStreamInference(
-                modelXml, modelBin, device, warmupIterations);
+                modelXml, modelBin, device, warmupIterations, reshapeTime);
         }
 
         Core ie;
@@ -491,7 +534,8 @@ int main(int argc, char** argv) {
 
         if (!modelXml.empty()) {
             const int rc = runInference(
-                ie, modelXml, modelBin, device, iterations, tensorPath, outputPath);
+                ie, modelXml, modelBin, device, iterations, tensorPath, outputPath,
+                reshapeTime);
             std::cout << "RESULT: " << (rc == 0 ? "PASS" : "FAIL") << "\n";
             return rc;
         }
