@@ -1,3 +1,4 @@
+import ast
 import pathlib
 import sys
 import unittest
@@ -111,9 +112,24 @@ class CtcBeamTests(unittest.TestCase):
         self.assertIn('"cached greedy WER', source)
         self.assertIn('"cached greedy CER', source)
         self.assertIn('DEFAULT_TRAIN = ROOT / "work"', source)
-        self.assertIn('"beam-widths", default="8,16,32"', source)
-        self.assertIn('"lm-weights", default="0.15,0.30,0.45,0.60"', source)
-        self.assertIn('"jobs", type=int, default=16', source)
+        tree = ast.parse(source)
+        defaults = {}
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if not isinstance(node.func, ast.Attribute):
+                continue
+            if node.func.attr != "add_argument" or not node.args:
+                continue
+            name = node.args[0]
+            if not isinstance(name, ast.Constant) or not isinstance(name.value, str):
+                continue
+            for keyword in node.keywords:
+                if keyword.arg == "default" and isinstance(keyword.value, ast.Constant):
+                    defaults[name.value] = keyword.value.value
+        self.assertEqual(defaults["--beam-widths"], "8,16,32")
+        self.assertEqual(defaults["--lm-weights"], "0.15,0.30,0.45,0.60")
+        self.assertEqual(defaults["--jobs"], 16)
         self.assertIn('"schema": "speech-asr/ctc-decoder-sweep"', source)
 
     def test_decoder_entrypoint_exists(self):
