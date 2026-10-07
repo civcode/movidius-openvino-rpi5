@@ -680,6 +680,92 @@ def execute_local(
     return build_dir, compatibility
 
 
+def load_recorded_local_execution(
+    *,
+    experiment_dir: pathlib.Path,
+    attempt_id: str,
+    model_spec: dict[str, Any],
+) -> tuple[pathlib.Path, dict[str, Any]] | None:
+    attempt_dir = experiment_dir / "attempts" / attempt_id
+    attempt = load_json(attempt_dir / "attempt.json")
+    required_stages = {"training", "compatibility"}
+    required_artifacts = {
+        "checkpoint",
+        "onnx",
+        "openvino_xml",
+        "openvino_bin",
+    }
+    if not required_stages.issubset(set(attempt.get("stage_results", {}))):
+        return None
+    if not required_artifacts.issubset(set(attempt.get("artifacts", {}))):
+        return None
+
+    compatibility_path = attempt_dir / "results" / "compatibility.json"
+    training_path = attempt_dir / "results" / "training.json"
+    if not compatibility_path.is_file() or not training_path.is_file():
+        return None
+
+    model_id = executor_model_basename(str(model_spec["model_id"]))
+    build_dir = attempt_dir / "build" / model_id
+    required_build = [
+        build_dir / "training" / "checkpoint.pt",
+        build_dir / "export" / f"{model_id}.onnx",
+        build_dir / "openvino" / "fp16" / f"{model_id}.xml",
+        build_dir / "openvino" / "fp16" / f"{model_id}.bin",
+    ]
+    if any(not path.is_file() for path in required_build):
+        return None
+
+    compatibility = load_json(compatibility_path)
+    print(
+        json.dumps(
+            {
+                "event": "resume_local_execution",
+                "attempt_id": attempt_id,
+                "status": "reused_recorded_results",
+                "build_dir": str(build_dir),
+            },
+            sort_keys=True,
+        ),
+        flush=True,
+    )
+    return build_dir, compatibility
+
+
+def load_recorded_remote_execution(
+    *,
+    experiment_dir: pathlib.Path,
+    attempt_id: str,
+) -> tuple[pathlib.Path, dict[str, Any]] | None:
+    attempt_dir = experiment_dir / "attempts" / attempt_id
+    attempt = load_json(attempt_dir / "attempt.json")
+    required_stages = {"hardware", "accuracy"}
+    if not required_stages.issubset(set(attempt.get("stage_results", {}))):
+        return None
+
+    worker_result_path = attempt_dir / "edge" / "worker-result.json"
+    hardware_path = attempt_dir / "results" / "hardware.json"
+    if not worker_result_path.is_file() or not hardware_path.is_file():
+        return None
+
+    worker_result = validate_edge_worker_result(load_json(worker_result_path))
+    if worker_result.get("status") != "completed":
+        return None
+    hardware = validate_experiment_result(load_json(hardware_path))
+    print(
+        json.dumps(
+            {
+                "event": "resume_remote_execution",
+                "attempt_id": attempt_id,
+                "status": "reused_recorded_results",
+            },
+            sort_keys=True,
+        ),
+        flush=True,
+    )
+    return worker_result_path, hardware
+
+
 def sha256_file(path: pathlib.Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -905,8 +991,20 @@ def main() -> int:
             experiment_dir
         )
         manager("validate", "--experiment", str(experiment_dir))
-        start = manager("start-attempt", "--experiment", str(experiment_dir))
+        start = manager(
+            "start-attempt",
+            "--experiment",
+            str(experiment_dir),
+            "--resume-nonterminal",
+        )
         attempt_id = start["attempt_id"]
+        attempt_state = str(start["state"])
+        if attempt_state not in {"APPROVED", "EXECUTE", "EVALUATE"}:
+            raise ExecutionFailure(
+                f"cannot resume attempt {attempt_id} from state {attempt_state!r}",
+                outcome="failed",
+                failure_class="controller_execution",
+            )
         attempt_dir = experiment_dir / "attempts" / attempt_id
         logs_dir = attempt_dir / "logs"
         diagnostics_path = attempt_dir / "generated" / "terminal-diagnostics.json"
@@ -969,72 +1067,112 @@ def main() -> int:
             log_path=logs_dir / "edge-preflight.log",
         )
 
-        probe_build = (
-            attempt_dir / "build" / executor_model_basename(str(model_spec["model_id"]))
-        )
-        probe_command = compatibility_probe_command(
-            root=ROOT,
-            build_dir=probe_build,
-            model_spec=model_spec,
-        )
-        if probe_command is not None:
-            probe = run_process(
-                probe_command,
-                log_path=logs_dir / "controller-compatibility-probe.log",
+        build_dir: pathlib.Path | None = None
+        compatibility: dict[str, Any] | None = None
+
+        if attempt_state == "APPROVED":
+            probe_build = (
+                attempt_dir
+                / "build"
+                / executor_model_basename(str(model_spec["model_id"]))
             )
-            if probe.returncode != 0:
+            probe_command = compatibility_probe_command(
+                root=ROOT,
+                build_dir=probe_build,
+                model_spec=model_spec,
+            )
+            if probe_command is not None:
+                probe = run_process(
+                    probe_command,
+                    log_path=logs_dir / "controller-compatibility-probe.log",
+                )
+                if probe.returncode != 0:
+                    raise ExecutionFailure(
+                        "pre-training compatibility gate failed:\n"
+                        + "\n".join(probe.stdout.splitlines()[-40:]),
+                        outcome="failed",
+                        failure_class="controller_execution",
+                    )
+                physical_compatibility_probe(
+                    experiment_dir=experiment_dir,
+                    attempt_id=attempt_id,
+                    worker=args.worker,
+                    worker_repo=worker_repo,
+                    request=request,
+                    model_spec=model_spec,
+                    logs_dir=logs_dir,
+                )
+
+            manager(
+                "transition",
+                "--experiment",
+                str(experiment_dir),
+                "--attempt",
+                attempt_id,
+                "--state",
+                "EXECUTE",
+            )
+            attempt_state = "EXECUTE"
+
+        if attempt_state == "EXECUTE":
+            recorded_local = load_recorded_local_execution(
+                experiment_dir=experiment_dir,
+                attempt_id=attempt_id,
+                model_spec=model_spec,
+            )
+            if recorded_local is None:
+                build_dir, compatibility = execute_local(
+                    experiment_dir=experiment_dir,
+                    attempt_id=attempt_id,
+                    model_spec=model_spec,
+                    train_config=train_config,
+                    logs_dir=logs_dir,
+                )
+            else:
+                build_dir, compatibility = recorded_local
+
+            manager(
+                "transition",
+                "--experiment",
+                str(experiment_dir),
+                "--attempt",
+                attempt_id,
+                "--state",
+                "EVALUATE",
+            )
+            attempt_state = "EVALUATE"
+
+        if build_dir is None or compatibility is None:
+            recorded_local = load_recorded_local_execution(
+                experiment_dir=experiment_dir,
+                attempt_id=attempt_id,
+                model_spec=model_spec,
+            )
+            if recorded_local is None:
                 raise ExecutionFailure(
-                    "pre-training compatibility gate failed:\n"
-                    + "\n".join(probe.stdout.splitlines()[-40:]),
+                    f"attempt {attempt_id} is in EVALUATE without complete local evidence",
                     outcome="failed",
                     failure_class="controller_execution",
                 )
-            physical_compatibility_probe(
+            build_dir, compatibility = recorded_local
+
+        recorded_remote = load_recorded_remote_execution(
+            experiment_dir=experiment_dir,
+            attempt_id=attempt_id,
+        )
+        if recorded_remote is None:
+            worker_result_path, hardware = execute_remote(
                 experiment_dir=experiment_dir,
                 attempt_id=attempt_id,
                 worker=args.worker,
                 worker_repo=worker_repo,
                 request=request,
                 model_spec=model_spec,
+                build_dir=build_dir,
                 logs_dir=logs_dir,
             )
-
-        manager(
-            "transition",
-            "--experiment",
-            str(experiment_dir),
-            "--attempt",
-            attempt_id,
-            "--state",
-            "EXECUTE",
-        )
-        build_dir, compatibility = execute_local(
-            experiment_dir=experiment_dir,
-            attempt_id=attempt_id,
-            model_spec=model_spec,
-            train_config=train_config,
-            logs_dir=logs_dir,
-        )
-
-        manager(
-            "transition",
-            "--experiment",
-            str(experiment_dir),
-            "--attempt",
-            attempt_id,
-            "--state",
-            "EVALUATE",
-        )
-        worker_result_path, hardware = execute_remote(
-            experiment_dir=experiment_dir,
-            attempt_id=attempt_id,
-            worker=args.worker,
-            worker_repo=worker_repo,
-            request=request,
-            model_spec=model_spec,
-            build_dir=build_dir,
-            logs_dir=logs_dir,
-        )
+        else:
+            worker_result_path, hardware = recorded_remote
 
         acceptance_result = acceptance_evaluation(
             policy=acceptance,
