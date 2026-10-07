@@ -125,14 +125,23 @@ def require_main_clean() -> str:
     return git_head()
 
 
-def first_record(manifest: pathlib.Path) -> dict:
+def select_record(manifest: pathlib.Path, sample_id: str | None) -> dict:
+    first: dict | None = None
     for line in manifest.read_text(encoding="utf-8").splitlines():
-        if line.strip():
-            value = json.loads(line)
-            if not isinstance(value, dict):
-                raise ValueError("manifest first record must be an object")
+        if not line.strip():
+            continue
+        value = json.loads(line)
+        if not isinstance(value, dict):
+            raise ValueError("manifest record must be an object")
+        if first is None:
+            first = value
+        if sample_id is not None and str(value.get("id")) == sample_id:
             return value
-    raise ValueError("manifest is empty")
+    if sample_id is not None:
+        raise ValueError(f"sample id not found in manifest: {sample_id}")
+    if first is None:
+        raise ValueError("manifest is empty")
+    return first
 
 
 def output_frames(feature_frames: int, spec: dict) -> int:
@@ -162,6 +171,10 @@ def main() -> int:
     parser.add_argument("--spec", type=pathlib.Path, default=DEFAULT_SPEC)
     parser.add_argument("--pretrained", type=pathlib.Path, default=DEFAULT_PRETRAINED)
     parser.add_argument("--dynamic-onnx", type=pathlib.Path, default=DEFAULT_DYNAMIC_ONNX)
+    parser.add_argument(
+        "--sample-id",
+        help="LibriSpeech utterance id to diagnose; defaults to the first manifest record",
+    )
     parser.add_argument("--output-dir", type=pathlib.Path, default=DEFAULT_OUTPUT_DIR)
     args = parser.parse_args()
 
@@ -172,7 +185,7 @@ def main() -> int:
                 raise ValueError(f"required input missing: {path}")
 
         spec = json.loads(args.spec.read_text(encoding="utf-8"))
-        record = first_record(args.manifest)
+        record = select_record(args.manifest, args.sample_id)
         sample_count = int(record["sample_count"])
         valid_frames, tensor_frames = reference_feature_lengths(sample_count, spec)
         valid_out = output_frames(valid_frames, spec)
@@ -193,7 +206,8 @@ def main() -> int:
             raise ValueError("first-sample frontend geometry changed")
         features = np.ascontiguousarray(features, dtype=np.float32)
 
-        out = args.output_dir.resolve()
+        sample_tag = str(record["id"]).replace("/", "_")
+        out = args.output_dir.resolve() / sample_tag
         export = out / f"export-t{tensor_frames}"
         ir = out / f"openvino-t{tensor_frames}"
         stage = out / f"edge-t{tensor_frames}"
@@ -311,7 +325,7 @@ def main() -> int:
 
         remote_rel = (
             f"speech-asr/quartznet15x5-reference/static-shape-diagnostic/"
-            f"{head[:8]}-t{tensor_frames}"
+            f"{head[:8]}-{sample_tag}-t{tensor_frames}"
         )
         remote_dir = f"{remote_repo}/work/{remote_rel}"
         run_capture(
