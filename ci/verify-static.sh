@@ -1483,6 +1483,7 @@ test -x scripts/freeze-cnn-ctc-v19-decoder.sh || fail 'v19 decoder artifact free
 test -x scripts/decode-cnn-ctc-v19-logits.sh || fail 'v19 runtime decoder entry point missing'
 test -x scripts/benchmark-cnn-ctc-v19-decoder.sh || fail 'v19 CPU decoder benchmark entry point missing'
 test -x scripts/evaluate-cnn-ctc-v19-deployed.sh || fail 'v19 deployed decoder evaluator entry point missing'
+test -x scripts/run-cnn-ctc-v19-deployed-edge.sh || fail 'v19 deployed decoder edge controller entry point missing'
 test -f examples/speech-asr/evaluation/run_cnn_ctc_v19_deployed_edge.py || fail 'v19 deployed decoder edge controller missing'
 grep -q 'flock -n 9' scripts/evaluate-cnn-ctc-v19-deployed.sh || fail 'v19 deployed decoder evaluator lacks exclusive MYRIAD lock'
 grep -q 'fbd72a648826b2e200f9244b4dc73be425cada2e304be92d513f7033a8de4088' scripts/evaluate-cnn-ctc-v19-deployed.sh || fail 'v19 deployed decoder evaluator validation identity changed'

@@ -66,7 +66,7 @@ done
     echo "deployed v19 measurement requires an arm64/aarch64 Pi host" >&2
     exit 2
 }
-for command in sha256sum flock taskset; do
+for command in sha256sum flock taskset realpath; do
     command -v "$command" >/dev/null 2>&1 || {
         echo "required command missing: $command" >&2
         exit 2

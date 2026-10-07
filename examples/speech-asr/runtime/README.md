@@ -74,6 +74,44 @@ p50/p95 latency plus WER/CER. Greedy remains available in the physical evaluator
 when no decoder artifact is supplied, preserving historical acoustic-baseline
 comparability.
 
+For the final paired Pi deployment measurement, run the controller from the
+main Oberon checkout after defining the source experiment, attempt and frozen
+decoder artifact:
+
+```bash
+git pull --ff-only
+
+EXP=work/speech-asr/experiments/exp-f4adb44ab833e896
+ATTEMPT=attempt-0002
+
+./scripts/run-cnn-ctc-v19-deployed-edge.sh \
+  --experiment "$EXP" \
+  --attempt "$ATTEMPT" \
+  --decoder-artifact "$ARTIFACT"
+```
+
+The controller requires both the Oberon checkout and the edge human checkout to
+remain on `main` at the same commit. It verifies the frozen 1,273-record
+validation-manifest hash, validates the decoder artifact, stages only the
+selected v19 FP16 IR plus decoder artifact, and invokes a fresh edge evaluation
+under the existing exclusive MYRIAD lock. Decoder CPU affinity defaults to
+cores 0-3 with OpenMP/MKL/OpenBLAS restricted to one thread.
+
+The edge evaluator recomputes every physical MYRIAD inference for this
+measurement rather than reusing the previous acoustic cache. Evidence is pulled
+back to:
+
+```text
+work/speech-asr/deployed-evaluations/
+  exp-f4adb44ab833e896-attempt-0002-decoder-v1/
+    result.json
+    evaluator.log
+```
+
+The controller prints the measured MYRIAD p50/p95, decoder p50/p95/mean,
+paired acoustic-plus-decoder p50/p95/mean, combined realtime factor, and whether
+WER/CER still exactly match the frozen decoder result.
+
 
 ## Evaluation worker
 

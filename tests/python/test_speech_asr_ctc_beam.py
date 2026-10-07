@@ -222,6 +222,7 @@ class CtcBeamTests(unittest.TestCase):
             "decode-cnn-ctc-v19-logits.sh",
             "benchmark-cnn-ctc-v19-decoder.sh",
             "evaluate-cnn-ctc-v19-deployed.sh",
+            "run-cnn-ctc-v19-deployed-edge.sh",
         ):
             self.assertTrue((ROOT / "scripts" / name).is_file())
 
