@@ -1040,7 +1040,7 @@ def main() -> int:
                     None if validation_manifest is None else str(validation_manifest)
                 ),
                 "pretrained_archive": str(args.pretrained),
-                "pretrained_sha512": pretrained_initialization["source"]["sha512"],
+                "pretrained_sha384": pretrained_initialization["source"]["sha384"],
             },
         }
         (args.output_dir / "training-result.json").write_text(
