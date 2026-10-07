@@ -17,6 +17,7 @@ SSH_OPTIONS = (
 RSYNC_RSH = "ssh -o BatchMode=yes -o ConnectTimeout=10"
 _WORKER_RE = re.compile(r"^[A-Za-z0-9_.@-]+$")
 PRETRAINING_MYRIAD_MAX_ABS_ERROR = 0.01
+PRETRAINING_MYRIAD_PRETRAINED_MAX_FRAME_TOTAL_VARIATION = 0.002
 
 
 V2_ARCHITECTURE = {
@@ -599,9 +600,67 @@ def load_compatibility_result(build_dir: pathlib.Path) -> dict[str, Any]:
 
 def pretraining_myriad_compatibility(
     comparison: Mapping[str, Any],
+    *,
+    model_id: str | None = None,
 ) -> dict[str, Any]:
     max_abs_error = comparison.get("max_abs_error")
+    frame_argmax_agreement = comparison.get("frame_argmax_agreement")
+    frame_argmax_mismatches = comparison.get("frame_argmax_mismatches")
+    min_reference_top2_margin = comparison.get("min_reference_top2_margin")
+    max_frame_total_variation = comparison.get("max_frame_total_variation")
+    max_softmax_abs_error = comparison.get("max_softmax_abs_error")
     reasons: list[str] = []
+
+    if model_id == "cnn_ctc_v18":
+        gate_kind = "pretrained-semantic-parity-v1"
+        if (
+            not isinstance(frame_argmax_agreement, (int, float))
+            or isinstance(frame_argmax_agreement, bool)
+            or frame_argmax_agreement != 1.0
+        ):
+            reasons.append(
+                "pretrained frame_argmax_agreement must be exactly 1.0"
+            )
+        if frame_argmax_mismatches != 0:
+            reasons.append(
+                f"pretrained frame_argmax_mismatches "
+                f"{frame_argmax_mismatches!r} != 0"
+            )
+        if (
+            not isinstance(max_frame_total_variation, (int, float))
+            or isinstance(max_frame_total_variation, bool)
+            or max_frame_total_variation < 0
+        ):
+            reasons.append(
+                "pretrained max_frame_total_variation is missing or invalid"
+            )
+        elif (
+            max_frame_total_variation
+            > PRETRAINING_MYRIAD_PRETRAINED_MAX_FRAME_TOTAL_VARIATION
+        ):
+            reasons.append(
+                f"pretrained max_frame_total_variation "
+                f"{max_frame_total_variation!r} exceeds "
+                f"{PRETRAINING_MYRIAD_PRETRAINED_MAX_FRAME_TOTAL_VARIATION!r}"
+            )
+
+        return {
+            "status": "accepted" if not reasons else "rejected",
+            "gate_kind": gate_kind,
+            "max_frame_total_variation_limit": (
+                PRETRAINING_MYRIAD_PRETRAINED_MAX_FRAME_TOTAL_VARIATION
+            ),
+            "max_frame_total_variation": max_frame_total_variation,
+            "max_softmax_abs_error": max_softmax_abs_error,
+            "max_abs_error_limit": None,
+            "max_abs_error": max_abs_error,
+            "frame_argmax_agreement": frame_argmax_agreement,
+            "frame_argmax_mismatches": frame_argmax_mismatches,
+            "min_reference_top2_margin": min_reference_top2_margin,
+            "reasons": reasons,
+        }
+
+    gate_kind = "initialized-raw-logit-parity-v1"
     if (
         not isinstance(max_abs_error, (int, float))
         or isinstance(max_abs_error, bool)
@@ -616,13 +675,12 @@ def pretraining_myriad_compatibility(
 
     return {
         "status": "accepted" if not reasons else "rejected",
+        "gate_kind": gate_kind,
         "max_abs_error_limit": PRETRAINING_MYRIAD_MAX_ABS_ERROR,
         "max_abs_error": max_abs_error,
-        "frame_argmax_agreement": comparison.get("frame_argmax_agreement"),
-        "frame_argmax_mismatches": comparison.get("frame_argmax_mismatches"),
-        "min_reference_top2_margin": comparison.get(
-            "min_reference_top2_margin"
-        ),
+        "frame_argmax_agreement": frame_argmax_agreement,
+        "frame_argmax_mismatches": frame_argmax_mismatches,
+        "min_reference_top2_margin": min_reference_top2_margin,
         "reasons": reasons,
     }
 
