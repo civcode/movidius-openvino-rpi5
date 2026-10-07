@@ -1489,6 +1489,8 @@ grep -q 'FrozenCtcDecoder.from_artifact' examples/speech-asr/evaluation/benchmar
 grep -q '0.5497732671129346' examples/speech-asr/tools/freeze_cnn_ctc_v19_decoder.py || fail 'v19 selected decoder WER evidence changed'
 grep -q '0.4634567759027818' examples/speech-asr/tools/freeze_cnn_ctc_v19_decoder.py || fail 'v19 selected decoder CER evidence changed'
 grep -q '"--decoder-artifact"' examples/speech-asr/evaluation/evaluate_cnn_ctc_v19.py || fail 'v19 physical evaluator decoder artifact option missing'
+grep -q '"acoustic_plus_decoder_latency_p95_ms"' examples/speech-asr/evaluation/evaluate_cnn_ctc_v19.py || fail 'v19 physical evaluator paired acoustic+decoder latency missing'
+grep -q '"acoustic_plus_decoder_realtime_factor"' examples/speech-asr/evaluation/evaluate_cnn_ctc_v19.py || fail 'v19 physical evaluator paired acoustic+decoder RTF missing'
 
 python3 - <<'PY_CHECK'
 from pathlib import Path

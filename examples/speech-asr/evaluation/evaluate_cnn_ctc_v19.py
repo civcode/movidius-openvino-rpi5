@@ -595,11 +595,13 @@ def main() -> int:
         char_counts = []
         latencies = []
         decoder_latencies = []
+        acoustic_plus_decoder_latencies = []
         per_sample = []
         skipped = {"too_long": [], "target_too_long": []}
         manifest_samples = 0
         total_audio_samples = 0
         total_infer_seconds = 0.0
+        total_decode_seconds = 0.0
 
         input_shape = tuple(int(value) for value in spec["input_contract"]["shape"])
         output_shape = tuple(int(value) for value in spec["output_contract"]["shape"])
@@ -897,12 +899,18 @@ def main() -> int:
                 )
                 decode_ms = (time.perf_counter() - decode_started) * 1000.0
                 decoder_latencies.append(decode_ms)
+                total_decode_seconds += decode_ms / 1000.0
+                acoustic_plus_decoder_ms = infer_ms + decode_ms
+                acoustic_plus_decoder_latencies.append(acoustic_plus_decoder_ms)
                 deployed_decoder = {
                     key: value
                     for key, value in deployed_decoder.items()
                     if key != "score"
                 }
                 deployed_decoder["decode_ms"] = decode_ms
+                deployed_decoder["acoustic_plus_decoder_ms"] = (
+                    acoustic_plus_decoder_ms
+                )
                 hypothesis = deployed_decoder["hypothesis"]
             reference = record["transcript"]["text"]
             words = word_error_counts(reference, hypothesis)
@@ -999,6 +1007,10 @@ def main() -> int:
         deployed_decoder_summary = None
         if decoder_artifact is not None:
             decoder_latency = latency_summary_ms(decoder_latencies)
+            acoustic_plus_decoder_latency = latency_summary_ms(
+                acoustic_plus_decoder_latencies
+            )
+            audio_seconds = total_audio_samples / 16000.0
             deployed_decoder_summary = {
                 "kind": "ctc-prefix-beam-char-ngram-v1",
                 **decoder_artifact["decoder"],
@@ -1008,9 +1020,23 @@ def main() -> int:
                 "decode_latency_mean_ms": (
                     sum(decoder_latencies) / len(decoder_latencies)
                 ),
-                "decoder_realtime_factor": (
-                    (sum(decoder_latencies) / 1000.0)
-                    / (total_audio_samples / 16000.0)
+                "decoder_realtime_factor": total_decode_seconds / audio_seconds,
+                "acoustic_plus_decoder_latency_p50_ms": (
+                    acoustic_plus_decoder_latency["p50_ms"]
+                ),
+                "acoustic_plus_decoder_latency_p95_ms": (
+                    acoustic_plus_decoder_latency["p95_ms"]
+                ),
+                "acoustic_plus_decoder_latency_mean_ms": (
+                    sum(acoustic_plus_decoder_latencies)
+                    / len(acoustic_plus_decoder_latencies)
+                ),
+                "acoustic_plus_decoder_realtime_factor": (
+                    (total_infer_seconds + total_decode_seconds) / audio_seconds
+                ),
+                "measurement_scope": (
+                    "paired per-utterance MYRIAD Infer() + CPU decoder; "
+                    "frontend/IPC excluded"
                 ),
             }
         manifest_sha = sha256_path(args.manifest)
@@ -1116,6 +1142,9 @@ def main() -> int:
             "decoder p50/p95 ms: "
             f"{deployed_decoder_summary['decode_latency_p50_ms']:.3f}/"
             f"{deployed_decoder_summary['decode_latency_p95_ms']:.3f}\n"
+            "acoustic+decoder p50/p95 ms: "
+            f"{deployed_decoder_summary['acoustic_plus_decoder_latency_p50_ms']:.3f}/"
+            f"{deployed_decoder_summary['acoustic_plus_decoder_latency_p95_ms']:.3f}\n"
             if deployed_decoder_summary is not None
             else "decoder: greedy baseline\n"
         )

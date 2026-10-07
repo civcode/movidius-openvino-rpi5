@@ -189,6 +189,10 @@ class CtcBeamTests(unittest.TestCase):
         self.assertIn('"--decoder-artifact"', evaluator)
         self.assertIn("FrozenCtcDecoder.from_artifact(", evaluator)
         self.assertIn("runtime_decoder.decode(", evaluator)
+        self.assertIn('"acoustic_plus_decoder_ms"', evaluator)
+        self.assertIn('"acoustic_plus_decoder_latency_p50_ms"', evaluator)
+        self.assertIn('"acoustic_plus_decoder_latency_p95_ms"', evaluator)
+        self.assertIn('"acoustic_plus_decoder_realtime_factor"', evaluator)
         self.assertIn("FrozenCtcDecoder.from_artifact(", runtime)
         self.assertIn("runtime_decoder.decode(", runtime)
 
