@@ -1556,6 +1556,7 @@ grep -q 'exact-time-runtime-reshape-v1' examples/speech-asr/evaluation/evaluate_
 grep -q -- '"--reshape-time"' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py || fail 'QuartzNet MYRIAD evaluator does not request exact time reshape'
 grep -q -- '--backend host' scripts/evaluate-quartznet15x5-reference-myriad.sh || fail 'QuartzNet MYRIAD deployment is not pinned to host runtime'
 grep -q 'check-reshape' scripts/evaluate-quartznet15x5-reference-myriad.sh || fail 'QuartzNet MYRIAD deployment does not require reshape-capable runtime'
+grep -q 'requestedDevice.usesMyriad && !myriadAvailable' smoke-test/main.cpp || fail 'hello_myriad must allow CPU-only inference without a MYRIAD device'
 grep -q -- '"--refresh-runtime"' examples/speech-asr/evaluation/run_quartznet15x5_reference_myriad_edge.py || fail 'QuartzNet edge controller lacks runtime refresh path'
 grep -q 'rsync_push_command' examples/speech-asr/evaluation/run_quartznet15x5_reference_myriad_edge.py || fail 'QuartzNet edge controller does not stage dataset/artifacts'
 grep -q 'rsync_pull_command' examples/speech-asr/evaluation/run_quartznet15x5_reference_myriad_edge.py || fail 'QuartzNet edge controller does not collect evidence'

@@ -526,7 +526,8 @@ int main(int argc, char** argv) {
             return 0;
         }
 
-        if (!myriadAvailable) {
+        const ov203::DeviceSpec requestedDevice = ov203::parseDeviceSpec(device);
+        if (requestedDevice.usesMyriad && !myriadAvailable) {
             std::cout << "RESULT: FAIL - no MYRIAD plugin (is the MA2450 stick plugged in,"
                          " and does the container have --device=/dev/bus/usb?)\n";
             return 2;
