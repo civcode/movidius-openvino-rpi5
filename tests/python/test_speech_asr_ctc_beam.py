@@ -210,8 +210,12 @@ class CtcBeamTests(unittest.TestCase):
             wrapper,
         )
         self.assertIn("--fresh", wrapper)
+        self.assertIn("stage_validation_dataset(", controller)
+        self.assertIn("os.link(audio, destination)", controller)
         self.assertIn("rsync_push_command(", controller)
         self.assertIn("rsync_pull_command(", controller)
+        self.assertIn("edge-speech-preflight.sh", controller)
+        self.assertIn('"--preflight-only"', controller)
         self.assertIn('if branch != "main":', controller)
         self.assertIn('"acoustic_plus_decoder_latency_p95_ms"', controller)
 

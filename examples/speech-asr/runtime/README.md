@@ -95,9 +95,14 @@ By default the controller uses
 
 The controller requires both the Oberon checkout and the edge human checkout to
 remain on `main` at the same commit. It verifies the frozen 1,273-record
-validation-manifest hash, validates the decoder artifact, stages only the
-selected v19 FP16 IR plus decoder artifact, and invokes a fresh edge evaluation
-under the existing exclusive MYRIAD lock. Decoder CPU affinity defaults to
+validation-manifest hash, validates the decoder artifact, stages the selected
+v19 FP16 IR plus decoder artifact, and mirrors the frozen validation manifest
+with every referenced audio clip into the isolated edge run directory. The
+dataset mirror is built with hard links on Oberon when possible, so it does not
+duplicate the local corpus before rsync. The controller then runs both the
+standard edge runtime preflight and a deployed-input/audio preflight before
+invoking a fresh edge evaluation under the existing exclusive MYRIAD lock.
+Decoder CPU affinity defaults to
 cores 0-3 with OpenMP/MKL/OpenBLAS restricted to one thread.
 
 The edge evaluator recomputes every physical MYRIAD inference for this

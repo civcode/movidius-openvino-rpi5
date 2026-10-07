@@ -6,9 +6,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import pathlib
+import shutil
 import subprocess
 import sys
+import tempfile
 from typing import Any
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -17,7 +20,10 @@ ROOT = SPEECH_ROOT.parents[1]
 sys.path.insert(0, str(SPEECH_ROOT / "python"))
 
 from speech_asr.cnn_ctc import load_vocab  # noqa: E402
-from speech_asr.contracts import validate_experiment_result  # noqa: E402
+from speech_asr.contracts import (  # noqa: E402
+    validate_experiment_result,
+    validate_speech_sample,
+)
 from speech_asr.ctc_beam import load_decoder_artifact  # noqa: E402
 from speech_asr.orchestration import (  # noqa: E402
     rsync_pull_command,
@@ -32,6 +38,7 @@ EXPECTED_MANIFEST_SHA256 = (
 )
 EXPECTED_WER = 0.5497732671129346
 EXPECTED_CER = 0.4634567759027818
+EXPECTED_SAMPLES = 1273
 BENCHMARK_ID = "ami-model-quality-v4-architecture-screen-v1-es2011-validation"
 
 
@@ -89,6 +96,76 @@ def load_json(path: pathlib.Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError(f"expected JSON object: {path}")
     return value
+
+
+def stage_validation_dataset(
+    manifest: pathlib.Path,
+) -> tuple[pathlib.Path, list[pathlib.Path], pathlib.Path]:
+    """Mirror the frozen manifest plus referenced audio into a temporary tree."""
+
+    ami_root = (ROOT / "work" / "speech-asr" / "ami").resolve()
+    manifest = manifest.resolve()
+    try:
+        manifest_relative = manifest.relative_to(ami_root)
+    except ValueError as exc:
+        raise ValueError(
+            f"validation manifest must live below frozen AMI root: {manifest}"
+        ) from exc
+
+    staging_parent = ROOT / "work" / "speech-asr"
+    staging_parent.mkdir(parents=True, exist_ok=True)
+    stage_root = pathlib.Path(
+        tempfile.mkdtemp(prefix="v19-deployed-dataset-", dir=staging_parent)
+    )
+    top_levels = {manifest_relative.parts[0]}
+    copied_audio: set[pathlib.Path] = set()
+    records = 0
+    try:
+        staged_manifest = stage_root / manifest_relative
+        staged_manifest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(manifest, staged_manifest)
+
+        with manifest.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                record = validate_speech_sample(json.loads(line))
+                records += 1
+                raw = pathlib.Path(record["audio"]["path"])
+                audio = raw if raw.is_absolute() else manifest.parent / raw
+                audio = audio.resolve()
+                try:
+                    relative = audio.relative_to(ami_root)
+                except ValueError as exc:
+                    raise ValueError(
+                        f"{record['id']}: validation audio escapes frozen AMI root: "
+                        f"{audio}"
+                    ) from exc
+                if not audio.is_file():
+                    raise ValueError(
+                        f"{record['id']}: validation audio missing: {audio}"
+                    )
+                if audio in copied_audio:
+                    continue
+                copied_audio.add(audio)
+                top_levels.add(relative.parts[0])
+                destination = stage_root / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    os.link(audio, destination)
+                except OSError:
+                    shutil.copy2(audio, destination)
+
+        if records != EXPECTED_SAMPLES:
+            raise ValueError(
+                f"validation manifest record count changed: "
+                f"{records} != {EXPECTED_SAMPLES}"
+            )
+        sources = [stage_root / name for name in sorted(top_levels)]
+        return stage_root, sources, manifest_relative
+    except Exception:
+        shutil.rmtree(stage_root, ignore_errors=True)
+        raise
 
 
 def main() -> int:
@@ -195,9 +272,50 @@ def main() -> int:
                 f"controller/edge revision mismatch: {local_head} != {remote_head}"
             )
 
+        run_id = (
+            f"{SOURCE_EXPERIMENT}-{SOURCE_ATTEMPT}-decoder-v1-"
+            f"{local_head[:8]}-{decoder_sha[:8]}"
+        )
+        remote_base = f"{remote_repo}/work/speech-asr/v19-deployed-eval/{run_id}"
+        remote_input = f"{remote_base}/input"
+        remote_dataset = f"{remote_base}/dataset/ami"
+        remote_cache = f"{remote_base}/cache"
+        remote_evidence = f"{remote_base}/evidence"
+        run_capture(
+            ssh_command(
+                args.worker,
+                [
+                    "mkdir",
+                    "-p",
+                    remote_input,
+                    remote_dataset,
+                    remote_cache,
+                    remote_evidence,
+                ],
+            )
+        )
+
+        stage_root, dataset_sources, manifest_relative = stage_validation_dataset(
+            manifest
+        )
+        try:
+            dataset_push = run_capture(
+                rsync_push_command(
+                    worker=args.worker,
+                    sources=dataset_sources,
+                    remote_dir=remote_dataset,
+                )
+            )
+            if dataset_push.stdout:
+                print(
+                    dataset_push.stdout,
+                    end="" if dataset_push.stdout.endswith("\n") else "\n",
+                )
+        finally:
+            shutil.rmtree(stage_root, ignore_errors=True)
+
         remote_manifest = (
-            f"{remote_repo}/work/speech-asr/ami/model-quality-v4/"
-            "validation.manifest.jsonl"
+            f"{remote_dataset}/{manifest_relative.as_posix()}"
         )
         remote_manifest_sha = remote_text(
             args.worker,
@@ -205,23 +323,9 @@ def main() -> int:
         ).split()[0]
         if remote_manifest_sha != EXPECTED_MANIFEST_SHA256:
             raise ValueError(
-                f"edge validation manifest hash changed: {remote_manifest_sha}"
+                f"edge staged validation manifest hash changed: "
+                f"{remote_manifest_sha}"
             )
-
-        run_id = (
-            f"{SOURCE_EXPERIMENT}-{SOURCE_ATTEMPT}-decoder-v1-"
-            f"{local_head[:8]}-{decoder_sha[:8]}"
-        )
-        remote_base = f"{remote_repo}/work/speech-asr/v19-deployed-eval/{run_id}"
-        remote_input = f"{remote_base}/input"
-        remote_cache = f"{remote_base}/cache"
-        remote_evidence = f"{remote_base}/evidence"
-        run_capture(
-            ssh_command(
-                args.worker,
-                ["mkdir", "-p", remote_input, remote_cache, remote_evidence],
-            )
-        )
         run_capture(
             rsync_push_command(
                 worker=args.worker,
@@ -232,6 +336,50 @@ def main() -> int:
 
         remote_decoder = f"{remote_input}/{decoder_artifact.name}"
         experiment_id = f"{SOURCE_EXPERIMENT}-deployed-decoder-v1"
+
+        remote_repo_prefix = remote_repo.rstrip("/") + "/"
+        if not remote_manifest.startswith(remote_repo_prefix):
+            raise ValueError("staged manifest is not below edge repository")
+        remote_manifest_relative = remote_manifest[len(remote_repo_prefix):]
+        edge_preflight = run_capture(
+            ssh_command(
+                args.worker,
+                [
+                    "bash",
+                    f"{remote_repo}/scripts/edge-speech-preflight.sh",
+                    "--manifest",
+                    remote_manifest_relative,
+                    "--manifest-sha256",
+                    EXPECTED_MANIFEST_SHA256,
+                ],
+            )
+        )
+        print(
+            edge_preflight.stdout,
+            end="" if edge_preflight.stdout.endswith("\n") else "\n",
+        )
+
+        deployed_preflight = run_capture(
+            ssh_command(
+                args.worker,
+                [
+                    "bash",
+                    f"{remote_repo}/scripts/evaluate-cnn-ctc-v19-deployed.sh",
+                    "--manifest",
+                    remote_manifest,
+                    "--ir-dir",
+                    remote_input,
+                    "--decoder-artifact",
+                    remote_decoder,
+                    "--preflight-only",
+                ],
+            )
+        )
+        print(
+            deployed_preflight.stdout,
+            end="" if deployed_preflight.stdout.endswith("\n") else "\n",
+        )
+
         command = [
             "bash",
             f"{remote_repo}/scripts/evaluate-cnn-ctc-v19-deployed.sh",
