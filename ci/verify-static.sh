@@ -1332,6 +1332,10 @@ grep -q 'MODEL_SPEC_SHA256 = "766a3851160bc4d6d1a5be8f27d45066accce9391683efc99e
 grep -q 'class NovoGrad' examples/speech-asr/training/novograd.py || fail 'cnn_ctc_v17 NovoGrad implementation missing'
 grep -q 'warmup_cosine_learning_rate' examples/speech-asr/training/train_cnn_ctc_v17.py || fail 'cnn_ctc_v17 warmup cosine schedule missing'
 grep -q 'MAX_SERVER_RESTARTS = 4' examples/speech-asr/evaluation/evaluate_cnn_ctc_v17.py || fail 'cnn_ctc_v17 persistent-server restart guard missing'
+grep -q -- '--resume-nonterminal' examples/speech-asr/tools/manage_experiment.py || fail 'experiment manager nonterminal resume flag missing'
+grep -q -- '"--resume-nonterminal"' examples/speech-asr/agent/run_experiment.py || fail 'experiment runner does not request nonterminal resume'
+grep -q 'load_recorded_local_execution' examples/speech-asr/agent/run_experiment.py || fail 'experiment runner local resume helper missing'
+grep -q 'load_recorded_remote_execution' examples/speech-asr/agent/run_experiment.py || fail 'experiment runner remote resume helper missing'
 grep -q '"max_cer": None' examples/speech-asr/agent/init_cnn_ctc_v17_quartznet_reference_training.py || fail 'cnn_ctc_v17 CER must be measured, not gated'
 grep -q '"max_latency_p95_ms": None' examples/speech-asr/agent/init_cnn_ctc_v17_quartznet_reference_training.py || fail 'cnn_ctc_v17 latency must be measured, not gated'
 
