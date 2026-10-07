@@ -1092,8 +1092,8 @@ Implemented deployment path:
 - export the untouched source weights to dynamic ONNX for semantic reference;
 - export a fixed 512-frame carrier ONNX and convert it to OpenVINO 2020.3 FP16;
 - reshape the carrier IR at runtime to each exact source padded time length;
-- require first-sample ONNX/MYRIAD frame argmax agreement `1.0` and maximum
-  frame TV <= `0.002`;
+- require first-sample ONNX/MYRIAD valid decoded-frame argmax agreement
+  `1.0` and maximum valid-frame TV <= `0.002`;
 - evaluate all 2,703 LibriSpeech dev-clean utterances;
 - require physical WER <= `0.05` and absolute WER drift <= `0.005` from the
   qualified PyTorch WER.

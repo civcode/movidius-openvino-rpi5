@@ -725,8 +725,8 @@ NeMo frontend must reproduce the full 2,703-utterance clean reference within
 
 Physical acceptance requires:
 
-- first-sample ONNX/MYRIAD frame argmax agreement `1.0`;
-- maximum frame total-variation distance <= `0.002`;
+- first-sample ONNX/MYRIAD valid decoded-frame argmax agreement `1.0`;
+- maximum valid decoded-frame total-variation distance <= `0.002`;
 - full dev-clean WER <= `0.05`;
 - absolute WER drift from the qualified PyTorch result <= `0.005`;
 - all 2,703 utterances;

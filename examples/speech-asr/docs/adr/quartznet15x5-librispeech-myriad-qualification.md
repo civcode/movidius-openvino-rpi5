@@ -86,8 +86,11 @@ the dynamic ONNX reference on the exact same NumPy feature tensor.
 
 Required:
 
-- frame argmax agreement exactly `1.0`;
-- maximum per-frame total-variation distance <= `0.002`.
+- valid decoded-frame argmax agreement exactly `1.0`;
+- maximum valid decoded-frame total-variation distance <= `0.002`.
+
+The full padded tensor comparison is also recorded diagnostically, but padded
+tail frames are not decoded and therefore do not gate deployment quality.
 
 This is the same probability-space tolerance used for pretrained QuartzNet
 MYRIAD semantic checks elsewhere in the repository.
