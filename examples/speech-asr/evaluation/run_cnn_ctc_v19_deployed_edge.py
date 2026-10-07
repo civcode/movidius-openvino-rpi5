@@ -99,7 +99,11 @@ def main() -> int:
         default=ROOT / "work" / "speech-asr" / "experiments" / SOURCE_EXPERIMENT,
     )
     parser.add_argument("--attempt", default=SOURCE_ATTEMPT)
-    parser.add_argument("--decoder-artifact", type=pathlib.Path, required=True)
+    parser.add_argument(
+        "--decoder-artifact",
+        type=pathlib.Path,
+        help="override the frozen attempt results/decoder-artifact-v1.json",
+    )
     parser.add_argument("--worker", default="edge")
     parser.add_argument("--edge-repo")
     parser.add_argument("--cpuset", default="0-3")
@@ -123,7 +127,11 @@ def main() -> int:
         ir_dir = attempt_dir / "build" / "cnn_ctc_v19" / "openvino" / "fp16"
         xml = ir_dir / "cnn_ctc_v19.xml"
         binary = ir_dir / "cnn_ctc_v19.bin"
-        decoder_artifact = args.decoder_artifact.resolve()
+        decoder_artifact = (
+            args.decoder_artifact.resolve()
+            if args.decoder_artifact is not None
+            else attempt_dir / "results" / "decoder-artifact-v1.json"
+        )
         manifest = (
             ROOT
             / "work"

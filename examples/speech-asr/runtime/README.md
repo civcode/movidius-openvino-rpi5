@@ -86,9 +86,12 @@ ATTEMPT=attempt-0002
 
 ./scripts/run-cnn-ctc-v19-deployed-edge.sh \
   --experiment "$EXP" \
-  --attempt "$ATTEMPT" \
-  --decoder-artifact "$ARTIFACT"
+  --attempt "$ATTEMPT"
 ```
+
+By default the controller uses
+`$EXP/attempts/$ATTEMPT/results/decoder-artifact-v1.json`; pass
+`--decoder-artifact` only to override that path.
 
 The controller requires both the Oberon checkout and the edge human checkout to
 remain on `main` at the same commit. It verifies the frozen 1,273-record
