@@ -1482,6 +1482,12 @@ grep -q '"schema": "speech-asr/ctc-decoder-sweep"' examples/speech-asr/evaluatio
 test -x scripts/freeze-cnn-ctc-v19-decoder.sh || fail 'v19 decoder artifact freezer missing'
 test -x scripts/decode-cnn-ctc-v19-logits.sh || fail 'v19 runtime decoder entry point missing'
 test -x scripts/benchmark-cnn-ctc-v19-decoder.sh || fail 'v19 CPU decoder benchmark entry point missing'
+test -x scripts/evaluate-cnn-ctc-v19-deployed.sh || fail 'v19 deployed decoder evaluator entry point missing'
+test -f examples/speech-asr/evaluation/run_cnn_ctc_v19_deployed_edge.py || fail 'v19 deployed decoder edge controller missing'
+grep -q 'flock -n 9' scripts/evaluate-cnn-ctc-v19-deployed.sh || fail 'v19 deployed decoder evaluator lacks exclusive MYRIAD lock'
+grep -q 'fbd72a648826b2e200f9244b4dc73be425cada2e304be92d513f7033a8de4088' scripts/evaluate-cnn-ctc-v19-deployed.sh || fail 'v19 deployed decoder evaluator validation identity changed'
+grep -q 'rsync_push_command' examples/speech-asr/evaluation/run_cnn_ctc_v19_deployed_edge.py || fail 'v19 deployed decoder controller does not stage artifacts'
+grep -q 'rsync_pull_command' examples/speech-asr/evaluation/run_cnn_ctc_v19_deployed_edge.py || fail 'v19 deployed decoder controller does not collect evidence'
 grep -q 'def build_decoder_artifact' examples/speech-asr/python/speech_asr/ctc_beam.py || fail 'v19 decoder artifact builder missing'
 grep -q 'def decode_with_artifact' examples/speech-asr/python/speech_asr/ctc_beam.py || fail 'v19 runtime artifact decode missing'
 grep -q 'class FrozenCtcDecoder' examples/speech-asr/python/speech_asr/ctc_beam.py || fail 'v19 reusable runtime decoder missing'
@@ -1647,6 +1653,7 @@ for name in [
     "examples/speech-asr/evaluation/evaluate_cnn_ctc_v19.py",
     "examples/speech-asr/evaluation/tune_cnn_ctc_v19_decoder.py",
     "examples/speech-asr/evaluation/benchmark_cnn_ctc_v19_decoder.py",
+    "examples/speech-asr/evaluation/run_cnn_ctc_v19_deployed_edge.py",
     "examples/speech-asr/runtime/decode_cnn_ctc_v19_logits.py",
     "examples/speech-asr/tools/freeze_cnn_ctc_v19_decoder.py",
     "examples/speech-asr/evaluation/evaluate_frozen_cnn_ctc_v3_reference.py",

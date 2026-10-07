@@ -196,12 +196,32 @@ class CtcBeamTests(unittest.TestCase):
         self.assertIn("FrozenCtcDecoder.from_artifact(", runtime)
         self.assertIn("runtime_decoder.decode(", runtime)
 
+    def test_deployed_decoder_edge_runner_is_guarded(self):
+        wrapper = (
+            ROOT / "scripts" / "evaluate-cnn-ctc-v19-deployed.sh"
+        ).read_text(encoding="utf-8")
+        controller = (
+            SPEECH / "evaluation" / "run_cnn_ctc_v19_deployed_edge.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("flock -n 9", wrapper)
+        self.assertIn('EXPECTED_SAMPLES=1273', wrapper)
+        self.assertIn(
+            'EXPECTED_MANIFEST_SHA256="fbd72a648826b2e200f9244b4dc73be425cada2e304be92d513f7033a8de4088"',
+            wrapper,
+        )
+        self.assertIn("--fresh", wrapper)
+        self.assertIn("rsync_push_command(", controller)
+        self.assertIn("rsync_pull_command(", controller)
+        self.assertIn('if branch != "main":', controller)
+        self.assertIn('"acoustic_plus_decoder_latency_p95_ms"', controller)
+
     def test_decoder_entrypoints_exist(self):
         for name in (
             "tune-cnn-ctc-v19-decoder.sh",
             "freeze-cnn-ctc-v19-decoder.sh",
             "decode-cnn-ctc-v19-logits.sh",
             "benchmark-cnn-ctc-v19-decoder.sh",
+            "evaluate-cnn-ctc-v19-deployed.sh",
         ):
             self.assertTrue((ROOT / "scripts" / name).is_file())
 
