@@ -134,10 +134,20 @@ class CnnCtcV17Tests(unittest.TestCase):
         evaluator = (
             SPEECH / "evaluation" / "evaluate_cnn_ctc_v17.py"
         ).read_text(encoding="utf-8")
+        controller = (
+            SPEECH / "agent" / "run_experiment.py"
+        ).read_text(encoding="utf-8")
+        manager = (
+            SPEECH / "tools" / "manage_experiment.py"
+        ).read_text(encoding="utf-8")
         self.assertIn("NovoGrad(", trainer)
         self.assertIn("warmup_cosine_learning_rate(", trainer)
         self.assertIn("MAX_SERVER_RESTARTS = 4", evaluator)
         self.assertIn("infer_with_restart(", evaluator)
+        self.assertIn('"--resume-nonterminal"', controller)
+        self.assertIn("load_recorded_local_execution(", controller)
+        self.assertIn("load_recorded_remote_execution(", controller)
+        self.assertIn("--resume-nonterminal", manager)
 
     def test_entrypoints_exist(self):
         for name in (
