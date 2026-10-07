@@ -186,6 +186,11 @@ V17_ARCHITECTURE = {
     "dropout": 0.0,
 }
 
+V18_ARCHITECTURE = {
+    **V17_ARCHITECTURE,
+    "batchnorm_eps": 0.001,
+}
+
 
 def executor_model_basename(model_id: str) -> str:
     if model_id in {
@@ -206,6 +211,7 @@ def executor_model_basename(model_id: str) -> str:
         "cnn_ctc_v15",
         "cnn_ctc_v16",
         "cnn_ctc_v17",
+        "cnn_ctc_v18",
     }:
         return model_id
     raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
@@ -234,12 +240,17 @@ def validate_model_executor_request(
         "cnn_ctc_v15",
         "cnn_ctc_v16",
         "cnn_ctc_v17",
+        "cnn_ctc_v18",
     }:
         raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
     if model_spec.get("family") != "cnn_ctc":
         raise ValueError(f"{model_id} executor requires family 'cnn_ctc'")
     expected_frontend = {
-        "kind": "logmel-v2" if model_id == "cnn_ctc_v4" else "logmel-v1"
+        "kind": (
+            "logmel-v3"
+            if model_id == "cnn_ctc_v18"
+            else ("logmel-v2" if model_id == "cnn_ctc_v4" else "logmel-v1")
+        )
     }
     if model_spec.get("frontend") != expected_frontend:
         raise ValueError(
@@ -265,6 +276,7 @@ def validate_model_executor_request(
         "cnn_ctc_v15": V15_ARCHITECTURE,
         "cnn_ctc_v16": V16_ARCHITECTURE,
         "cnn_ctc_v17": V17_ARCHITECTURE,
+        "cnn_ctc_v18": V18_ARCHITECTURE,
     }[model_id]
     if model_spec.get("architecture") != expected_architecture:
         raise ValueError(
@@ -278,7 +290,9 @@ def validate_model_executor_request(
     optimizer = train_config.get("optimizer")
     if not isinstance(optimizer, Mapping):
         raise ValueError("training optimizer declaration is missing")
-    expected_optimizer_kind = "novograd" if model_id == "cnn_ctc_v17" else "adam"
+    expected_optimizer_kind = (
+        "novograd" if model_id in {"cnn_ctc_v17", "cnn_ctc_v18"} else "adam"
+    )
     if dict(optimizer) != {
         "kind": expected_optimizer_kind,
         "learning_rate": optimizer.get("learning_rate"),
@@ -367,6 +381,7 @@ def compatibility_probe_command(
         "cnn_ctc_v15",
         "cnn_ctc_v16",
         "cnn_ctc_v17",
+        "cnn_ctc_v18",
     }:
         return [
             str(root / "scripts" / f"probe-{model_id.replace('_', '-')}.sh"),
@@ -406,6 +421,7 @@ def training_command(
         "cnn_ctc_v15": "train-cnn-ctc-v15.sh",
         "cnn_ctc_v16": "train-cnn-ctc-v16.sh",
         "cnn_ctc_v17": "train-cnn-ctc-v17.sh",
+        "cnn_ctc_v18": "train-cnn-ctc-v18.sh",
     }.get(model_id)
     if executable is None:
         raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
