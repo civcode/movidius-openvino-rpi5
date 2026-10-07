@@ -79,9 +79,19 @@ for path in     "$MANIFEST"     "$IR_DIR/quartznet15x5_nvidia_ref.xml"     "$IR_
     [[ -s "$path" ]] || { echo "required file missing or empty: $path" >&2; exit 2; }
 done
 
-"$ROOT/scripts/python-apps.sh" - <<'PY'
-import numpy, onnxruntime, soundfile
+"$ROOT/scripts/python-apps.sh" - "$ROOT" <<'PY'
+import pathlib
+import sys
+
+import numpy
+import onnxruntime
+import soundfile
+
+root = pathlib.Path(sys.argv[1])
+sys.path.insert(0, str(root / "examples/speech-asr/python"))
+
 from speech_asr.quartznet_fixed512 import FIXED_TENSOR_FRAMES
+
 assert FIXED_TENSOR_FRAMES == 512
 print("fixed512 edge Python preflight: PASS")
 PY
