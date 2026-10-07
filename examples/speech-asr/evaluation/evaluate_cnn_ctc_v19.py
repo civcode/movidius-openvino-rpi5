@@ -36,7 +36,7 @@ from speech_asr.cnn_ctc import (  # noqa: E402
 )
 from speech_asr.cnn_ctc_frontend import logmel_features  # noqa: E402
 from speech_asr.ctc_beam import (  # noqa: E402
-    decode_with_artifact,
+    FrozenCtcDecoder,
     load_decoder_artifact,
 )
 from speech_asr.contracts import validate_experiment_result, validate_speech_sample  # noqa: E402
@@ -575,6 +575,11 @@ def main() -> int:
             if args.decoder_artifact is not None
             else None
         )
+        runtime_decoder = (
+            FrozenCtcDecoder.from_artifact(decoder_artifact, vocab=vocab)
+            if decoder_artifact is not None
+            else None
+        )
         if args.progress_interval < 0:
             raise ValueError("progress_interval must be >= 0")
         xml = args.ir_dir / "cnn_ctc_v19.xml"
@@ -886,10 +891,9 @@ def main() -> int:
                 hypothesis = decoder["hypothesis"]
             else:
                 decode_started = time.perf_counter()
-                deployed_decoder = decode_with_artifact(
+                deployed_decoder = runtime_decoder.decode(
                     logits[0, :output_frames, :],
                     vocab,
-                    decoder_artifact,
                 )
                 decode_ms = (time.perf_counter() - decode_started) * 1000.0
                 decoder_latencies.append(decode_ms)
