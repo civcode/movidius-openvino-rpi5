@@ -240,8 +240,13 @@ def remote_run(
     argv: list[str],
     *,
     log_path: pathlib.Path,
+    stream_output: bool = False,
 ) -> subprocess.CompletedProcess[str]:
-    return run_process(ssh_command(worker, argv), log_path=log_path)
+    return run_process(
+        ssh_command(worker, argv),
+        log_path=log_path,
+        stream_output=stream_output,
+    )
 
 
 def terminalize(
@@ -872,6 +877,7 @@ def execute_remote(
             output,
         ],
         log_path=logs_dir / "edge-worker-ssh.log",
+        stream_output=True,
     )
 
     collected = experiment_dir / "attempts" / attempt_id / "edge"
