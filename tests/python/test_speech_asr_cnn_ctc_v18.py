@@ -43,7 +43,7 @@ def train_config():
         "pretrained_source": {
             "path": "work/speech-asr/pretrained/quartznet15x5-en-base-v2/QuartzNet15x5-En-Base.nemo",
             "size_bytes": 71083664,
-            "sha512": "74e8284e77098906afb7a15a861ef60ec14db1a4acb206fa719492fa43050ad69a91c245652c05c5f0ded38b5903ed55",
+            "sha384": "74e8284e77098906afb7a15a861ef60ec14db1a4acb206fa719492fa43050ad69a91c245652c05c5f0ded38b5903ed55",
         },
         "training_manifest": {
             "id": "ami-model-quality-v4-architecture-screen-v1-train",
@@ -80,7 +80,7 @@ class CnnCtcV18Tests(unittest.TestCase):
             "per_mel_bin_mean_std_valid_zero_pad",
         )
         self.assertEqual(
-            transfer["source_sha512"],
+            transfer["source_sha384"],
             "74e8284e77098906afb7a15a861ef60ec14db1a4acb206fa719492fa43050ad69a91c245652c05c5f0ded38b5903ed55",
         )
         self.assertEqual(transfer["source_size_bytes"], 71083664)
@@ -129,13 +129,13 @@ class CnnCtcV18Tests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn('DEFAULT_PARENT = "exp-dbcda9a6f7ae7d7f"', source)
         self.assertIn(
-            'MODEL_SPEC_SHA256 = "4cf0403f533563e7977663b3ccbfc17450ed55be426457d53c5ead1fbf2cf6f8"',
+            'MODEL_SPEC_SHA256 = "008416f73aa2f90e1eb7b60cb2021175cbc0826b09810aed9aebbe41fe6f422c"',
             source,
         )
         self.assertIn("V17_PHYSICAL_CER = 0.9365892990842596", source)
         self.assertIn("PRETRAINED_SIZE = 71083664", source)
-        self.assertIn("PRETRAINED_SHA512 =", source)
-        self.assertIn("sha512_path(PRETRAINED)", source)
+        self.assertIn("PRETRAINED_SHA384 =", source)
+        self.assertIn("sha384_path(PRETRAINED)", source)
         self.assertIn("PRETRAINED_IMPORT", source)
         self.assertIn('"speech-asr/pretrained-import-verification"', source)
         self.assertIn('"kind": "novograd"', source)
@@ -163,7 +163,7 @@ class CnnCtcV18Tests(unittest.TestCase):
         self.assertIn('"pretrained_initialization"', trainer)
         self.assertIn('"initial_validation"', trainer)
         self.assertIn("verify_source(archive)", importer)
-        self.assertIn("SOURCE_SHA512", importer)
+        self.assertIn("SOURCE_SHA384", importer)
         self.assertIn("shared_decoder_symbols", importer)
         self.assertIn("shared_decoder_symbol_count", verifier)
         self.assertIn("encoder_source_tensors_used", verifier)
