@@ -248,7 +248,10 @@ if grep -q 'prepare-cnn-ctc-v2.sh' scripts/train-cnn-ctc-v3.sh; then
 fi
 grep -q 'cnn_ctc_v3.xml' scripts/train-cnn-ctc-v3.sh || fail 'cnn_ctc_v3 full pipeline does not assert v3 XML output'
 grep -q 'PRETRAINING_MYRIAD_MAX_ABS_ERROR = 0.01' examples/speech-asr/python/speech_asr/orchestration.py || fail 'pretraining MYRIAD numerical tolerance changed'
+grep -q 'PRETRAINING_MYRIAD_PRETRAINED_MAX_FRAME_TOTAL_VARIATION = 0.002' examples/speech-asr/python/speech_asr/orchestration.py || fail 'pretrained MYRIAD probability tolerance changed'
+grep -q 'pretrained-semantic-parity-v1' examples/speech-asr/python/speech_asr/orchestration.py || fail 'pretrained MYRIAD semantic gate missing'
 grep -q 'pretraining_myriad_compatibility' examples/speech-asr/agent/run_experiment.py || fail 'controller lacks numerical pretraining MYRIAD gate'
+grep -q 'model_id=model_id' examples/speech-asr/agent/run_experiment.py || fail 'controller does not select model-aware MYRIAD gate'
 if grep -q 'agreement < 0.99' examples/speech-asr/agent/run_experiment.py; then
     fail 'initialized MYRIAD probe must not use brittle argmax threshold'
 fi
