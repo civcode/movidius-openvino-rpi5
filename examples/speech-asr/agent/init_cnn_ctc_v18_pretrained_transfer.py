@@ -294,6 +294,11 @@ def main() -> int:
             "max_samples": None,
             "checkpoint_selection": "validation_cer",
             "optimizer": {"kind": "novograd", "learning_rate": 0.001},
+            "pretrained_source": {
+                "path": repo_relative(PRETRAINED),
+                "size_bytes": PRETRAINED_SIZE,
+                "sha512": PRETRAINED_SHA512,
+            },
             "training_manifest": {
                 "id": "ami-model-quality-v4-architecture-screen-v1-train",
                 "path": repo_relative(SCREEN_MANIFEST),
