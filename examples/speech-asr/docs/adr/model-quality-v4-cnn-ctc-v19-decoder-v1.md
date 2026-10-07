@@ -1,6 +1,6 @@
 # ADR: freeze cnn_ctc_v19 acoustics and add CPU CTC beam/LM decoding
 
-Status: implemented; decoder sweep execution pending
+Status: selected decoder frozen; Raspberry Pi CPU latency reproof pending
 Date: 2026-10-07
 Acoustic reference: `exp-f4adb44ab833e896/attempt-0002`
 
@@ -49,6 +49,38 @@ The sweep must:
 7. record CPU decoder p50/p95/mean latency and wall time for every candidate.
 
 No held-out corpus is used in this decoder-development sweep.
+
+## Sweep result
+
+The completed 1,273-sample sweep reproduced the physical greedy baseline
+exactly at WER `0.5985748218527316` and CER `0.46230490122674656`.
+
+Beam search alone did not materially improve WER. Beam width 8 was the best
+beam-only point at WER `0.5974951414381343`, CER
+`0.457582215055002`, and Oberon decoder p95 `28.727534600329808 ms`.
+
+The selected decoder is:
+
+- prefix beam width: `8`;
+- acoustic token top-k per frame: `12`;
+- character LM: additive-smoothed suffix-backoff 5-gram;
+- LM weight: `0.30`;
+- word-boundary bonus: `-0.20`;
+- validation WER: `0.5497732671129346`;
+- validation CER: `0.4634567759027818`;
+- Oberon decoder p50/p95: `13.642333 / 48.499758 ms`.
+
+Relative to greedy, WER improves by about 8.15%. CER is effectively flat but
+slightly worse by `0.001151874676035225`, so selection is explicitly a
+word-error optimization.
+
+The selected profile is frozen into a versioned decoder artifact containing the
+trained LM counts plus sweep/model/dataset provenance. The v19 model spec and
+OpenVINO IR remain unchanged.
+
+Before declaring the full deployed system latency, re-run the CPU-only decoder
+benchmark on the Raspberry Pi 5. Oberon decoder timings are development
+evidence, not Pi runtime latency.
 
 ## CPU execution policy
 
