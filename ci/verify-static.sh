@@ -1551,6 +1551,7 @@ grep -q 'QUALIFIED_WER = 0.037939781625675524' examples/speech-asr/evaluation/ev
 grep -q 'MAX_WER = 0.05' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py || fail 'QuartzNet MYRIAD WER ceiling changed'
 grep -q 'MAX_ABS_WER_DELTA = 0.005' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py || fail 'QuartzNet MYRIAD WER-delta gate changed'
 grep -q 'DIAGNOSTIC_MAX_FRAME_TOTAL_VARIATION = 0.002' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py || fail 'QuartzNet MYRIAD probability-drift diagnostic reference changed'
+grep -q -- '"--tensor-frames"' examples/speech-asr/evaluation/diagnose_quartznet15x5_reference_myriad_static.py || fail 'QuartzNet static diagnostic lacks exact tensor-frame selection'
 grep -q '"gating": False' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py || fail 'QuartzNet MYRIAD probability drift unexpectedly became a hard gate'
 grep -q 'exact-time-runtime-reshape-v1' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py || fail 'QuartzNet MYRIAD exact-time execution policy changed'
 grep -q -- '"--reshape-time"' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py || fail 'QuartzNet MYRIAD evaluator does not request exact time reshape'

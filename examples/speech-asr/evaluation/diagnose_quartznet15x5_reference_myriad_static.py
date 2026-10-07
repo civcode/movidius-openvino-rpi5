@@ -125,7 +125,16 @@ def require_main_clean() -> str:
     return git_head()
 
 
-def select_record(manifest: pathlib.Path, sample_id: str | None) -> dict:
+def select_record(
+    manifest: pathlib.Path,
+    *,
+    sample_id: str | None,
+    tensor_frames: int | None,
+    spec: dict,
+) -> dict:
+    if sample_id is not None and tensor_frames is not None:
+        raise ValueError("--sample-id and --tensor-frames are mutually exclusive")
+
     first: dict | None = None
     for line in manifest.read_text(encoding="utf-8").splitlines():
         if not line.strip():
@@ -137,8 +146,20 @@ def select_record(manifest: pathlib.Path, sample_id: str | None) -> dict:
             first = value
         if sample_id is not None and str(value.get("id")) == sample_id:
             return value
+        if tensor_frames is not None:
+            _, observed_tensor_frames = reference_feature_lengths(
+                int(value["sample_count"]),
+                spec,
+            )
+            if observed_tensor_frames == tensor_frames:
+                return value
+
     if sample_id is not None:
         raise ValueError(f"sample id not found in manifest: {sample_id}")
+    if tensor_frames is not None:
+        raise ValueError(
+            f"no manifest record has tensor_feature_frames={tensor_frames}"
+        )
     if first is None:
         raise ValueError("manifest is empty")
     return first
@@ -175,6 +196,11 @@ def main() -> int:
         "--sample-id",
         help="LibriSpeech utterance id to diagnose; defaults to the first manifest record",
     )
+    parser.add_argument(
+        "--tensor-frames",
+        type=int,
+        help="diagnose the first manifest record with this exact padded feature length",
+    )
     parser.add_argument("--output-dir", type=pathlib.Path, default=DEFAULT_OUTPUT_DIR)
     args = parser.parse_args()
 
@@ -185,7 +211,14 @@ def main() -> int:
                 raise ValueError(f"required input missing: {path}")
 
         spec = json.loads(args.spec.read_text(encoding="utf-8"))
-        record = select_record(args.manifest, args.sample_id)
+        if args.tensor_frames is not None and args.tensor_frames <= 0:
+            raise ValueError("--tensor-frames must be positive")
+        record = select_record(
+            args.manifest,
+            sample_id=args.sample_id,
+            tensor_frames=args.tensor_frames,
+            spec=spec,
+        )
         sample_count = int(record["sample_count"])
         valid_frames, tensor_frames = reference_feature_lengths(sample_count, spec)
         valid_out = output_frames(valid_frames, spec)

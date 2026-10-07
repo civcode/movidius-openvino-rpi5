@@ -1,6 +1,6 @@
 # ADR: qualify the clean QuartzNet reference on Pi 5 + MA2450/MYRIAD
 
-Status: implemented; physical measurement pending
+Status: physical qualification completed; long-shape MYRIAD failure under characterization
 Date: 2026-10-07
 Reference model: `quartznet15x5_nvidia_ref`
 
@@ -103,6 +103,23 @@ is attributed to OpenVINO FP16/MYRIAD numerical execution rather than the
 variable-shape mechanism. The earlier `0.002` probability tolerance remains a
 diagnostic reference only. Full-corpus greedy WER/CER is the authoritative
 semantic deployment test.
+
+A later exact-static diagnostic isolated a qualitatively different failure at
+`T=3264`. The ONNX export remained bit-identical between dynamic and static
+graphs. The same OpenVINO 2020.3 FP16 IR produced:
+
+- OpenVINO CPU: 1 argmax mismatch in 1,624 valid frames
+  (`0.999384236453202` agreement), maximum TV about `0.01578`;
+- MYRIAD/MA2450: 1,624 argmax mismatches in 1,624 valid frames
+  (`0.0` agreement), maximum TV `1.0`, logits reaching `626.5`.
+
+The CPU result exonerates ONNX export, Model Optimizer, and the generated FP16
+IR as the cause of the catastrophic long-shape corruption. Runtime reshape is
+also exonerated because this diagnostic used a model exported and converted
+directly at `T=3264`. The remaining fault domain is the MYRIAD
+compiler/runtime/device execution path for large QuartzNet temporal tensors.
+The exact onset boundary is characterized separately; `T=2048` is not
+declared a hardware limit without that boundary evidence.
 
 ## Full clean-speech quality gate
 
