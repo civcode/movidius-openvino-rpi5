@@ -518,6 +518,12 @@ def main() -> int:
     )
     parser.add_argument("--platform", required=True, choices=("armv7", "arm64", "amd64"))
     parser.add_argument(
+        "--progress-interval",
+        type=int,
+        default=25,
+        help="emit corpus-evaluation progress every N manifest records; 0 disables",
+    )
+    parser.add_argument(
         "--output",
         type=pathlib.Path,
         default=ROOT / "work" / "speech-asr" / "cnn_ctc_v19" / "ami-smoke-result.json",
@@ -528,6 +534,8 @@ def main() -> int:
     try:
         spec = load_spec(args.spec)
         vocab = load_vocab(args.vocab)
+        if args.progress_interval < 0:
+            raise ValueError("progress_interval must be >= 0")
         xml = args.ir_dir / "cnn_ctc_v19.xml"
         binary = args.ir_dir / "cnn_ctc_v19.bin"
         for path in (args.manifest, xml, binary):
@@ -566,6 +574,7 @@ def main() -> int:
             for line in args.manifest.read_text(encoding="utf-8").splitlines()
             if line.strip()
         )
+        evaluation_started = time.monotonic()
         print(
             f"[myriad-eval] manifest_records={manifest_total} "
             f"execution_mode={EXECUTION_MODE} resumable=true",
@@ -863,12 +872,27 @@ def main() -> int:
                     },
                 }
             )
-            if manifest_samples == 1 or manifest_samples % 100 == 0:
+            if (
+                args.progress_interval > 0
+                and (
+                    manifest_samples == 1
+                    or manifest_samples % args.progress_interval == 0
+                    or manifest_samples == manifest_total
+                )
+            ):
+                elapsed = time.monotonic() - evaluation_started
+                records_per_second = manifest_samples / max(elapsed, 1e-9)
+                remaining = manifest_total - manifest_samples
+                eta_seconds = remaining / max(records_per_second, 1e-9)
                 print(
                     "[myriad-eval] "
                     f"processed={manifest_samples}/{manifest_total} "
+                    f"percent={100.0 * manifest_samples / max(1, manifest_total):.1f} "
                     f"evaluated={len(per_sample)} reused={reused_samples} "
-                    f"new={new_samples} sessions={len(session_loads)}",
+                    f"new={new_samples} sessions={len(session_loads)} "
+                    f"restarts={server_restarts} "
+                    f"rate={records_per_second:.2f}/s "
+                    f"elapsed={elapsed:.1f}s eta={eta_seconds:.1f}s",
                     flush=True,
                 )
 
