@@ -132,7 +132,14 @@ case "${MODE}" in
         ;;
     custom)
         DOCKER_ARGS+=(-v "${ROOT}/work:/work")
-        ENTRY=(/opt/openvino/bin/hello_myriad --device MYRIAD "$@")
+        custom_device_args=(--device MYRIAD)
+        for arg in "$@"; do
+            if [[ "${arg}" == "--device" ]]; then
+                custom_device_args=()
+                break
+            fi
+        done
+        ENTRY=(/opt/openvino/bin/hello_myriad "${custom_device_args[@]}" "$@")
         ;;
     custom-server)
         # Binary tensor protocol: container-entry.sh must not write its banner
