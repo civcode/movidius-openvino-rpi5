@@ -194,7 +194,7 @@ V18_ARCHITECTURE = {
 V18_PRETRAINED_SOURCE = {
     "path": "work/speech-asr/pretrained/quartznet15x5-en-base-v2/QuartzNet15x5-En-Base.nemo",
     "size_bytes": 71083664,
-    "sha512": "74e8284e77098906afb7a15a861ef60ec14db1a4acb206fa719492fa43050ad69a91c245652c05c5f0ded38b5903ed55",
+    "sha384": "74e8284e77098906afb7a15a861ef60ec14db1a4acb206fa719492fa43050ad69a91c245652c05c5f0ded38b5903ed55",
 }
 
 
