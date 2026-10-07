@@ -306,35 +306,36 @@ def main() -> int:
             "version": 1,
             "title": "cnn_ctc_v19 conservative pretrained QuartzNet fine-tuning",
             "hypothesis": (
-                "cnn_ctc_v18 proved the pretrained QuartzNet start is strong on AMI (epoch-zero "
-                "validation CER 0.5776651500316765) but the batch-1, 1e-3 fine-tuning run "
-                "catastrophically forgot that representation. Freezing pretrained BatchNorm "
-                "running statistics, increasing the batch to 8, using 1e-4 cosine fine-tuning, "
-                "and allowing epoch zero to win checkpoint selection should preserve or improve "
-                "the transferred acoustic model."
+                "cnn_ctc_v18 proved the pretrained QuartzNet start is strong on AMI "
+                "(epoch-zero validation CER 0.5776651500316765) but batch-1, 1e-3 "
+                "fine-tuning catastrophically forgot that representation. Freezing "
+                "pretrained BatchNorm running statistics, increasing the batch to 8, "
+                "using 1e-4 cosine fine-tuning, and allowing epoch zero to win "
+                "checkpoint selection should preserve or improve the transfer baseline."
             ),
             "rationale": (
-                "v17 completed with physical CER 0.9365892990842596 and p95 latency 395.7917298 ms. "
-                "The pinned NVIDIA/Open Model Zoo checkpoint is the same QuartzNet-15x5 family. "
-                "Its source alphabet has 29 CTC symbols, all of which map into the project's "
-                "39-symbol vocabulary; only digits remain newly initialized."
+                "v18 started at validation CER 0.5776651500316765 / WER "
+                "0.7393651479162168, but its best post-update validation CER was only "
+                "0.9003628405229511 and the deployed checkpoint reached physical CER "
+                "0.8975407475666648. v18 epoch 1 also observed a pre-clip gradient norm "
+                "above 222k while BatchNorm running statistics were updated from "
+                "single-sample batches."
             ),
             "changes": [
-                f"parent to completed v17 evidence experiment {DEFAULT_PARENT}",
-                "use the pinned NVIDIA QuartzNet15x5Base-En v2 NeMo archive with exact size and SHA-384 verification",
-                "initialize the full QuartzNet encoder from pretrained tensors",
-                "remap all 29 shared source CTC symbols into the 39-symbol project projection and retain seeded initialization only for digits",
-                "align the acoustic frontend to 20 ms Hann, pre-emphasis 0.97, Slaney mel and per-feature mean/std normalization",
-                "align BatchNorm epsilon to 0.001 while retaining the same convolution/channel/stride/dilation topology",
-                "fine-tune all parameters with NovoGrad at peak learning rate 0.001, betas 0.95/0.25 and weight decay 0.001",
-                "use 12% warmup plus cosine decay to 1e-6",
-                "keep the frozen 12-epoch AMI architecture-screen train/validation manifests and validation-CER checkpoint selection",
-                "record zero-step pretrained validation metrics before the first optimizer update",
-                "re-prove ONNX, OpenVINO 2020.3 and physical MYRIAD numerical compatibility before training",
+                f"parent to completed v18 evidence experiment {DEFAULT_PARENT}",
+                "keep the exact pinned pretrained source, frontend, vocabulary and QuartzNet inference topology",
+                "increase fine-tuning batch size from 1 to 8",
+                "freeze BatchNorm running mean/variance statistics at pretrained values while keeping affine parameters trainable",
+                "reduce NovoGrad peak learning rate from 1e-3 to 1e-4",
+                "remove warmup and use cosine decay from 1e-4 to 1e-6",
+                "treat zero-step pretrained validation as checkpoint epoch 0 so fine-tuning cannot replace it with a worse checkpoint",
+                "keep the frozen 12-epoch AMI architecture-screen manifests and validation-CER selection",
+                "re-prove ONNX, OpenVINO 2020.3 and physical MYRIAD numerical compatibility",
             ],
             "notes": (
-                "No sealed held-out evidence is used. CER/WER/latency remain measured rather than "
-                "hard-gated; exact numerical toolchain agreement remains a hard gate."
+                "No sealed held-out evidence is used. CER/WER/latency remain measured "
+                "rather than hard-gated. The v18 semantic MYRIAD pretrained-model gate "
+                "is retained unchanged."
             ),
         }
         experiment_model = {
@@ -428,12 +429,14 @@ def main() -> int:
         return 2
 
     output = json.loads(proc.stdout)
-    output["pretrained_transfer_reference"] = {
+    output["conservative_transfer_reference"] = {
         "parent": DEFAULT_PARENT,
         "attempt": PARENT_ATTEMPT,
-        "v17_best_validation_cer": parent["training"]["best_validation_cer"],
-        "v17_physical_cer": parent["summary"]["metrics"]["cer"],
-        "v17_physical_p95_ms": parent["summary"]["metrics"]["inference_latency_p95_ms"],
+        "v18_initial_validation_cer": parent["training"]["initial_validation"]["cer"],
+        "v18_initial_validation_wer": parent["training"]["initial_validation"]["wer"],
+        "v18_best_validation_cer": parent["training"]["best_validation_cer"],
+        "v18_physical_cer": parent["summary"]["metrics"]["cer"],
+        "v18_physical_p95_ms": parent["summary"]["metrics"]["inference_latency_p95_ms"],
         "pretrained": pretrained,
         "model_spec_sha256": MODEL_SPEC_SHA256,
         "optimizer": "novograd",
