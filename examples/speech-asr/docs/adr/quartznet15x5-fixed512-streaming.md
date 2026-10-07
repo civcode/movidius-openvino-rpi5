@@ -1,6 +1,6 @@
 # ADR: fixed-T=512 QuartzNet streaming on MA2450
 
-Status: implemented; physical WER qualification pending
+Status: implemented; 200-utterance physical diagnostic passed; full WER qualification pending
 Date: 2026-10-07
 
 ## Context
@@ -55,6 +55,38 @@ For the physical MA2450 run:
 The evaluator also supports `--engine onnx` so the same fixed-window policy can
 be run without MYRIAD. This isolates chunking/stitching accuracy from VPU
 numerical execution if the physical result regresses.
+
+## 200-utterance physical diagnostic
+
+A 200-utterance LibriSpeech dev-clean diagnostic was run on the Pi 5 + MA2450
+using the fixed policy above.
+
+Controller-side preparation on Oberon was constrained independently to CPUs
+`0-15` with `OMP_NUM_THREADS=16`, `MKL_NUM_THREADS=16`, and
+`OPENBLAS_NUM_THREADS=16`. The Pi-side evaluator used its own four-core policy:
+CPUs `0-3` with the three thread counts set to `4`.
+
+Measured diagnostic result:
+
+- samples: `200`
+- fixed-window inferences: `443`
+- network loads: `1`
+- model load: `1970.619 ms`
+- first-window ONNX/MYRIAD valid-frame argmax agreement: `0.99609375`
+- first-window max frame total variation: `0.06952664` (diagnostic only)
+- WER: `0.046166529266281946`
+- CER: `0.014760597743214395`
+- absolute WER delta from the qualified whole-utterance PyTorch source:
+  `0.008226747640606422`
+- MYRIAD inference p50 / p95: `393.939 / 395.967 ms`
+- inference-only RTF including overlap compute: `0.12868995426179905`
+- result status: `diagnostic`
+
+The same 200-sample WER/CER was reproduced before and after separating the
+Oberon and Pi CPU-affinity policies, so the host CPU-limit correction did not
+change recognition semantics. This diagnostic is encouraging but is not
+authoritative; the acceptance gate remains the full 2,703-utterance dev-clean
+run.
 
 ## Commands
 
