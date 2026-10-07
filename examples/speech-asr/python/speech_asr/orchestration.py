@@ -319,7 +319,7 @@ def validate_model_executor_request(
             f"{model_id} executor requires optimizer {expected_optimizer_kind!r}"
         )
     if model_id in {"cnn_ctc_v18", "cnn_ctc_v19"}:
-        expected_pretrained = V18_PRETRAINED_SOURCE if model_id in {"cnn_ctc_v18", "cnn_ctc_v19"} else V19_PRETRAINED_SOURCE
+        expected_pretrained = V18_PRETRAINED_SOURCE if model_id == "cnn_ctc_v18" else V19_PRETRAINED_SOURCE
         if train_config.get("pretrained_source") != expected_pretrained:
             raise ValueError(
                 f"{model_id} requires the exact pinned pretrained source declaration"
