@@ -1493,6 +1493,8 @@ grep -q 'fbd72a648826b2e200f9244b4dc73be425cada2e304be92d513f7033a8de4088' scrip
 grep -q 'stage_validation_dataset' examples/speech-asr/evaluation/run_cnn_ctc_v19_deployed_edge.py || fail 'v19 deployed decoder controller does not stage validation data'
 grep -q 'os.link(audio, destination)' examples/speech-asr/evaluation/run_cnn_ctc_v19_deployed_edge.py || fail 'v19 deployed decoder validation staging is not hard-link first'
 grep -q 'edge-speech-preflight.sh' examples/speech-asr/evaluation/run_cnn_ctc_v19_deployed_edge.py || fail 'v19 deployed decoder controller lacks edge runtime preflight'
+grep -q 'RUNTIME_BACKEND="host"' scripts/evaluate-cnn-ctc-v19-deployed.sh || fail 'v19 deployed decoder evaluator is not pinned to host runtime'
+grep -q '"host"' examples/speech-asr/evaluation/run_cnn_ctc_v19_deployed_edge.py || fail 'v19 deployed decoder controller is not pinned to host runtime'
 grep -q -- '"--preflight-only"' examples/speech-asr/evaluation/run_cnn_ctc_v19_deployed_edge.py || fail 'v19 deployed decoder controller lacks dataset/audio preflight'
 grep -q 'rsync_push_command' examples/speech-asr/evaluation/run_cnn_ctc_v19_deployed_edge.py || fail 'v19 deployed decoder controller does not stage artifacts'
 grep -q 'rsync_pull_command' examples/speech-asr/evaluation/run_cnn_ctc_v19_deployed_edge.py || fail 'v19 deployed decoder controller does not collect evidence'

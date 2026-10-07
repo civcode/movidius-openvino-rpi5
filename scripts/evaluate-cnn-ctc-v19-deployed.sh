@@ -17,6 +17,7 @@ LOG="$ROOT/work/speech-asr/v19-deployed-eval/evidence/evaluator.log"
 BENCHMARK_ID="ami-model-quality-v4-architecture-screen-v1-es2011-validation"
 EXPERIMENT_ID="exp-f4adb44ab833e896-deployed-decoder-v1"
 CPUSET="${SPEECH_DECODER_CPUSET:-0-3}"
+RUNTIME_BACKEND="host"
 FRESH=0
 PREFLIGHT_ONLY=0
 LOCK_PATH="${SPEECH_MYRIAD_LOCK:-/tmp/movidius-speech-asr-myriad.lock}"
@@ -138,7 +139,7 @@ print(json.dumps({
 }, sort_keys=True))
 PY
 
-runtime_check="$("$ROOT/scripts/run-myriad-tensor.sh"     --platform arm64     --backend auto     check)"
+runtime_check="$("$ROOT/scripts/run-myriad-tensor.sh"     --platform arm64     --backend "$RUNTIME_BACKEND"     check)"
 printf '%s\n' "$runtime_check"
 
 if [[ "$PREFLIGHT_ONLY" -eq 1 ]]; then
@@ -163,7 +164,7 @@ if ! flock -n 9; then
 fi
 
 set +e
-OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 taskset -c "$CPUSET"     "$ROOT/scripts/evaluate-cnn-ctc-v19.sh"         --platform arm64         --runtime-backend auto         --manifest "$MANIFEST"         --benchmark-id "$BENCHMARK_ID"         --ir-dir "$IR_DIR"         --decoder-artifact "$DECODER_ARTIFACT"         --experiment-id "$EXPERIMENT_ID"         --work-dir "$WORK_DIR"         --output "$OUTPUT"         2>&1 | tee "$LOG"
+OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 taskset -c "$CPUSET"     "$ROOT/scripts/evaluate-cnn-ctc-v19.sh"         --platform arm64         --runtime-backend "$RUNTIME_BACKEND"         --manifest "$MANIFEST"         --benchmark-id "$BENCHMARK_ID"         --ir-dir "$IR_DIR"         --decoder-artifact "$DECODER_ARTIFACT"         --experiment-id "$EXPERIMENT_ID"         --work-dir "$WORK_DIR"         --output "$OUTPUT"         2>&1 | tee "$LOG"
 status="${PIPESTATUS[0]}"
 set -e
 exit "$status"

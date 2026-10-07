@@ -272,6 +272,24 @@ def main() -> int:
                 f"controller/edge revision mismatch: {local_head} != {remote_head}"
             )
 
+        host_runtime_preflight = run_capture(
+            ssh_command(
+                args.worker,
+                [
+                    f"{remote_repo}/scripts/run-myriad-tensor.sh",
+                    "--platform",
+                    "arm64",
+                    "--backend",
+                    "host",
+                    "check",
+                ],
+            )
+        )
+        print(
+            host_runtime_preflight.stdout,
+            end="" if host_runtime_preflight.stdout.endswith("\n") else "\n",
+        )
+
         run_id = (
             f"{SOURCE_EXPERIMENT}-{SOURCE_ATTEMPT}-decoder-v1-"
             f"{local_head[:8]}-{decoder_sha[:8]}"
@@ -352,7 +370,7 @@ def main() -> int:
                     "--manifest-sha256",
                     EXPECTED_MANIFEST_SHA256,
                     "--runtime-backend",
-                    "auto",
+                    "host",
                 ],
             )
         )
