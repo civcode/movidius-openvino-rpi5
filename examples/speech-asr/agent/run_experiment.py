@@ -533,13 +533,6 @@ def physical_compatibility_probe(
     comparison_doc = load_json(comparison_path)
     comparison_metrics = comparison_doc.get("comparison", {})
     numerical_gate = pretraining_myriad_compatibility(comparison_metrics)
-    if numerical_gate["status"] != "accepted":
-        raise ExecutionFailure(
-            "pretraining MYRIAD numerical compatibility failed: "
-            + "; ".join(numerical_gate["reasons"]),
-            outcome="failed",
-            failure_class="hardware_execution",
-        )
 
     evidence_path = collected / "probe.json"
     write_json(
@@ -555,6 +548,26 @@ def physical_compatibility_probe(
             "log_sha256": sha256_file(logs_dir / "edge-model-probe.log"),
         },
     )
+
+    if numerical_gate["status"] != "accepted":
+        raise ExecutionFailure(
+            "pretraining MYRIAD numerical compatibility failed: "
+            + "; ".join(numerical_gate["reasons"])
+            + "; frame_argmax_agreement="
+            + repr(comparison_metrics.get("frame_argmax_agreement"))
+            + "; frame_argmax_mismatches="
+            + repr(comparison_metrics.get("frame_argmax_mismatches"))
+            + "; min_reference_top2_margin="
+            + repr(comparison_metrics.get("min_reference_top2_margin"))
+            + "; max_mismatched_reference_top2_margin="
+            + repr(
+                comparison_metrics.get(
+                    "max_mismatched_reference_top2_margin"
+                )
+            ),
+            outcome="failed",
+            failure_class="hardware_execution",
+        )
     return evidence_path
 
 
