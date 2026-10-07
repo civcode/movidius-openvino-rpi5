@@ -98,6 +98,9 @@ test -f examples/speech-asr/contracts/acoustic-benchmark-result-v1.schema.json |
 
 # Phase 7 recorded streaming invariants.
 test -f examples/speech-asr/python/speech_asr/streaming.py || fail 'Phase 7 streaming core missing'
+test -f examples/speech-asr/python/speech_asr/quartznet_fixed512.py || fail 'QuartzNet fixed512 streaming core missing'
+grep -q 'FIXED_TENSOR_FRAMES = 512' examples/speech-asr/python/speech_asr/quartznet_fixed512.py || fail 'QuartzNet fixed512 tensor geometry changed'
+grep -q 'single_global_ctc_collapse_after_logit_stitch' examples/speech-asr/python/speech_asr/quartznet_fixed512.py || fail 'QuartzNet fixed512 stitch/decode policy changed'
 test -f examples/speech-asr/contracts/streaming-v1.json || fail 'Phase 7 streaming contract missing'
 test -f examples/speech-asr/contracts/streaming-replay-result-v1.schema.json || fail 'Phase 7 replay result schema missing'
 grep -q 'midpoint_partition' examples/speech-asr/contracts/streaming-v1.json || fail 'streaming overlap ownership changed'
