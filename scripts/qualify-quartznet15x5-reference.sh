@@ -31,10 +31,24 @@ fi
 
 eval_args=(--archive "$SOURCE" --device "$DEVICE")
 [[ -n "$MAX_SAMPLES" ]] && eval_args+=(--max-samples "$MAX_SAMPLES")
+
+# A full-corpus WER miss is qualification evidence, not a reason to discard the
+# independent PyTorch -> ONNX parity evidence. Preserve the evaluator status,
+# finish all reference-only checks, then return the WER gate result.
+set +e
 "$ROOT/scripts/evaluate-quartznet15x5-reference.sh" "${eval_args[@]}"
+eval_status=$?
+set -e
+if [[ "$eval_status" -ne 0 && "$eval_status" -ne 3 ]]; then
+    exit "$eval_status"
+fi
 
 "$ROOT/scripts/export-quartznet15x5-reference.sh" --archive "$SOURCE"
 "$ROOT/scripts/compare-quartznet15x5-reference-onnx.sh"   --output "$ROOT/work/speech-asr/quartznet15x5-reference/onnx-parity.json"
 
 echo "QuartzNet15x5 pretrained reference qualification: complete"
 echo "No training, OpenVINO conversion, or MYRIAD execution was performed."
+if [[ "$eval_status" -eq 3 ]]; then
+    echo "LibriSpeech dev-clean WER reproduction gate: FAIL" >&2
+fi
+exit "$eval_status"

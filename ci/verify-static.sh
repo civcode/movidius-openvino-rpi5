@@ -1529,6 +1529,8 @@ grep -q 'float(valid_frames - 1)' examples/speech-asr/training/quartznet15x5_ref
 if grep -Eq 'run-myriad-tensor\.sh|evaluate-cnn-ctc-v19-deployed\.sh|run-speech-experiment\.sh' scripts/qualify-quartznet15x5-reference.sh; then
     fail 'QuartzNet reference qualification must remain hardware-free'
 fi
+grep -q 'eval_status=\$?' scripts/qualify-quartznet15x5-reference.sh || fail 'QuartzNet reference runner must preserve WER gate status'
+grep -q 'compare-quartznet15x5-reference-onnx.sh' scripts/qualify-quartznet15x5-reference.sh || fail 'QuartzNet reference runner must collect ONNX evidence after WER evaluation'
 
 python3 - <<'PY_CHECK'
 from pathlib import Path

@@ -90,6 +90,9 @@ class QuartzNetReferenceTests(unittest.TestCase):
             "prepare-cnn-ctc-v18.sh",
         ):
             self.assertNotIn(forbidden, runner)
+        self.assertIn("eval_status=$?", runner)
+        self.assertIn('"$eval_status" -ne 0 && "$eval_status" -ne 3', runner)
+        self.assertIn('exit "$eval_status"', runner)
 
     def test_entrypoints_exist(self):
         for name in (
