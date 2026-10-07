@@ -94,7 +94,11 @@ By default the controller uses
 `--decoder-artifact` only to override that path.
 
 The controller requires both the Oberon checkout and the edge human checkout to
-remain on `main` at the same commit. It verifies the frozen 1,273-record
+remain on `main` at the same commit. For this deployed reproof it selects the
+MYRIAD launcher with `--runtime-backend auto`: an already-populated native
+ARM64 host runtime is preferred, with the matching local Docker image as the
+fallback. Ordinary experiment execution remains Docker-default. It verifies the
+frozen 1,273-record
 validation-manifest hash, validates the decoder artifact, stages the selected
 v19 FP16 IR plus decoder artifact, and mirrors the frozen validation manifest
 with every referenced audio clip into the isolated edge run directory. The

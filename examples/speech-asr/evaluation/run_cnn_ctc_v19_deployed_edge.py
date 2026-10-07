@@ -351,6 +351,8 @@ def main() -> int:
                     remote_manifest_relative,
                     "--manifest-sha256",
                     EXPECTED_MANIFEST_SHA256,
+                    "--runtime-backend",
+                    "auto",
                 ],
             )
         )

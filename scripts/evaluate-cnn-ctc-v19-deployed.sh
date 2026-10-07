@@ -138,6 +138,9 @@ print(json.dumps({
 }, sort_keys=True))
 PY
 
+runtime_check="$("$ROOT/scripts/run-myriad-tensor.sh"     --platform arm64     --backend auto     check)"
+printf '%s\n' "$runtime_check"
+
 if [[ "$PREFLIGHT_ONLY" -eq 1 ]]; then
     exit 0
 fi
@@ -160,7 +163,7 @@ if ! flock -n 9; then
 fi
 
 set +e
-OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 taskset -c "$CPUSET"     "$ROOT/scripts/evaluate-cnn-ctc-v19.sh"         --platform arm64         --manifest "$MANIFEST"         --benchmark-id "$BENCHMARK_ID"         --ir-dir "$IR_DIR"         --decoder-artifact "$DECODER_ARTIFACT"         --experiment-id "$EXPERIMENT_ID"         --work-dir "$WORK_DIR"         --output "$OUTPUT"         2>&1 | tee "$LOG"
+OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 taskset -c "$CPUSET"     "$ROOT/scripts/evaluate-cnn-ctc-v19.sh"         --platform arm64         --runtime-backend auto         --manifest "$MANIFEST"         --benchmark-id "$BENCHMARK_ID"         --ir-dir "$IR_DIR"         --decoder-artifact "$DECODER_ARTIFACT"         --experiment-id "$EXPERIMENT_ID"         --work-dir "$WORK_DIR"         --output "$OUTPUT"         2>&1 | tee "$LOG"
 status="${PIPESTATUS[0]}"
 set -e
 exit "$status"

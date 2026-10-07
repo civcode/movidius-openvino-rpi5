@@ -216,6 +216,9 @@ class CtcBeamTests(unittest.TestCase):
         self.assertIn("rsync_pull_command(", controller)
         self.assertIn("edge-speech-preflight.sh", controller)
         self.assertIn('"--preflight-only"', controller)
+        self.assertIn('"--runtime-backend"', evaluator)
+        self.assertIn("run-myriad-tensor.sh", evaluator)
+        self.assertIn('"launcher_backend"', evaluator)
         self.assertIn('if branch != "main":', controller)
         self.assertIn('"acoustic_plus_decoder_latency_p95_ms"', controller)
 
@@ -227,6 +230,7 @@ class CtcBeamTests(unittest.TestCase):
             "benchmark-cnn-ctc-v19-decoder.sh",
             "evaluate-cnn-ctc-v19-deployed.sh",
             "run-cnn-ctc-v19-deployed-edge.sh",
+            "run-myriad-tensor.sh",
         ):
             self.assertTrue((ROOT / "scripts" / name).is_file())
 

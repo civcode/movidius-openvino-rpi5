@@ -136,14 +136,15 @@ def write_f32_file_exact(path: pathlib.Path, values: np.ndarray) -> None:
         raise
 
 
-def require_persistent_runtime(platform: str) -> None:
+def require_persistent_runtime(platform: str, backend: str) -> str:
     proc = subprocess.run(
         [
-            str(ROOT / "run.sh"),
+            str(ROOT / "scripts" / "run-myriad-tensor.sh"),
             "--platform",
             platform,
-            "bench",
-            "--help",
+            "--backend",
+            backend,
+            "check",
         ],
         cwd=ROOT,
         text=True,
@@ -151,16 +152,21 @@ def require_persistent_runtime(platform: str) -> None:
         stderr=subprocess.STDOUT,
         check=False,
     )
-    if proc.returncode != 0 or "--stdin" not in proc.stdout:
+    if proc.returncode != 0:
         raise ValueError(
-            "runtime image lacks persistent tensor-stream support; "
-            f"rebuild it from this checkout with: ./build.sh --platform {platform}"
+            "MYRIAD tensor runtime preflight failed:\n"
+            + "\n".join(proc.stdout.splitlines()[-40:])
         )
+    for line in proc.stdout.splitlines():
+        if line.startswith("runtime_backend="):
+            return line.split("=", 1)[1]
+    raise ValueError("MYRIAD tensor runtime preflight did not report its backend")
 
 
 def run_single_shot_parity(
     *,
     platform: str,
+    runtime_backend: str,
     xml: pathlib.Path,
     binary: pathlib.Path,
     feature_path: pathlib.Path,
@@ -169,9 +175,11 @@ def run_single_shot_parity(
 ) -> np.ndarray:
     proc = subprocess.run(
         [
-            str(ROOT / "run.sh"),
+            str(ROOT / "scripts" / "run-myriad-tensor.sh"),
             "--platform",
             platform,
+            "--backend",
+            runtime_backend,
             "custom",
             "--model",
             container_work(xml),
@@ -554,6 +562,12 @@ def main() -> int:
     )
     parser.add_argument("--platform", required=True, choices=("armv7", "arm64", "amd64"))
     parser.add_argument(
+        "--runtime-backend",
+        choices=("auto", "host", "docker"),
+        default="docker",
+        help="MYRIAD launcher backend; default docker preserves experiment behavior",
+    )
+    parser.add_argument(
         "--progress-interval",
         type=int,
         default=25,
@@ -590,7 +604,9 @@ def main() -> int:
 
         work = args.work_dir
         work.mkdir(parents=True, exist_ok=True)
-        require_persistent_runtime(args.platform)
+        resolved_runtime_backend = require_persistent_runtime(
+            args.platform, args.runtime_backend
+        )
         word_counts = []
         char_counts = []
         latencies = []
@@ -645,9 +661,11 @@ def main() -> int:
             session_id = next_server_session_id(work)
             log_path = work / f"{session_id}.log"
             command = [
-                str(ROOT / "run.sh"),
+                str(ROOT / "scripts" / "run-myriad-tensor.sh"),
                 "--platform",
                 args.platform,
+                "--backend",
+                resolved_runtime_backend,
                 "custom-server",
                 "--model",
                 container_work(xml),
@@ -777,6 +795,7 @@ def main() -> int:
                 if not parity_checked:
                     single_shot = run_single_shot_parity(
                         platform=args.platform,
+                        runtime_backend=resolved_runtime_backend,
                         xml=xml,
                         binary=binary,
                         feature_path=feature_path,
@@ -1090,6 +1109,7 @@ def main() -> int:
                 },
                 "hardware_execution": {
                     "mode": EXECUTION_MODE,
+                    "launcher_backend": resolved_runtime_backend,
                     "server_sessions": len(load_values),
                     "server_restarts": server_restarts,
                     "max_server_restarts": MAX_SERVER_RESTARTS,
@@ -1108,6 +1128,7 @@ def main() -> int:
                 "vocab_sha256": canonical_sha256(vocab),
                 "frontend_kind": spec["frontend"]["kind"],
                 "hardware_execution_mode": EXECUTION_MODE,
+                "myriad_launcher_backend": resolved_runtime_backend,
                 "persistent_parity_gate": parity_report,
                 "evaluator_sha256": evaluator_sha,
                 "decoder_artifact_sha256": (

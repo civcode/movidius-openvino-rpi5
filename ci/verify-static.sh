@@ -1484,6 +1484,9 @@ test -x scripts/decode-cnn-ctc-v19-logits.sh || fail 'v19 runtime decoder entry 
 test -x scripts/benchmark-cnn-ctc-v19-decoder.sh || fail 'v19 CPU decoder benchmark entry point missing'
 test -x scripts/evaluate-cnn-ctc-v19-deployed.sh || fail 'v19 deployed decoder evaluator entry point missing'
 test -x scripts/run-cnn-ctc-v19-deployed-edge.sh || fail 'v19 deployed decoder edge controller entry point missing'
+test -x scripts/run-myriad-tensor.sh || fail 'shared MYRIAD tensor launcher missing'
+grep -q 'runtime_exec_openvino' scripts/run-myriad-tensor.sh || fail 'MYRIAD tensor launcher lacks host runtime support'
+grep -q 'DOCKER_READY' scripts/run-myriad-tensor.sh || fail 'MYRIAD tensor launcher lacks Docker fallback'
 test -f examples/speech-asr/evaluation/run_cnn_ctc_v19_deployed_edge.py || fail 'v19 deployed decoder edge controller missing'
 grep -q 'flock -n 9' scripts/evaluate-cnn-ctc-v19-deployed.sh || fail 'v19 deployed decoder evaluator lacks exclusive MYRIAD lock'
 grep -q 'fbd72a648826b2e200f9244b4dc73be425cada2e304be92d513f7033a8de4088' scripts/evaluate-cnn-ctc-v19-deployed.sh || fail 'v19 deployed decoder evaluator validation identity changed'
@@ -1500,6 +1503,8 @@ grep -q 'FrozenCtcDecoder.from_artifact' examples/speech-asr/evaluation/benchmar
 grep -q '0.5497732671129346' examples/speech-asr/tools/freeze_cnn_ctc_v19_decoder.py || fail 'v19 selected decoder WER evidence changed'
 grep -q '0.4634567759027818' examples/speech-asr/tools/freeze_cnn_ctc_v19_decoder.py || fail 'v19 selected decoder CER evidence changed'
 grep -q '"--decoder-artifact"' examples/speech-asr/evaluation/evaluate_cnn_ctc_v19.py || fail 'v19 physical evaluator decoder artifact option missing'
+grep -q '"--runtime-backend"' examples/speech-asr/evaluation/evaluate_cnn_ctc_v19.py || fail 'v19 physical evaluator runtime backend option missing'
+grep -q '"launcher_backend"' examples/speech-asr/evaluation/evaluate_cnn_ctc_v19.py || fail 'v19 physical evaluator runtime backend provenance missing'
 grep -q '"acoustic_plus_decoder_latency_p95_ms"' examples/speech-asr/evaluation/evaluate_cnn_ctc_v19.py || fail 'v19 physical evaluator paired acoustic+decoder latency missing'
 grep -q '"acoustic_plus_decoder_realtime_factor"' examples/speech-asr/evaluation/evaluate_cnn_ctc_v19.py || fail 'v19 physical evaluator paired acoustic+decoder RTF missing'
 

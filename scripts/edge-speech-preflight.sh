@@ -5,12 +5,14 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 MANIFEST_REL=""
 MANIFEST_SHA=""
+RUNTIME_BACKEND="docker"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --manifest) [[ $# -ge 2 ]] || { echo "--manifest needs a path" >&2; exit 2; }; MANIFEST_REL="$2"; shift 2 ;;
         --manifest-sha256) [[ $# -ge 2 ]] || { echo "--manifest-sha256 needs a digest" >&2; exit 2; }; MANIFEST_SHA="$2"; shift 2 ;;
+        --runtime-backend) [[ $# -ge 2 ]] || { echo "--runtime-backend needs auto|host|docker" >&2; exit 2; }; RUNTIME_BACKEND="$2"; shift 2 ;;
         -h|--help)
-            echo "usage: $0 --manifest repo-relative-path --manifest-sha256 digest"
+            echo "usage: $0 --manifest repo-relative-path --manifest-sha256 digest [--runtime-backend auto|host|docker]"
             exit 0
             ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
@@ -57,17 +59,8 @@ actual="$(sha256sum "$manifest" | awk '{print $1}')"
     exit 2
 }
 
-help_log="$(mktemp)"
-trap 'rm -f "$help_log"' EXIT
-set +e
-"$ROOT/run.sh" --platform arm64 custom --help >"$help_log" 2>&1
-status=$?
-set -e
-if (( status != 0 )) || ! grep -q -- '--tensor' "$help_log" || ! grep -q -- '--output' "$help_log"; then
-    cat "$help_log" >&2
-    echo "arm64 runtime image lacks required tensor I/O support" >&2
-    exit 2
-fi
+runtime_check="$("$ROOT/scripts/run-myriad-tensor.sh"     --platform arm64     --backend "$RUNTIME_BACKEND"     check)"
+printf '%s\n' "$runtime_check"
 
 echo "edge speech preflight: PASS"
 echo "manifest_sha256=$actual"
