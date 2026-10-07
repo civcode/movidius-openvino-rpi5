@@ -219,13 +219,24 @@ class PersistentMyriadServer:
         atexit.register(self.close)
 
         deadline = time.monotonic() + startup_timeout
+        next_heartbeat = time.monotonic() + 10.0
         while not self._ready.wait(0.1):
+            now = time.monotonic()
             if self.proc.poll() is not None:
                 raise RuntimeError(
                     "persistent MYRIAD server exited during startup:\n"
                     + "\n".join(self._stderr_tail[-30:])
                 )
-            if time.monotonic() >= deadline:
+            if now >= next_heartbeat:
+                tail = self._stderr_tail[-1] if self._stderr_tail else "<no runtime output>"
+                print(
+                    "[quartznet-myriad] waiting for MYRIAD network load "
+                    f"elapsed={startup_timeout - max(0.0, deadline - now):.1f}s "
+                    f"last_runtime_line={tail}",
+                    flush=True,
+                )
+                next_heartbeat = now + 10.0
+            if now >= deadline:
                 self.close()
                 raise RuntimeError(
                     "persistent MYRIAD server startup timed out:\n"
@@ -467,6 +478,14 @@ def main() -> int:
                 "1",
             ]
             log_path = args.work_dir / f"shape-{tensor_frames:05d}.log"
+            print(
+                "[quartznet-myriad] loading shape "
+                f"{session_index}/{len(shape_order)} "
+                f"feature_frames={tensor_frames} "
+                f"output_frames={output_frames} "
+                f"utterances={len(group)}",
+                flush=True,
+            )
             server = PersistentMyriadServer(
                 command=command,
                 input_elements=input_elements,
@@ -476,6 +495,13 @@ def main() -> int:
             if server.warmup != 1:
                 raise RuntimeError("MYRIAD session warmup count changed")
             load_ms.append(server.load_ms)
+            print(
+                "[quartznet-myriad] shape ready "
+                f"{session_index}/{len(shape_order)} "
+                f"feature_frames={tensor_frames} "
+                f"load_ms={server.load_ms:.3f}",
+                flush=True,
+            )
 
             for request_index, item in enumerate(group, start=1):
                 record = item["record"]
