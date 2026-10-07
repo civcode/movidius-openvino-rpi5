@@ -1,0 +1,160 @@
+{
+  "schema": "speech-asr/pretrained-reference-spec",
+  "version": 1,
+  "id": "quartznet15x5_nvidia_ref",
+  "purpose": "zero-training reproduction of NVIDIA Multidataset QuartzNet15x5Base-En on LibriSpeech dev-clean before any AMI adaptation or deployment work",
+  "source": {
+    "name": "QuartzNet15x5-En-Base.nemo",
+    "model": "NVIDIA Multidataset QuartzNet15x5Base-En",
+    "version": "2",
+    "size_bytes": 71083664,
+    "sha384": "74e8284e77098906afb7a15a861ef60ec14db1a4acb206fa719492fa43050ad69a91c245652c05c5f0ded38b5903ed55",
+    "open_model_zoo_url": "https://storage.openvinotoolkit.org/repositories/open_model_zoo/public/2022.1/quartznet-15x5-en/QuartzNet15x5-En-Base.nemo",
+    "nvidia_url": "https://api.ngc.nvidia.com/v2/models/nvidia/multidataset_quartznet15x5/versions/2/files/QuartzNet15x5-En-Base.nemo"
+  },
+  "frontend": {
+    "kind": "nemo-filterbank-reference-v1",
+    "sample_rate_hz": 16000,
+    "window_samples": 320,
+    "hop_samples": 160,
+    "fft_size": 512,
+    "mel_bins": 64,
+    "fmin_hz": 0,
+    "fmax_hz": 8000,
+    "preemphasis": 0.97,
+    "window": "hann",
+    "hann_periodic": false,
+    "stft_center": true,
+    "stft_pad_mode": "constant",
+    "magnitude_power": 2,
+    "mel_scale": "slaney",
+    "mel_norm": "slaney",
+    "log_guard_type": "add",
+    "log_guard_value": 5.960464477539063e-8,
+    "source_dither": 0.00001,
+    "evaluation_dither": 0,
+    "normalization": "per_feature",
+    "normalization_ddof": 1,
+    "normalization_epsilon": 0.00001,
+    "frame_splicing": 1,
+    "pad_to": 16,
+    "pad_value": 0,
+    "valid_feature_length": "floor(audio_samples / hop_samples)"
+  },
+  "network": {
+    "kind": "quartznet-15x5-v1",
+    "source": "NVIDIA QuartzNet15x5Base-En / NeMo JasperEncoder",
+    "normalization": "batchnorm",
+    "batchnorm_eps": 0.001,
+    "activation": "relu",
+    "dropout": 0,
+    "separable_convolution": "depthwise-pointwise",
+    "prologue": {
+      "name": "C1",
+      "channels": 256,
+      "kernel": 33,
+      "stride": 2,
+      "dilation": 1,
+      "padding": 16,
+      "separable": true
+    },
+    "block_groups": [
+      {
+        "name": "B1",
+        "channels": 256,
+        "kernel": 33,
+        "block_repeats": 3,
+        "module_repeats": 5,
+        "stride": 1,
+        "dilation": 1,
+        "padding": 16
+      },
+      {
+        "name": "B2",
+        "channels": 256,
+        "kernel": 39,
+        "block_repeats": 3,
+        "module_repeats": 5,
+        "stride": 1,
+        "dilation": 1,
+        "padding": 19
+      },
+      {
+        "name": "B3",
+        "channels": 512,
+        "kernel": 51,
+        "block_repeats": 3,
+        "module_repeats": 5,
+        "stride": 1,
+        "dilation": 1,
+        "padding": 25
+      },
+      {
+        "name": "B4",
+        "channels": 512,
+        "kernel": 63,
+        "block_repeats": 3,
+        "module_repeats": 5,
+        "stride": 1,
+        "dilation": 1,
+        "padding": 31
+      },
+      {
+        "name": "B5",
+        "channels": 512,
+        "kernel": 75,
+        "block_repeats": 3,
+        "module_repeats": 5,
+        "stride": 1,
+        "dilation": 1,
+        "padding": 37
+      }
+    ],
+    "residual_projection": "pointwise-conv-batchnorm",
+    "epilogue": [
+      {
+        "name": "C2",
+        "channels": 512,
+        "kernel": 87,
+        "stride": 1,
+        "dilation": 2,
+        "padding": 86,
+        "separable": true
+      },
+      {
+        "name": "C3",
+        "channels": 1024,
+        "kernel": 1,
+        "stride": 1,
+        "dilation": 1,
+        "padding": 0,
+        "separable": false
+      }
+    ],
+    "projection_kernel": 1
+  },
+  "output_contract": {
+    "name": "logits",
+    "layout": "NTV",
+    "dtype": "float32",
+    "classes": 29,
+    "blank_index": 28
+  },
+  "dataset": {
+    "id": "librispeech-dev-clean",
+    "source": "OpenSLR SLR12",
+    "archive": "dev-clean.tar.gz",
+    "url": "https://www.openslr.org/resources/12/dev-clean.tar.gz",
+    "md5": "42e2234ba48799c1f50f24a7926300a1",
+    "expected_utterances": 2703
+  },
+  "qualification": {
+    "training_allowed": false,
+    "openvino_allowed": false,
+    "myriad_allowed": false,
+    "decoder": "ctc-greedy",
+    "published_dev_clean_wer": 0.0379,
+    "reproduction_max_wer": 0.05,
+    "next_dataset_after_match": "librispeech-test-clean"
+  }
+}
