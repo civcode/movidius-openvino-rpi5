@@ -146,8 +146,12 @@ def warmup_cosine_learning_rate(
 ) -> float:
     if total_steps < 1:
         return peak_lr
-    warmup_steps = max(1, int(round(total_steps * warmup_ratio)))
-    if step_index < warmup_steps:
+    warmup_steps = (
+        0
+        if warmup_ratio == 0
+        else max(1, int(round(total_steps * warmup_ratio)))
+    )
+    if warmup_steps and step_index < warmup_steps:
         return peak_lr * float(step_index + 1) / float(warmup_steps)
     decay_steps = max(1, total_steps - warmup_steps)
     decay_index = min(decay_steps - 1, step_index - warmup_steps)
