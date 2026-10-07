@@ -114,17 +114,40 @@ The qualification used 152 exact shapes only to preserve source semantics. A pro
 
 Padding an utterance into a larger bucket is **not yet proven semantically neutral** for QuartzNet. Temporal convolutions and boundary effects can change valid logits. Any bucket policy must be qualified against exact-shape hypotheses and WER before adoption. Fixed-window streaming likewise requires its own accuracy validation.
 
-### 5.2 Consider keeping a few executable networks resident, but treat this as unproven
+### 5.2 Multiple executable networks can coexist on one MA2450
 
-Keeping several static QuartzNet executable networks resident could eliminate repeated graph load/compile latency. However, this project has not yet measured:
+Physical testing confirmed that the OpenVINO 2020.3 MYRIAD plugin can keep at
+least four QuartzNet executable networks resident simultaneously on the tested
+MA2450. The test loaded reshaped static graphs at `T=512`, `1024`, `1536`,
+and `2048` without releasing earlier `ExecutableNetwork` or `InferRequest`
+objects.
 
-- how many QuartzNet networks can coexist on the tested stick;
-- how much device memory each compiled network consumes; or
-- whether the OpenVINO 2020.3 MYRIAD plugin can manage several resident executable networks reliably on one device.
+After every additional `LoadNetwork()`, all previously loaded graphs were run
+again. Their deterministic output fingerprints remained unchanged:
 
-Do not assume nominal stick memory translates directly into available model residency. Compiled-network memory includes transformed weights, activation/work buffers, DMA/runtime state, and plugin/firmware overhead.
+| Resident graph | Load time | Steady-state inference during rechecks | Recheck result |
+|---|---:|---:|---|
+| `T=512` | 1945 ms | about 392 ms | stable after all later loads |
+| `T=1024` | 5470 ms | about 1415 ms | stable after `T=1536` and `T=2048` loads |
+| `T=1536` | 5478 ms | about 3704 ms | stable after `T=2048` load |
+| `T=2048` | 5495 ms | about 6125 ms | stable |
 
-Multiple resident networks would remove load latency; they would not create multiple independent accelerators or multiply inference throughput.
+The final result was `RESIDENT_RESULT status=PASS loaded=4 requested=4`.
+
+This proves that multiple resident compiled networks are supported in practice
+by this OpenVINO 2020.3/MA2450 stack. It also shows that loading a later network
+did not evict or corrupt the earlier networks in this four-graph test.
+
+The maximum resident-network count remains unknown, as does the device-memory
+cost of each compiled graph. Do not assume nominal stick memory translates
+directly into available graph capacity. Compiled-network memory includes
+transformed weights, activation/work buffers, DMA/runtime state, and
+plugin/firmware overhead.
+
+Multiple resident networks can remove repeated graph-load latency for
+applications that require several models or shapes. They do not create multiple
+independent accelerators and therefore do not imply multiplied inference
+throughput.
 
 ### 5.3 Long audio should be segmented or routed elsewhere
 
@@ -144,7 +167,7 @@ The exact chunking strategy must preserve enough acoustic context to avoid intro
 
 - The exact underlying implementation defect, for example internal tiling, addressing, buffering, or another compiler primitive limit, has not been identified.
 - The `T=3088/3104` transition has only been established for this QuartzNet topology and tested software/firmware path; it must not be generalized to unrelated neural networks.
-- The maximum number of simultaneously resident QuartzNet networks on the stick has not been measured.
+- At least four simultaneously resident QuartzNet networks are proven; the maximum resident-network count has not been measured.
 - A production bucket-padding policy has not yet been shown to preserve exact-shape WER.
 - A fixed-window or streaming QuartzNet deployment has not yet been qualified for boundary effects and word-error rate.
 - The tested amd64 OpenVINO CPU result is an attribution control, not a Raspberry Pi CPU performance comparison.
@@ -154,7 +177,7 @@ The exact chunking strategy must preserve enough acoustic context to avoid intro
 1. Add a hard runtime shape guard that rejects `T>=3104` for the MA2450 QuartzNet path.
 2. Use a lower production policy ceiling, for example `T<=2048`, until a validated streaming/bucketing design is frozen.
 3. Keep semantic probes, including argmax parity and WER, not only successful `Infer()` return codes, in hardware qualification.
-4. Benchmark a small resident-shape set and measure how many executable networks can coexist before adopting preloading.
+4. Four resident QuartzNet graphs are proven stable; measure the actual capacity ceiling only if a future application needs more than four resident models.
 5. Record per-shape load time and inference time separately so graph compilation is never confused with steady-state latency.
 6. Retain CPU/ONNX controls for future MYRIAD regressions; they are effective at distinguishing graph-conversion problems from VPU execution problems.
 
@@ -180,6 +203,7 @@ Production should therefore use bounded, validated static or streaming shapes, e
 | Full physical corpus | 2703/2703; overall WER `0.0517628` before removing known catastrophic execution cases |
 | MYRIAD inference | p50 `611.9 ms`; p95 `4023.1 ms`; mean `1317.0 ms`; RTF `0.1835` |
 | Shape load overhead | 152 sessions; mean about `1963 ms`; total about `298.4 s` |
+| Multi-resident capacity | `T=512,1024,1536,2048` loaded simultaneously; all four rechecked with stable output fingerprints |
 
 ## Related repository evidence
 
