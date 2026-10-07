@@ -152,6 +152,25 @@ class CnnCtcV19Tests(unittest.TestCase):
         self.assertIn('"freeze_batchnorm_running_stats": freeze_bn_stats', source)
         self.assertIn('"initial_validation_checkpoint_candidate": True', source)
 
+    def test_myriad_evaluator_restarts_on_pipe_io_failures(self):
+        source = (
+            SPEECH / "evaluation" / "evaluate_cnn_ctc_v19.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "except (BrokenPipeError, OSError, ValueError) as exc:",
+            source,
+        )
+        self.assertIn(
+            "persistent MYRIAD server input pipe write failed:",
+            source,
+        )
+        self.assertIn(
+            "persistent MYRIAD server output pipe read failed:",
+            source,
+        )
+        self.assertIn("except RuntimeError as exc:", source)
+        self.assertIn("MAX_SERVER_RESTARTS = 4", source)
+
     def test_v19_uses_pretrained_semantic_myriad_gate(self):
         result = pretraining_myriad_compatibility(
             {
