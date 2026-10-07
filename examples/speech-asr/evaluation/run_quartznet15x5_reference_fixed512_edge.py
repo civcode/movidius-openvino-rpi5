@@ -172,7 +172,8 @@ def main() -> int:
     parser.add_argument("--worker", default="edge")
     parser.add_argument("--edge-repo")
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
-    parser.add_argument("--cpuset", default="0-15")
+    parser.add_argument("--local-cpuset", default="0-15")
+    parser.add_argument("--cpuset", default="0-3")
     parser.add_argument("--hop-output-frames", type=int, default=128)
     parser.add_argument("--max-samples", type=int)
     parser.add_argument("--refresh-runtime", action="store_true")
@@ -184,13 +185,15 @@ def main() -> int:
             raise ValueError("--max-samples must be positive")
         if not 1 <= args.hop_output_frames <= 256:
             raise ValueError("--hop-output-frames must be in 1..256")
+        if not all(ch.isdigit() or ch in ",-" for ch in args.local_cpuset):
+            raise ValueError("invalid --local-cpuset")
         if not all(ch.isdigit() or ch in ",-" for ch in args.cpuset):
             raise ValueError("invalid --cpuset")
 
         local_head = require_main_and_clean()
         dataset, ir, dynamic = run_local_reference_preparation_limited(
             args.device,
-            args.cpuset,
+            args.local_cpuset,
         )
         manifest, manifest_sha = validate_local_dataset(dataset)
         xml = ir / "quartznet15x5_nvidia_ref.xml"

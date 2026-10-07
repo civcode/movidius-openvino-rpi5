@@ -8,7 +8,7 @@ DYNAMIC_ONNX="$ROOT/work/speech-asr/quartznet15x5-reference/myriad/dynamic/quart
 WORK_DIR="$ROOT/work/speech-asr/quartznet15x5-reference/fixed512-evaluation"
 OUTPUT="$WORK_DIR/result.json"
 LOG="$WORK_DIR/evaluator.log"
-CPUSET="${SPEECH_DECODER_CPUSET:-0-15}"
+CPUSET="${SPEECH_DECODER_CPUSET:-0-3}"
 MAX_SAMPLES=""
 HOP_OUTPUT_FRAMES=128
 FRESH=0
@@ -132,9 +132,9 @@ args=(
 [[ -n "$MAX_SAMPLES" ]] && args+=(--max-samples "$MAX_SAMPLES")
 
 set +e
-OMP_NUM_THREADS=16 \
-MKL_NUM_THREADS=16 \
-OPENBLAS_NUM_THREADS=16 \
+OMP_NUM_THREADS=4 \
+MKL_NUM_THREADS=4 \
+OPENBLAS_NUM_THREADS=4 \
 taskset -c "$CPUSET" \
     "$ROOT/scripts/python-apps.sh" \
     "$ROOT/examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_fixed512.py" \
