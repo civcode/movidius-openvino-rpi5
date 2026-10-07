@@ -35,6 +35,10 @@ from speech_asr.cnn_ctc import (  # noqa: E402
     manifest_record_eligibility,
 )
 from speech_asr.cnn_ctc_frontend import logmel_features  # noqa: E402
+from speech_asr.ctc_beam import (  # noqa: E402
+    decode_with_artifact,
+    load_decoder_artifact,
+)
 from speech_asr.contracts import validate_experiment_result, validate_speech_sample  # noqa: E402
 from speech_asr.evaluation import (  # noqa: E402
     character_error_counts,
@@ -537,6 +541,11 @@ def main() -> int:
     parser.add_argument("--spec", type=pathlib.Path, default=DEFAULT_SPEC)
     parser.add_argument("--vocab", type=pathlib.Path, default=DEFAULT_VOCAB)
     parser.add_argument("--ir-dir", type=pathlib.Path, default=DEFAULT_IR)
+    parser.add_argument(
+        "--decoder-artifact",
+        type=pathlib.Path,
+        help="optional frozen CPU beam/LM decoder artifact; greedy remains default",
+    )
     parser.add_argument("--experiment-id", default="cnn_ctc_v19-ami-smoke-myriad")
     parser.add_argument(
         "--work-dir",
@@ -561,6 +570,11 @@ def main() -> int:
     try:
         spec = load_spec(args.spec)
         vocab = load_vocab(args.vocab)
+        decoder_artifact = (
+            load_decoder_artifact(args.decoder_artifact, vocab=vocab)
+            if args.decoder_artifact is not None
+            else None
+        )
         if args.progress_interval < 0:
             raise ValueError("progress_interval must be >= 0")
         xml = args.ir_dir / "cnn_ctc_v19.xml"
@@ -575,6 +589,7 @@ def main() -> int:
         word_counts = []
         char_counts = []
         latencies = []
+        decoder_latencies = []
         per_sample = []
         skipped = {"too_long": [], "target_too_long": []}
         manifest_samples = 0
@@ -866,7 +881,25 @@ def main() -> int:
                 logits[0, :output_frames, :],
                 vocab,
             )
-            hypothesis = decoder["hypothesis"]
+            deployed_decoder = None
+            if decoder_artifact is None:
+                hypothesis = decoder["hypothesis"]
+            else:
+                decode_started = time.perf_counter()
+                deployed_decoder = decode_with_artifact(
+                    logits[0, :output_frames, :],
+                    vocab,
+                    decoder_artifact,
+                )
+                decode_ms = (time.perf_counter() - decode_started) * 1000.0
+                decoder_latencies.append(decode_ms)
+                deployed_decoder = {
+                    key: value
+                    for key, value in deployed_decoder.items()
+                    if key != "score"
+                }
+                deployed_decoder["decode_ms"] = decode_ms
+                hypothesis = deployed_decoder["hypothesis"]
             reference = record["transcript"]["text"]
             words = word_error_counts(reference, hypothesis)
             chars = character_error_counts(reference, hypothesis)
@@ -893,6 +926,18 @@ def main() -> int:
                         for key, value in decoder.items()
                         if key != "hypothesis"
                     },
+                    "deployed_decoder": (
+                        {
+                            key: value
+                            for key, value in deployed_decoder.items()
+                            if key != "hypothesis"
+                        }
+                        if deployed_decoder is not None
+                        else {
+                            "kind": "ctc-greedy-v1",
+                            "decode_ms": None,
+                        }
+                    ),
                     "hardware_execution": {
                         "mode": EXECUTION_MODE,
                         "server_session_id": session_id,
@@ -947,6 +992,23 @@ def main() -> int:
 
         latency = latency_summary_ms(latencies)
         decoder_summary = aggregate_decoder_diagnostics(per_sample)
+        deployed_decoder_summary = None
+        if decoder_artifact is not None:
+            decoder_latency = latency_summary_ms(decoder_latencies)
+            deployed_decoder_summary = {
+                "kind": "ctc-prefix-beam-char-ngram-v1",
+                **decoder_artifact["decoder"],
+                "artifact_sha256": sha256_path(args.decoder_artifact),
+                "decode_latency_p50_ms": decoder_latency["p50_ms"],
+                "decode_latency_p95_ms": decoder_latency["p95_ms"],
+                "decode_latency_mean_ms": (
+                    sum(decoder_latencies) / len(decoder_latencies)
+                ),
+                "decoder_realtime_factor": (
+                    (sum(decoder_latencies) / 1000.0)
+                    / (total_audio_samples / 16000.0)
+                ),
+            }
         manifest_sha = sha256_path(args.manifest)
         spec_sha = canonical_sha256(spec)
         load_values = list(session_loads.values())
@@ -1007,6 +1069,7 @@ def main() -> int:
                     "persistent_parity_gate": parity_report,
                 },
                 "decoder": decoder_summary,
+                "deployed_decoder": deployed_decoder_summary,
                 "per_sample": per_sample,
             },
             "provenance": {
@@ -1017,6 +1080,11 @@ def main() -> int:
                 "hardware_execution_mode": EXECUTION_MODE,
                 "persistent_parity_gate": parity_report,
                 "evaluator_sha256": evaluator_sha,
+                "decoder_artifact_sha256": (
+                    sha256_path(args.decoder_artifact)
+                    if args.decoder_artifact is not None
+                    else None
+                ),
             },
         }
         validate_experiment_result(result)
@@ -1040,7 +1108,14 @@ def main() -> int:
         f"CER: {result['metrics']['cer']:.6f}\n"
         f"inference-only RTF: {result['metrics']['realtime_factor']:.6f}\n"
         f"latency p50/p95 ms: {latency['p50_ms']:.3f}/{latency['p95_ms']:.3f}\n"
-        f"persistent server sessions: {len(session_loads)}\n"
+        + (
+            "decoder p50/p95 ms: "
+            f"{deployed_decoder_summary['decode_latency_p50_ms']:.3f}/"
+            f"{deployed_decoder_summary['decode_latency_p95_ms']:.3f}\n"
+            if deployed_decoder_summary is not None
+            else "decoder: greedy baseline\n"
+        )
+        + f"persistent server sessions: {len(session_loads)}\n"
         f"result: {args.output}"
     )
     return 0
