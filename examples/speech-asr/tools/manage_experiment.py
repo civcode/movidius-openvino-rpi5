@@ -233,7 +233,7 @@ def command_start_attempt(args: argparse.Namespace) -> None:
     if attempts:
         _index, _path, previous = attempts[-1]
         if previous["state"] != "AWAIT_REVIEW":
-            if args.resume_nonterminal:
+            if getattr(args, "resume_nonterminal", False):
                 print(
                     json.dumps(
                         {
