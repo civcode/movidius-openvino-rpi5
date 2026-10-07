@@ -127,7 +127,7 @@ def validate_pretrained() -> dict:
     if not PRETRAINED.is_file():
         raise ValueError(
             f"pretrained QuartzNet archive missing: {PRETRAINED}; "
-            "run ./scripts/prepare-cnn-ctc-v18-pretrained.sh first"
+            "run ./scripts/prepare-cnn-ctc-v19-pretrained.sh first"
         )
     size = PRETRAINED.stat().st_size
     if size != PRETRAINED_SIZE:
@@ -139,7 +139,7 @@ def validate_pretrained() -> dict:
     if not PRETRAINED_IMPORT.is_file():
         raise ValueError(
             f"pretrained QuartzNet import verification missing: {PRETRAINED_IMPORT}; "
-            "run ./scripts/prepare-cnn-ctc-v18-pretrained.sh first"
+            "run ./scripts/prepare-cnn-ctc-v19-pretrained.sh first"
         )
     verified = load_json(PRETRAINED_IMPORT)
     if (
