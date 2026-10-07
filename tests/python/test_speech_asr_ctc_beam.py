@@ -203,6 +203,9 @@ class CtcBeamTests(unittest.TestCase):
         controller = (
             SPEECH / "evaluation" / "run_cnn_ctc_v19_deployed_edge.py"
         ).read_text(encoding="utf-8")
+        evaluator = (
+            SPEECH / "evaluation" / "evaluate_cnn_ctc_v19.py"
+        ).read_text(encoding="utf-8")
         self.assertIn("flock -n 9", wrapper)
         self.assertIn('EXPECTED_SAMPLES=1273', wrapper)
         self.assertIn(
