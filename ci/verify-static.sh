@@ -1535,6 +1535,28 @@ fi
 grep -q 'eval_status=\$?' scripts/qualify-quartznet15x5-reference.sh || fail 'QuartzNet reference runner must preserve WER gate status'
 grep -q 'compare-quartznet15x5-reference-onnx.sh' scripts/qualify-quartznet15x5-reference.sh || fail 'QuartzNet reference runner must collect ONNX evidence after WER evaluation'
 
+# Qualified clean-speech QuartzNet -> OpenVINO FP16 -> MYRIAD path.
+test -f examples/speech-asr/python/speech_asr/quartznet_reference_frontend.py || fail 'QuartzNet edge-safe reference frontend missing'
+test -f examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py || fail 'QuartzNet MYRIAD reference evaluator missing'
+test -f examples/speech-asr/evaluation/run_quartznet15x5_reference_myriad_edge.py || fail 'QuartzNet MYRIAD edge controller missing'
+test -x scripts/qualify-quartznet15x5-reference-numpy.sh || fail 'QuartzNet NumPy reference qualification missing'
+test -x scripts/prepare-quartznet15x5-reference-myriad.sh || fail 'QuartzNet MYRIAD artifact preparer missing'
+test -x scripts/evaluate-quartznet15x5-reference-myriad.sh || fail 'QuartzNet Pi MYRIAD evaluator missing'
+test -x scripts/run-quartznet15x5-reference-myriad-edge.sh || fail 'QuartzNet MYRIAD edge controller entry point missing'
+test -x scripts/test-speech-asr-quartznet-reference-myriad.sh || fail 'QuartzNet MYRIAD reference tests missing'
+grep -q 'EXPECTED_SAMPLES = 2703' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py || fail 'QuartzNet MYRIAD dev-clean sample boundary changed'
+grep -q 'QUALIFIED_WER = 0.037939781625675524' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py || fail 'QuartzNet MYRIAD source WER evidence changed'
+grep -q 'MAX_WER = 0.05' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py || fail 'QuartzNet MYRIAD WER ceiling changed'
+grep -q 'MAX_ABS_WER_DELTA = 0.005' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py || fail 'QuartzNet MYRIAD WER-delta gate changed'
+grep -q 'MAX_FRAME_TOTAL_VARIATION = 0.002' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py || fail 'QuartzNet MYRIAD semantic TV gate changed'
+grep -q 'exact-time-runtime-reshape-v1' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py || fail 'QuartzNet MYRIAD exact-time execution policy changed'
+grep -q -- '"--reshape-time"' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py || fail 'QuartzNet MYRIAD evaluator does not request exact time reshape'
+grep -q -- '--backend host' scripts/evaluate-quartznet15x5-reference-myriad.sh || fail 'QuartzNet MYRIAD deployment is not pinned to host runtime'
+grep -q 'check-reshape' scripts/evaluate-quartznet15x5-reference-myriad.sh || fail 'QuartzNet MYRIAD deployment does not require reshape-capable runtime'
+grep -q -- '"--refresh-runtime"' examples/speech-asr/evaluation/run_quartznet15x5_reference_myriad_edge.py || fail 'QuartzNet edge controller lacks runtime refresh path'
+grep -q 'rsync_push_command' examples/speech-asr/evaluation/run_quartznet15x5_reference_myriad_edge.py || fail 'QuartzNet edge controller does not stage dataset/artifacts'
+grep -q 'rsync_pull_command' examples/speech-asr/evaluation/run_quartznet15x5_reference_myriad_edge.py || fail 'QuartzNet edge controller does not collect evidence'
+
 # CPU/CUDA-only AMI adaptation attribution after source-domain qualification.
 test -x scripts/evaluate-quartznet15x5-ami-attribution.sh || fail 'QuartzNet AMI attribution entry point missing'
 test -x scripts/test-speech-asr-quartznet-ami-attribution.sh || fail 'QuartzNet AMI attribution unit-test entry point missing'
@@ -1564,6 +1586,7 @@ for name in [
     "examples/speech-asr/python/speech_asr/cnn_ctc_frontend.py",
     "examples/speech-asr/python/speech_asr/ctc_beam.py",
     "examples/speech-asr/python/speech_asr/cnn_ctc_compare.py",
+    "examples/speech-asr/python/speech_asr/quartznet_reference_frontend.py",
     "examples/speech-asr/python/speech_asr/experiment.py",
     "examples/speech-asr/python/speech_asr/orchestration.py",
     "examples/speech-asr/agent/init_cnn_ctc_v1_experiment.py",
@@ -1649,7 +1672,10 @@ for name in [
     "examples/speech-asr/evaluation/evaluate_quartznet15x5_reference.py",
     "examples/speech-asr/evaluation/compare_quartznet15x5_reference_onnx.py",
     "examples/speech-asr/evaluation/evaluate_quartznet15x5_ami_attribution.py",
+    "examples/speech-asr/evaluation/evaluate_quartznet15x5_reference_myriad.py",
+    "examples/speech-asr/evaluation/run_quartznet15x5_reference_myriad_edge.py",
     "tests/python/test_speech_asr_quartznet_reference.py",
+    "tests/python/test_speech_asr_quartznet_reference_myriad.py",
     "tests/python/test_speech_asr_quartznet_ami_attribution.py",
     "examples/speech-asr/training/novograd.py",
     "examples/speech-asr/training/train_cnn_ctc_v10.py",
