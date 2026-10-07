@@ -1532,6 +1532,22 @@ fi
 grep -q 'eval_status=\$?' scripts/qualify-quartznet15x5-reference.sh || fail 'QuartzNet reference runner must preserve WER gate status'
 grep -q 'compare-quartznet15x5-reference-onnx.sh' scripts/qualify-quartznet15x5-reference.sh || fail 'QuartzNet reference runner must collect ONNX evidence after WER evaluation'
 
+# CPU/CUDA-only AMI adaptation attribution after source-domain qualification.
+test -x scripts/evaluate-quartznet15x5-ami-attribution.sh || fail 'QuartzNet AMI attribution entry point missing'
+test -x scripts/test-speech-asr-quartznet-ami-attribution.sh || fail 'QuartzNet AMI attribution unit-test entry point missing'
+test -f examples/speech-asr/evaluation/evaluate_quartznet15x5_ami_attribution.py || fail 'QuartzNet AMI attribution evaluator missing'
+grep -q 'fbd72a648826b2e200f9244b4dc73be425cada2e304be92d513f7033a8de4088' examples/speech-asr/evaluation/evaluate_quartznet15x5_ami_attribution.py || fail 'QuartzNet AMI attribution validation identity changed'
+grep -q 'EXPECTED_SAMPLES = 1273' examples/speech-asr/evaluation/evaluate_quartznet15x5_ami_attribution.py || fail 'QuartzNet AMI attribution sample count changed'
+grep -q 's0-source-head-source-frontend' examples/speech-asr/evaluation/evaluate_quartznet15x5_ami_attribution.py || fail 'QuartzNet AMI attribution source stage missing'
+grep -q 's1-source-head-fixed-frontend' examples/speech-asr/evaluation/evaluate_quartznet15x5_ami_attribution.py || fail 'QuartzNet AMI attribution frontend stage missing'
+grep -q 's2-ami-head-fixed-frontend-epoch0' examples/speech-asr/evaluation/evaluate_quartznet15x5_ami_attribution.py || fail 'QuartzNet AMI attribution head stage missing'
+grep -q 's3-v19-finetuned' examples/speech-asr/evaluation/evaluate_quartznet15x5_ami_attribution.py || fail 'QuartzNet AMI attribution fine-tuned stage missing'
+grep -q 'EXPECTED_EPOCH0_WER = 0.7393651479162168' examples/speech-asr/evaluation/evaluate_quartznet15x5_ami_attribution.py || fail 'QuartzNet AMI epoch-zero evidence changed'
+grep -q 'EXPECTED_FINETUNED_WER = 0.5983588857698121' examples/speech-asr/evaluation/evaluate_quartznet15x5_ami_attribution.py || fail 'QuartzNet AMI fine-tuned evidence changed'
+if grep -Eqi 'run-myriad-tensor\.sh|run-speech-experiment\.sh|edge-speech|docker run|ssh ' scripts/evaluate-quartznet15x5-ami-attribution.sh; then
+    fail 'QuartzNet AMI attribution runner must remain hardware-free'
+fi
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
 for name in [
@@ -1629,7 +1645,9 @@ for name in [
     "examples/speech-asr/datasets/librispeech/prepare_dev_clean.py",
     "examples/speech-asr/evaluation/evaluate_quartznet15x5_reference.py",
     "examples/speech-asr/evaluation/compare_quartznet15x5_reference_onnx.py",
+    "examples/speech-asr/evaluation/evaluate_quartznet15x5_ami_attribution.py",
     "tests/python/test_speech_asr_quartznet_reference.py",
+    "tests/python/test_speech_asr_quartznet_ami_attribution.py",
     "examples/speech-asr/training/novograd.py",
     "examples/speech-asr/training/train_cnn_ctc_v10.py",
     "examples/speech-asr/training/train_cnn_ctc_v11.py",
