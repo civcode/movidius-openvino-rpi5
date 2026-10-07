@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+import hashlib
+import json
 import math
-from typing import Iterable, Sequence
+import pathlib
+from typing import Any, Iterable, Mapping, Sequence
 
 import numpy as np
 
@@ -125,6 +128,254 @@ class CharacterNgramLM:
             "training_utterances": self.training_utterances,
             "training_characters": self.training_characters,
         }
+
+    def to_dict(self) -> dict[str, Any]:
+        contexts = []
+        for context in sorted(self.counts):
+            token_counts = self.counts[context]
+            contexts.append(
+                {
+                    "context": list(context),
+                    "counts": [
+                        [token, int(token_counts[token])]
+                        for token in sorted(token_counts)
+                    ],
+                }
+            )
+        return {
+            "schema": "speech-asr/character-ngram-lm",
+            "version": 1,
+            "kind": "character-ngram-additive-v1",
+            "order": self.order,
+            "smoothing": self.smoothing,
+            "alphabet": list(self.alphabet),
+            "training_utterances": self.training_utterances,
+            "training_characters": self.training_characters,
+            "contexts": contexts,
+        }
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "CharacterNgramLM":
+        if value.get("schema") != "speech-asr/character-ngram-lm":
+            raise ValueError("invalid character n-gram LM schema")
+        if value.get("version") != 1:
+            raise ValueError("unsupported character n-gram LM version")
+        if value.get("kind") != "character-ngram-additive-v1":
+            raise ValueError("unsupported character n-gram LM kind")
+
+        order = value.get("order")
+        smoothing = value.get("smoothing")
+        alphabet_raw = value.get("alphabet")
+        contexts_raw = value.get("contexts")
+        if not isinstance(order, int) or isinstance(order, bool) or order < 1:
+            raise ValueError("LM order must be a positive integer")
+        if (
+            not isinstance(smoothing, (int, float))
+            or isinstance(smoothing, bool)
+            or not math.isfinite(float(smoothing))
+            or float(smoothing) <= 0
+        ):
+            raise ValueError("LM smoothing must be a positive finite number")
+        if (
+            not isinstance(alphabet_raw, list)
+            or not alphabet_raw
+            or any(not isinstance(token, str) for token in alphabet_raw)
+        ):
+            raise ValueError("LM alphabet must be a non-empty string list")
+        alphabet = tuple(alphabet_raw)
+        if len(alphabet) != len(set(alphabet)):
+            raise ValueError("LM alphabet contains duplicate symbols")
+        if not isinstance(contexts_raw, list):
+            raise ValueError("LM contexts must be a list")
+
+        allowed = set(alphabet)
+        counts: dict[tuple[str, ...], Counter] = {}
+        totals: dict[tuple[str, ...], int] = {}
+        for entry in contexts_raw:
+            if not isinstance(entry, Mapping):
+                raise ValueError("LM context entry must be an object")
+            context_raw = entry.get("context")
+            token_counts_raw = entry.get("counts")
+            if (
+                not isinstance(context_raw, list)
+                or any(not isinstance(token, str) for token in context_raw)
+                or len(context_raw) > order - 1
+            ):
+                raise ValueError("invalid LM context")
+            context = tuple(context_raw)
+            if context in counts:
+                raise ValueError("duplicate LM context")
+            if not isinstance(token_counts_raw, list):
+                raise ValueError("LM counts must be a list")
+            token_counts: Counter = Counter()
+            for pair in token_counts_raw:
+                if (
+                    not isinstance(pair, list)
+                    or len(pair) != 2
+                    or not isinstance(pair[0], str)
+                    or pair[0] not in allowed
+                    or not isinstance(pair[1], int)
+                    or isinstance(pair[1], bool)
+                    or pair[1] <= 0
+                ):
+                    raise ValueError("invalid LM token count")
+                if pair[0] in token_counts:
+                    raise ValueError("duplicate LM token count")
+                token_counts[pair[0]] = pair[1]
+            counts[context] = token_counts
+            totals[context] = sum(token_counts.values())
+
+        training_utterances = value.get("training_utterances")
+        training_characters = value.get("training_characters")
+        for label, raw in (
+            ("training_utterances", training_utterances),
+            ("training_characters", training_characters),
+        ):
+            if not isinstance(raw, int) or isinstance(raw, bool) or raw < 0:
+                raise ValueError(f"LM {label} must be a non-negative integer")
+
+        return cls(
+            order=order,
+            smoothing=float(smoothing),
+            alphabet=alphabet,
+            counts=counts,
+            totals=totals,
+            training_utterances=training_utterances,
+            training_characters=training_characters,
+        )
+
+
+def canonical_json_sha256(value: object) -> str:
+    payload = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def build_decoder_artifact(
+    *,
+    acoustic_model: str,
+    vocab: Mapping[str, Any],
+    config: Mapping[str, Any],
+    lm: CharacterNgramLM,
+    provenance: Mapping[str, Any],
+) -> dict[str, Any]:
+    if acoustic_model != "cnn_ctc_v19":
+        raise ValueError("decoder artifact is frozen to cnn_ctc_v19")
+    expected_config = {
+        "kind": "prefix-beam",
+        "beam_width": 8,
+        "token_top_k": 12,
+        "lm_weight": 0.3,
+        "word_bonus": -0.2,
+    }
+    normalized_config = {
+        "kind": config.get("kind"),
+        "beam_width": config.get("beam_width"),
+        "token_top_k": config.get("token_top_k"),
+        "lm_weight": float(config.get("lm_weight", 0.0)),
+        "word_bonus": float(config.get("word_bonus", 0.0)),
+    }
+    if normalized_config != expected_config:
+        raise ValueError(
+            f"cnn_ctc_v19 decoder config must remain {expected_config!r}"
+        )
+    tokens = vocab.get("tokens")
+    if (
+        vocab.get("blank_index") != 0
+        or not isinstance(tokens, list)
+        or tuple(tokens[1:]) != lm.alphabet
+    ):
+        raise ValueError("decoder LM alphabet does not match v19 vocabulary")
+    return {
+        "schema": "speech-asr/ctc-decoder-artifact",
+        "version": 1,
+        "acoustic_model": acoustic_model,
+        "decoder": normalized_config,
+        "vocab_sha256": canonical_json_sha256(vocab),
+        "lm": lm.to_dict(),
+        "provenance": dict(provenance),
+    }
+
+
+def validate_decoder_artifact(
+    value: Mapping[str, Any],
+    *,
+    vocab: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    if value.get("schema") != "speech-asr/ctc-decoder-artifact":
+        raise ValueError("invalid CTC decoder artifact schema")
+    if value.get("version") != 1:
+        raise ValueError("unsupported CTC decoder artifact version")
+    if value.get("acoustic_model") != "cnn_ctc_v19":
+        raise ValueError("decoder artifact acoustic model must be cnn_ctc_v19")
+    decoder = value.get("decoder")
+    if not isinstance(decoder, Mapping):
+        raise ValueError("decoder artifact decoder config is missing")
+    lm_raw = value.get("lm")
+    if not isinstance(lm_raw, Mapping):
+        raise ValueError("decoder artifact LM is missing")
+    lm = CharacterNgramLM.from_dict(lm_raw)
+    if vocab is not None:
+        if value.get("vocab_sha256") != canonical_json_sha256(vocab):
+            raise ValueError("decoder artifact vocabulary hash mismatch")
+        tokens = vocab.get("tokens")
+        if not isinstance(tokens, list) or tuple(tokens[1:]) != lm.alphabet:
+            raise ValueError("decoder artifact LM alphabet mismatch")
+    build_decoder_artifact(
+        acoustic_model="cnn_ctc_v19",
+        vocab=(
+            vocab
+            if vocab is not None
+            else {"blank_index": 0, "tokens": ["<blank>", *lm.alphabet]}
+        ),
+        config=decoder,
+        lm=lm,
+        provenance=(
+            value.get("provenance")
+            if isinstance(value.get("provenance"), Mapping)
+            else {}
+        ),
+    )
+    return dict(value)
+
+
+def load_decoder_artifact(
+    path: pathlib.Path,
+    *,
+    vocab: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, Mapping):
+        raise ValueError("decoder artifact must be a JSON object")
+    return validate_decoder_artifact(value, vocab=vocab)
+
+
+def decode_with_artifact(
+    logits: Sequence[Sequence[float]] | np.ndarray,
+    vocab: dict,
+    artifact: Mapping[str, Any],
+) -> dict:
+    validated = validate_decoder_artifact(artifact, vocab=vocab)
+    config = validated["decoder"]
+    lm = CharacterNgramLM.from_dict(validated["lm"])
+    result = prefix_beam_decode(
+        logits,
+        vocab,
+        beam_width=int(config["beam_width"]),
+        token_top_k=int(config["token_top_k"]),
+        lm=lm,
+        lm_weight=float(config["lm_weight"]),
+        word_bonus=float(config["word_bonus"]),
+    )
+    return {
+        **result,
+        "kind": "ctc-prefix-beam-char-ngram-v1",
+        "acoustic_model": validated["acoustic_model"],
+    }
 
 
 def prefix_beam_decode(
