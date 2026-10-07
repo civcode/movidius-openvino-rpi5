@@ -94,6 +94,29 @@ class CnnCtcComparisonTests(unittest.TestCase):
             0.0,
         )
         self.assertGreater(result["max_abs_error"], 0.0)
+        self.assertGreaterEqual(result["max_softmax_abs_error"], 0.0)
+        self.assertGreaterEqual(result["mean_frame_total_variation"], 0.0)
+        self.assertGreaterEqual(result["max_frame_total_variation"], 0.0)
+        self.assertGreater(result["max_abs_reference"], 0.0)
+        self.assertGreaterEqual(
+            result["max_abs_error_over_reference_max_abs"],
+            0.0,
+        )
+
+    def test_comparison_probability_drift_is_zero_for_identical_logits(self):
+        import numpy as np
+        from speech_asr.cnn_ctc_compare import compare_arrays
+
+        logits = np.array(
+            [[[2.0, 1.0, -1.0], [0.1, 0.2, 0.3]]],
+            dtype=np.float32,
+        )
+        result = compare_arrays(logits, logits.copy())
+        self.assertEqual(result["frame_argmax_agreement"], 1.0)
+        self.assertEqual(result["max_abs_error"], 0.0)
+        self.assertEqual(result["max_softmax_abs_error"], 0.0)
+        self.assertEqual(result["mean_frame_total_variation"], 0.0)
+        self.assertEqual(result["max_frame_total_variation"], 0.0)
 
     def test_comparison_reports_low_margin_argmax_flip(self):
         import numpy as np
