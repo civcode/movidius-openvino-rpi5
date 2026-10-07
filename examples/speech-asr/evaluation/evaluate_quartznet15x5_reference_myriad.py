@@ -43,7 +43,10 @@ from speech_asr.evaluation import (
     latency_summary_ms,
     word_error_counts,
 )
-from speech_asr.quartznet_reference_frontend import nemo_reference_features_numpy
+from speech_asr.quartznet_reference_frontend import (
+    nemo_reference_features_numpy,
+    reference_feature_lengths,
+)
 
 EXPECTED_SAMPLES = 2703
 QUALIFIED_WER = 0.037939781625675524
@@ -410,32 +413,20 @@ def main() -> int:
             audio_path = args.manifest.parent / str(record["audio_path"])
             if not audio_path.is_file():
                 raise ValueError(f"{record['id']}: audio missing: {audio_path}")
-            samples, sample_rate = sf.read(
-                str(audio_path),
-                dtype="float32",
-                always_2d=False,
+            valid_frames, tensor_frames = reference_feature_lengths(
+                int(record["sample_count"]),
+                spec,
             )
-            if sample_rate != 16000 or np.asarray(samples).ndim != 1:
-                raise ValueError(f"{record['id']}: expected 16 kHz mono FLAC")
-            if len(samples) != int(record["sample_count"]):
-                raise ValueError(f"{record['id']}: sample count changed")
-
-            frontend_started = time.perf_counter()
-            features, valid_frames = nemo_reference_features_numpy(samples, spec)
-            frontend_ms = (time.perf_counter() - frontend_started) * 1000.0
-            frontend_latencies.append(frontend_ms)
-            tensor_frames = int(features.shape[2])
             valid_output_frames = reference_output_length(valid_frames, spec)
             full_output_frames = reference_output_length(tensor_frames, spec)
             item = {
                 "index": index,
                 "record": record,
-                "features": np.ascontiguousarray(features, dtype=np.float32),
+                "audio_path": audio_path,
                 "valid_frames": valid_frames,
                 "tensor_frames": tensor_frames,
                 "valid_output_frames": valid_output_frames,
                 "full_output_frames": full_output_frames,
-                "frontend_ms": frontend_ms,
             }
             prepared.append(item)
             grouped[tensor_frames].append(item)
@@ -488,8 +479,28 @@ def main() -> int:
 
             for request_index, item in enumerate(group, start=1):
                 record = item["record"]
+                samples, sample_rate = sf.read(
+                    str(item["audio_path"]),
+                    dtype="float32",
+                    always_2d=False,
+                )
+                if sample_rate != 16000 or np.asarray(samples).ndim != 1:
+                    raise ValueError(f"{record['id']}: expected 16 kHz mono FLAC")
+                if len(samples) != int(record["sample_count"]):
+                    raise ValueError(f"{record['id']}: sample count changed")
+
+                frontend_started = time.perf_counter()
+                features, valid_frames = nemo_reference_features_numpy(samples, spec)
+                frontend_ms = (time.perf_counter() - frontend_started) * 1000.0
+                frontend_latencies.append(frontend_ms)
+                if valid_frames != item["valid_frames"]:
+                    raise ValueError(f"{record['id']}: valid feature length changed")
+                if int(features.shape[2]) != tensor_frames:
+                    raise ValueError(f"{record['id']}: padded feature length changed")
+                features = np.ascontiguousarray(features, dtype=np.float32)
+
                 logits_flat, infer_ms = server.infer(
-                    item["features"],
+                    features,
                     request_index=request_index,
                 )
                 if logits_flat.size != output_elements:
@@ -504,7 +515,7 @@ def main() -> int:
                 if parity is None:
                     reference_logits = ort_session.run(
                         ["logits"],
-                        {"features": item["features"]},
+                        {"features": features},
                     )[0]
                     comparison = compare_arrays(reference_logits, logits)
                     if comparison.get("frame_argmax_agreement") != 1.0:
@@ -563,7 +574,7 @@ def main() -> int:
                     "hypothesis": hypothesis,
                     "word_edits": words.to_dict(),
                     "character_edits": chars.to_dict(),
-                    "frontend_ms": item["frontend_ms"],
+                    "frontend_ms": frontend_ms,
                     "inference_ms": infer_ms,
                     "valid_feature_frames": item["valid_frames"],
                     "tensor_feature_frames": tensor_frames,
