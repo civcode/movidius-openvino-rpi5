@@ -106,7 +106,7 @@ def load_spec(path: Path) -> dict:
         }
         for key, wanted in expected_transfer_frontend.items():
             if frontend.get(key) != wanted:
-                raise ValueError(f"cnn_ctc_v18 frontend.{key} must be {wanted!r}")
+                raise ValueError(f"{model_id} frontend.{key} must be {wanted!r}")
 
     input_contract = value.get("input_contract")
     if not isinstance(input_contract, dict) or input_contract.get("shape") != [1, 64, 512]:
@@ -610,8 +610,9 @@ def model_resource_estimate(spec: dict, vocab_size: int = 39) -> dict:
         "cnn_ctc_v16",
         "cnn_ctc_v17",
         "cnn_ctc_v18",
+        "cnn_ctc_v19",
     }:
-        raise ValueError("resource estimator targets cnn_ctc_v2 through cnn_ctc_v18")
+        raise ValueError("resource estimator targets cnn_ctc_v2 through cnn_ctc_v19")
 
     network = spec["network"]
     input_frames = int(spec["input_contract"]["shape"][2])
