@@ -136,6 +136,8 @@ class CnnCtcV18Tests(unittest.TestCase):
         self.assertIn("PRETRAINED_SIZE = 71083664", source)
         self.assertIn("PRETRAINED_SHA512 =", source)
         self.assertIn("sha512_path(PRETRAINED)", source)
+        self.assertIn("PRETRAINED_IMPORT", source)
+        self.assertIn('"speech-asr/pretrained-import-verification"', source)
         self.assertIn('"kind": "novograd"', source)
         self.assertIn('"learning_rate": 0.001', source)
         self.assertIn('"max_cer": None', source)
@@ -151,12 +153,22 @@ class CnnCtcV18Tests(unittest.TestCase):
         evaluator = (
             SPEECH / "evaluation" / "evaluate_cnn_ctc_v18.py"
         ).read_text(encoding="utf-8")
+        verifier = (
+            SPEECH / "training" / "verify_cnn_ctc_v18_pretrained.py"
+        ).read_text(encoding="utf-8")
+        prepare = (
+            ROOT / "scripts" / "prepare-cnn-ctc-v18-pretrained.sh"
+        ).read_text(encoding="utf-8")
         self.assertIn("load_pretrained_quartznet(", trainer)
         self.assertIn('"pretrained_initialization"', trainer)
         self.assertIn('"initial_validation"', trainer)
         self.assertIn("verify_source(archive)", importer)
         self.assertIn("SOURCE_SHA512", importer)
         self.assertIn("shared_decoder_symbols", importer)
+        self.assertIn("shared_decoder_symbol_count", verifier)
+        self.assertIn("encoder_source_tensors_used", verifier)
+        self.assertIn("torch.isfinite(logits).all()", verifier)
+        self.assertIn("verify_cnn_ctc_v18_pretrained.py", prepare)
         self.assertIn("MAX_SERVER_RESTARTS = 4", evaluator)
         self.assertIn("infer_with_restart(", evaluator)
 
