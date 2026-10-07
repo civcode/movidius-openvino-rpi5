@@ -26,6 +26,7 @@ SCREEN_MANIFEST = SCREEN_DIR / "train.manifest.jsonl"
 SCREEN_PROVENANCE = SCREEN_DIR / "screen.json"
 VALIDATION_MANIFEST = ROOT / "work" / "speech-asr" / "ami" / "model-quality-v4" / "validation.manifest.jsonl"
 PRETRAINED = ROOT / "work" / "speech-asr" / "pretrained" / "quartznet15x5-en-base-v2" / "QuartzNet15x5-En-Base.nemo"
+PRETRAINED_IMPORT = PRETRAINED.parent / "import-verification.json"
 
 MODEL_SPEC_SHA256 = "4cf0403f533563e7977663b3ccbfc17450ed55be426457d53c5ead1fbf2cf6f8"
 VOCAB_SHA256 = "79f4dc2b628f5f61b3d5361ca67fadff044a91569c24e0af3916786fd8ddce4f"
@@ -131,7 +132,52 @@ def validate_pretrained() -> dict:
     digest = sha512_path(PRETRAINED)
     if digest != PRETRAINED_SHA512:
         raise ValueError("pretrained QuartzNet SHA-512 changed")
-    return {"path": repo_relative(PRETRAINED), "size_bytes": size, "sha512": digest}
+
+    if not PRETRAINED_IMPORT.is_file():
+        raise ValueError(
+            f"pretrained QuartzNet import verification missing: {PRETRAINED_IMPORT}; "
+            "run ./scripts/prepare-cnn-ctc-v18-pretrained.sh first"
+        )
+    verified = load_json(PRETRAINED_IMPORT)
+    if (
+        verified.get("schema") != "speech-asr/pretrained-import-verification"
+        or verified.get("version") != 1
+        or verified.get("status") != "valid"
+        or verified.get("model_id") != "cnn_ctc_v18"
+    ):
+        raise ValueError("pretrained QuartzNet import verification is not valid")
+    source = verified.get("source")
+    if not isinstance(source, dict):
+        raise ValueError("pretrained QuartzNet import source evidence is missing")
+    if source.get("size_bytes") != PRETRAINED_SIZE:
+        raise ValueError("pretrained QuartzNet import source size changed")
+    if source.get("sha512") != PRETRAINED_SHA512:
+        raise ValueError("pretrained QuartzNet import source hash changed")
+    if verified.get("shared_decoder_symbol_count") != 29:
+        raise ValueError("pretrained QuartzNet shared decoder mapping changed")
+    if verified.get("target_only_symbols_random_init") != list("0123456789"):
+        raise ValueError("pretrained QuartzNet target-only decoder rows changed")
+    if verified.get("encoder_source_tensors_used", 0) < 500:
+        raise ValueError("pretrained QuartzNet encoder tensor import is incomplete")
+    if verified.get("output_shape") != [1, 256, 39]:
+        raise ValueError("pretrained QuartzNet import output shape changed")
+    if verified.get("finite_output") is not True:
+        raise ValueError("pretrained QuartzNet import produced non-finite output")
+    fingerprint = verified.get("acoustic_state_sha256")
+    if not isinstance(fingerprint, str) or len(fingerprint) != 64:
+        raise ValueError("pretrained QuartzNet acoustic-state fingerprint is missing")
+
+    return {
+        "path": repo_relative(PRETRAINED),
+        "size_bytes": size,
+        "sha512": digest,
+        "import_verification": {
+            "path": repo_relative(PRETRAINED_IMPORT),
+            "acoustic_state_sha256": fingerprint,
+            "encoder_source_tensors_used": verified["encoder_source_tensors_used"],
+            "shared_decoder_symbol_count": verified["shared_decoder_symbol_count"],
+        },
+    }
 
 
 def validate_parent() -> dict:
