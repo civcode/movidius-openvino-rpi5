@@ -12,14 +12,14 @@ import torch
 from torch import nn
 
 SOURCE_SIZE_BYTES = 71083664
-SOURCE_SHA512 = "74e8284e77098906afb7a15a861ef60ec14db1a4acb206fa719492fa43050ad69a91c245652c05c5f0ded38b5903ed55"
+SOURCE_SHA384 = "74e8284e77098906afb7a15a861ef60ec14db1a4acb206fa719492fa43050ad69a91c245652c05c5f0ded38b5903ed55"
 ENCODER_MEMBER = ".nemo_tmp/JasperEncoder.pt"
 DECODER_MEMBER = ".nemo_tmp/JasperDecoderForCTC.pt"
 SOURCE_TOKENS = [" "] + list("abcdefghijklmnopqrstuvwxyz") + ["'", "<blank>"]
 
 
-def sha512_path(path: pathlib.Path) -> str:
-    digest = hashlib.sha512()
+def sha384_path(path: pathlib.Path) -> str:
+    digest = hashlib.sha384()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
@@ -30,10 +30,10 @@ def verify_source(path: pathlib.Path) -> dict:
     size = path.stat().st_size
     if size != SOURCE_SIZE_BYTES:
         raise ValueError(f"pretrained archive size mismatch: {size} != {SOURCE_SIZE_BYTES}")
-    digest = sha512_path(path)
-    if digest != SOURCE_SHA512:
-        raise ValueError(f"pretrained archive SHA-512 mismatch: {digest} != {SOURCE_SHA512}")
-    return {"path": str(path), "size_bytes": size, "sha512": digest}
+    digest = sha384_path(path)
+    if digest != SOURCE_SHA384:
+        raise ValueError(f"pretrained archive SHA-384 mismatch: {digest} != {SOURCE_SHA384}")
+    return {"path": str(path), "size_bytes": size, "sha384": digest}
 
 
 def _load_torch_member(archive: pathlib.Path, member: str) -> dict[str, torch.Tensor]:
