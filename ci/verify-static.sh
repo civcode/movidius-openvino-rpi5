@@ -1510,6 +1510,26 @@ grep -q '"launcher_backend"' examples/speech-asr/evaluation/evaluate_cnn_ctc_v19
 grep -q '"acoustic_plus_decoder_latency_p95_ms"' examples/speech-asr/evaluation/evaluate_cnn_ctc_v19.py || fail 'v19 physical evaluator paired acoustic+decoder latency missing'
 grep -q '"acoustic_plus_decoder_realtime_factor"' examples/speech-asr/evaluation/evaluate_cnn_ctc_v19.py || fail 'v19 physical evaluator paired acoustic+decoder RTF missing'
 
+# Zero-training NVIDIA QuartzNet / LibriSpeech reference qualification.
+test -f examples/speech-asr/models/quartznet15x5_nvidia_ref/model_spec.json || fail 'QuartzNet pretrained reference spec missing'
+test -f examples/speech-asr/models/quartznet15x5_nvidia_ref/vocab.json || fail 'QuartzNet pretrained reference vocab missing'
+test -x scripts/prepare-librispeech-dev-clean.sh || fail 'LibriSpeech dev-clean preparer missing'
+test -x scripts/evaluate-quartznet15x5-reference.sh || fail 'QuartzNet pretrained reference evaluator missing'
+test -x scripts/export-quartznet15x5-reference.sh || fail 'QuartzNet pretrained reference ONNX exporter missing'
+test -x scripts/compare-quartznet15x5-reference-onnx.sh || fail 'QuartzNet pretrained reference ONNX parity tool missing'
+test -x scripts/qualify-quartznet15x5-reference.sh || fail 'QuartzNet pretrained reference qualification entry point missing'
+test -x scripts/test-speech-asr-quartznet-reference.sh || fail 'QuartzNet pretrained reference unit-test entry point missing'
+grep -q '42e2234ba48799c1f50f24a7926300a1' examples/speech-asr/datasets/librispeech/prepare_dev_clean.py || fail 'LibriSpeech dev-clean archive identity changed'
+grep -q '"published_dev_clean_wer": 0.0379' examples/speech-asr/models/quartznet15x5_nvidia_ref/model_spec.json || fail 'published QuartzNet dev-clean WER target changed'
+grep -q '"classes": 29' examples/speech-asr/models/quartznet15x5_nvidia_ref/model_spec.json || fail 'QuartzNet reference output width changed'
+grep -q '"blank_index": 28' examples/speech-asr/models/quartznet15x5_nvidia_ref/vocab.json || fail 'QuartzNet reference blank index changed'
+grep -q 'valid_frames = sample_count // hop' examples/speech-asr/training/quartznet15x5_reference.py || fail 'historical NeMo valid-frame rule changed'
+grep -q 'periodic=bool(frontend\["hann_periodic"\])' examples/speech-asr/training/quartznet15x5_reference.py || fail 'historical NeMo Hann window semantics changed'
+grep -q 'float(valid_frames - 1)' examples/speech-asr/training/quartznet15x5_reference.py || fail 'historical NeMo ddof=1 normalization changed'
+if grep -Eq 'run-myriad-tensor\.sh|evaluate-cnn-ctc-v19-deployed\.sh|run-speech-experiment\.sh' scripts/qualify-quartznet15x5-reference.sh; then
+    fail 'QuartzNet reference qualification must remain hardware-free'
+fi
+
 python3 - <<'PY_CHECK'
 from pathlib import Path
 for name in [
@@ -1602,6 +1622,12 @@ for name in [
     "examples/speech-asr/training/pretrained_cnn_ctc_v18.py",
     "examples/speech-asr/training/prepare_cnn_ctc_v18_pretrained.py",
     "examples/speech-asr/training/verify_cnn_ctc_v18_pretrained.py",
+    "examples/speech-asr/training/quartznet15x5_reference.py",
+    "examples/speech-asr/training/export_quartznet15x5_reference.py",
+    "examples/speech-asr/datasets/librispeech/prepare_dev_clean.py",
+    "examples/speech-asr/evaluation/evaluate_quartznet15x5_reference.py",
+    "examples/speech-asr/evaluation/compare_quartznet15x5_reference_onnx.py",
+    "tests/python/test_speech_asr_quartznet_reference.py",
     "examples/speech-asr/training/novograd.py",
     "examples/speech-asr/training/train_cnn_ctc_v10.py",
     "examples/speech-asr/training/train_cnn_ctc_v11.py",
