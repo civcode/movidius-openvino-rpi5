@@ -153,7 +153,7 @@
     "source_url": "https://storage.openvinotoolkit.org/repositories/open_model_zoo/public/2022.1/quartznet-15x5-en/QuartzNet15x5-En-Base.nemo",
     "original_source_url": "https://api.ngc.nvidia.com/v2/models/nvidia/multidataset_quartznet15x5/versions/2/files/QuartzNet15x5-En-Base.nemo",
     "source_size_bytes": 71083664,
-    "source_sha512": "74e8284e77098906afb7a15a861ef60ec14db1a4acb206fa719492fa43050ad69a91c245652c05c5f0ded38b5903ed55",
+    "source_sha384": "74e8284e77098906afb7a15a861ef60ec14db1a4acb206fa719492fa43050ad69a91c245652c05c5f0ded38b5903ed55",
     "source_license": "Apache-2.0",
     "source_encoder_member": ".nemo_tmp/JasperEncoder.pt",
     "source_decoder_member": ".nemo_tmp/JasperDecoderForCTC.pt",
