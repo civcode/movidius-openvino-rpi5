@@ -153,6 +153,9 @@ class CnnCtcV18Tests(unittest.TestCase):
         evaluator = (
             SPEECH / "evaluation" / "evaluate_cnn_ctc_v18.py"
         ).read_text(encoding="utf-8")
+        controller = (
+            SPEECH / "agent" / "run_experiment.py"
+        ).read_text(encoding="utf-8")
         verifier = (
             SPEECH / "training" / "verify_cnn_ctc_v18_pretrained.py"
         ).read_text(encoding="utf-8")
@@ -169,6 +172,9 @@ class CnnCtcV18Tests(unittest.TestCase):
         self.assertIn("encoder_source_tensors_used", verifier)
         self.assertIn("torch.isfinite(logits).all()", verifier)
         self.assertIn("verify_cnn_ctc_v18_pretrained.py", prepare)
+        self.assertIn("write_json(\n        evidence_path", controller)
+        self.assertIn("frame_argmax_mismatches=", controller)
+        self.assertIn("max_mismatched_reference_top2_margin=", controller)
         self.assertIn("MAX_SERVER_RESTARTS = 4", evaluator)
         self.assertIn("infer_with_restart(", evaluator)
 
