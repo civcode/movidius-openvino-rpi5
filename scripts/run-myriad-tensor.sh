@@ -19,6 +19,7 @@ usage: run-myriad-tensor.sh [--platform TARGET] [--backend auto|host|docker] [--
 MODE:
   check          verify the selected hello_myriad supports tensor streaming
   check-reshape  also require runtime time-axis reshape support
+  check-resident also require multi-resident network test support
   custom         run one-shot tensor inference
   custom-server  run the persistent stdin/stdout tensor server
 
@@ -40,7 +41,7 @@ done
 MODE="${1:-}"
 [[ -n "$MODE" ]] || { usage >&2; exit 2; }
 shift
-case "$MODE" in check|check-reshape|custom|custom-server) ;; *) echo "invalid mode: $MODE" >&2; exit 2 ;; esac
+case "$MODE" in check|check-reshape|check-resident|custom|custom-server) ;; *) echo "invalid mode: $MODE" >&2; exit 2 ;; esac
 runtime_validate_backend "$BACKEND"
 platform_load "$TARGET_REQUEST"
 IMAGE="${IMAGE_OVERRIDE:-$DEFAULT_IMAGE}"
@@ -113,7 +114,7 @@ case "$BACKEND" in
         ;;
 esac
 
-if [[ "$MODE" == check || "$MODE" == check-reshape ]]; then
+if [[ "$MODE" == check || "$MODE" == check-reshape || "$MODE" == check-resident ]]; then
     if [[ "$RESOLVED" == host ]]; then
         output="$(runtime_run_openvino "$TARGET" "$RT" "$OV" "$OV/bin/hello_myriad" --help 2>&1)"
     else
@@ -134,10 +135,18 @@ if [[ "$MODE" == check || "$MODE" == check-reshape ]]; then
         echo "selected hello_myriad lacks tensor output support" >&2
         exit 1
     }
-    if [[ "$MODE" == check-reshape ]]; then
+    if [[ "$MODE" == check-reshape || "$MODE" == check-resident ]]; then
         grep -q -- '--reshape-time' <<<"$output" || {
             printf '%s\n' "$output" >&2
             echo "selected hello_myriad lacks runtime reshape support" >&2
+            echo "rebuild the runtime image and rerun scripts/pull-runtime.sh" >&2
+            exit 1
+        }
+    fi
+    if [[ "$MODE" == check-resident ]]; then
+        grep -q -- '--resident-times' <<<"$output" || {
+            printf '%s\n' "$output" >&2
+            echo "selected hello_myriad lacks resident-network test support" >&2
             echo "rebuild the runtime image and rerun scripts/pull-runtime.sh" >&2
             exit 1
         }

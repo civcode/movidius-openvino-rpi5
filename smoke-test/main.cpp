@@ -452,6 +452,183 @@ int runInference(Core& ie, const std::string& modelXml, const std::string& model
     return 0;
 }
 
+
+std::vector<size_t> parseResidentTimes(const std::string& value) {
+    std::vector<size_t> times;
+    std::stringstream stream(value);
+    std::string token;
+    while (std::getline(stream, token, ',')) {
+        if (token.empty()) {
+            throw std::runtime_error("--resident-times contains an empty value");
+        }
+        const long long parsed = std::stoll(token);
+        if (parsed <= 0) {
+            throw std::runtime_error("--resident-times values must be positive");
+        }
+        const size_t frames = static_cast<size_t>(parsed);
+        if (frames % 16 != 0) {
+            throw std::runtime_error("--resident-times values must be multiples of 16");
+        }
+        times.push_back(frames);
+    }
+    if (times.empty()) {
+        throw std::runtime_error("--resident-times requires at least one value");
+    }
+    return times;
+}
+
+uint64_t fnv1a64(const uint8_t* data, size_t bytes) {
+    uint64_t value = 1469598103934665603ULL;
+    for (size_t i = 0; i < bytes; ++i) {
+        value ^= static_cast<uint64_t>(data[i]);
+        value *= 1099511628211ULL;
+    }
+    return value;
+}
+
+struct ResidentGraph {
+    size_t timeFrames = 0;
+    ExecutableNetwork executable;
+    InferRequest request;
+    std::string inputName;
+    std::string outputName;
+    uint64_t outputFingerprint = 0;
+};
+
+uint64_t runResidentRequest(ResidentGraph& graph, double& inferMs) {
+    Blob::Ptr input = graph.request.GetBlob(graph.inputName);
+    std::memset(input->buffer().as<uint8_t*>(), 0, input->byteSize());
+
+    const auto start = std::chrono::steady_clock::now();
+    graph.request.Infer();
+    const auto end = std::chrono::steady_clock::now();
+    inferMs = std::chrono::duration<double, std::milli>(end - start).count();
+
+    Blob::Ptr output = graph.request.GetBlob(graph.outputName);
+    const uint8_t* raw = output->cbuffer().as<uint8_t*>();
+    return fnv1a64(raw, output->byteSize());
+}
+
+int runResidentNetworks(
+    Core& ie,
+    const std::string& modelXml,
+    const std::string& modelBin,
+    const std::string& device,
+    const std::vector<size_t>& residentTimes) {
+    const ov203::DeviceSpec deviceSpec = ov203::parseDeviceSpec(device);
+    std::vector<ResidentGraph> resident;
+    resident.reserve(residentTimes.size());
+
+    std::cout << "RESIDENT_BEGIN requested=" << residentTimes.size()
+              << " device=" << device << std::endl;
+
+    for (size_t requestedIndex = 0; requestedIndex < residentTimes.size(); ++requestedIndex) {
+        const size_t timeFrames = residentTimes[requestedIndex];
+
+        try {
+            CNNNetwork network = ie.ReadNetwork(modelXml, modelBin);
+            reshapeTimeIfRequested(network, timeFrames);
+
+            InputsDataMap inputs = network.getInputsInfo();
+            OutputsDataMap outputs = network.getOutputsInfo();
+            if (inputs.size() != 1 || outputs.size() != 1) {
+                throw std::runtime_error(
+                    "--resident-times requires exactly one input and one output");
+            }
+
+            auto input = inputs.begin();
+            if (deviceSpec.usesMyriad) {
+                input->second->setPrecision(Precision::FP16);
+            } else {
+                input->second->setPrecision(Precision::FP32);
+            }
+            input->second->setLayout(
+                TensorDesc::getLayoutByDims(input->second->getInputData()->getDims()));
+
+            const auto loadStart = std::chrono::steady_clock::now();
+            ExecutableNetwork executable = ie.LoadNetwork(network, device);
+            const auto loadEnd = std::chrono::steady_clock::now();
+            const double loadMs =
+                std::chrono::duration<double, std::milli>(loadEnd - loadStart).count();
+
+            ResidentGraph graph;
+            graph.timeFrames = timeFrames;
+            graph.executable = executable;
+            graph.request = graph.executable.CreateInferRequest();
+            graph.inputName = input->first;
+            graph.outputName = outputs.begin()->first;
+
+            double initialInferMs = 0.0;
+            graph.outputFingerprint = runResidentRequest(graph, initialInferMs);
+
+            std::cout << "RESIDENT_LOAD"
+                      << " index=" << (requestedIndex + 1)
+                      << " time=" << timeFrames
+                      << " status=PASS"
+                      << " load_ms=" << std::fixed << std::setprecision(3) << loadMs
+                      << " initial_infer_ms=" << initialInferMs
+                      << " fingerprint=0x" << std::hex << graph.outputFingerprint << std::dec
+                      << std::endl;
+
+            resident.push_back(graph);
+        } catch (const std::exception& ex) {
+            std::cout << "RESIDENT_LOAD"
+                      << " index=" << (requestedIndex + 1)
+                      << " time=" << timeFrames
+                      << " status=FAIL"
+                      << " loaded_before_failure=" << resident.size()
+                      << " error=" << std::quoted(ex.what())
+                      << std::endl;
+            if (resident.empty()) {
+                std::cout << "RESIDENT_RESULT status=FAIL loaded=0 requested="
+                          << residentTimes.size() << std::endl;
+                return 3;
+            }
+            std::cout << "RESIDENT_RESULT status=CAPACITY_LIMIT loaded="
+                      << resident.size() << " requested=" << residentTimes.size()
+                      << " failed_time=" << timeFrames << std::endl;
+            return 0;
+        }
+
+        for (size_t i = 0; i < resident.size(); ++i) {
+            try {
+                double inferMs = 0.0;
+                const uint64_t fingerprint = runResidentRequest(resident[i], inferMs);
+                const bool stable = fingerprint == resident[i].outputFingerprint;
+                std::cout << "RESIDENT_RECHECK"
+                          << " after_load=" << timeFrames
+                          << " target_time=" << resident[i].timeFrames
+                          << " status=" << (stable ? "PASS" : "FINGERPRINT_MISMATCH")
+                          << " infer_ms=" << std::fixed << std::setprecision(3) << inferMs
+                          << " fingerprint=0x" << std::hex << fingerprint << std::dec
+                          << " stable=" << (stable ? 1 : 0)
+                          << std::endl;
+                if (!stable) {
+                    std::cout << "RESIDENT_RESULT status=RECHECK_FAIL loaded="
+                              << resident.size() << " requested=" << residentTimes.size()
+                              << " target_time=" << resident[i].timeFrames << std::endl;
+                    return 3;
+                }
+            } catch (const std::exception& ex) {
+                std::cout << "RESIDENT_RECHECK"
+                          << " after_load=" << timeFrames
+                          << " target_time=" << resident[i].timeFrames
+                          << " status=FAIL"
+                          << " error=" << std::quoted(ex.what())
+                          << std::endl;
+                std::cout << "RESIDENT_RESULT status=RECHECK_FAIL loaded="
+                          << resident.size() << " requested=" << residentTimes.size()
+                          << " target_time=" << resident[i].timeFrames << std::endl;
+                return 3;
+            }
+        }
+    }
+
+    std::cout << "RESIDENT_RESULT status=PASS loaded=" << resident.size()
+              << " requested=" << residentTimes.size() << std::endl;
+    return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -459,6 +636,7 @@ int main(int argc, char** argv) {
     int iterations = 1;
     int warmupIterations = 1;
     size_t reshapeTime = 0;
+    std::vector<size_t> residentTimes;
     bool listOnly = false;
     bool streamMode = false;
 
@@ -496,24 +674,44 @@ int main(int argc, char** argv) {
                 return 4;
             }
             reshapeTime = static_cast<size_t>(value);
+        } else if (arg == "--resident-times") {
+            residentTimes = parseResidentTimes(next("--resident-times"));
         } else if (arg == "-h" || arg == "--help") {
             std::cout << "usage: hello_myriad [--model <IR.xml>] [--weights <IR.bin>]"
                       << " [--device MYRIAD] [--iterations N] [--tensor input.f32]"
                       << " [--output output.f32] [--reshape-time T] [--list-only]\n"
                       << "       hello_myriad --model <IR.xml> [--weights <IR.bin>]"
                       << " [--device MYRIAD] --stdin [--warmup N] [--reshape-time T]\n"
+                      << "       hello_myriad --model <IR.xml> [--weights <IR.bin>]"
+                      << " [--device MYRIAD] --resident-times T1,T2,...\n"
                       << "stream protocol: repeated little-endian float32 input tensors"
                       << " on stdin; one float32 output tensor per request on stdout\n";
             return 0;
         } else {
             std::cerr << "usage: hello_myriad [--model <IR.xml>] [--weights <IR.bin>]"
                       << " [--device MYRIAD] [--iterations N] [--tensor input.f32]"
-                      << " [--output output.f32] [--reshape-time T] [--list-only|--stdin]\n";
+                      << " [--output output.f32] [--reshape-time T]"
+                      << " [--resident-times T1,T2,...] [--list-only|--stdin]\n";
             return 4;
         }
     }
 
     try {
+        if (!residentTimes.empty()) {
+            if (modelXml.empty()) {
+                std::cerr << "--resident-times requires --model\n";
+                return 4;
+            }
+            if (
+                streamMode || listOnly || reshapeTime != 0 ||
+                !tensorPath.empty() || !outputPath.empty()
+            ) {
+                std::cerr << "--resident-times cannot be combined with"
+                          << " --stdin/--list-only/--reshape-time/--tensor/--output\n";
+                return 4;
+            }
+        }
+
         if (streamMode) {
             if (modelXml.empty()) {
                 std::cerr << "--stdin requires --model\n";
@@ -545,6 +743,13 @@ int main(int argc, char** argv) {
             std::cout << "RESULT: FAIL - no MYRIAD plugin (is the MA2450 stick plugged in,"
                          " and does the container have --device=/dev/bus/usb?)\n";
             return 2;
+        }
+
+        if (!residentTimes.empty()) {
+            const int rc = runResidentNetworks(
+                ie, modelXml, modelBin, device, residentTimes);
+            std::cout << "RESULT: " << (rc == 0 ? "PASS" : "FAIL") << "\n";
+            return rc;
         }
 
         if (!modelXml.empty()) {
