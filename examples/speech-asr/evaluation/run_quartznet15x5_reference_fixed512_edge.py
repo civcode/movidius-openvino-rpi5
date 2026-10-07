@@ -19,7 +19,6 @@ from run_quartznet15x5_reference_myriad_edge import (  # noqa: E402
     remote_text,
     require_main_and_clean,
     run_capture,
-    run_local_reference_preparation,
     run_stream,
     run_stream_checked,
     sha256_path,
@@ -31,6 +30,71 @@ from speech_asr.orchestration import rsync_pull_command, rsync_push_command, ssh
 from speech_asr.quartznet_fixed512 import FIXED_TENSOR_FRAMES  # noqa: E402
 
 EXPECTED_SAMPLES = 2703
+LOCAL_THREADS = 16
+
+
+def local_limited_command(cpuset: str, argv: list[str]) -> list[str]:
+    return [
+        "env",
+        f"OMP_NUM_THREADS={LOCAL_THREADS}",
+        f"MKL_NUM_THREADS={LOCAL_THREADS}",
+        f"OPENBLAS_NUM_THREADS={LOCAL_THREADS}",
+        "taskset",
+        "-c",
+        cpuset,
+        *argv,
+    ]
+
+
+def run_local_reference_preparation_limited(
+    device: str,
+    cpuset: str,
+) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path]:
+    commands = [
+        (
+            [str(ROOT / "scripts" / "prepare-cnn-ctc-v18-pretrained.sh")],
+            "pretrained source preparation",
+        ),
+        (
+            [str(ROOT / "scripts" / "prepare-librispeech-dev-clean.sh")],
+            "LibriSpeech dev-clean preparation",
+        ),
+        (
+            [
+                str(ROOT / "scripts" / "qualify-quartznet15x5-reference-numpy.sh"),
+                "--device",
+                device,
+            ],
+            "NumPy source-reference qualification",
+        ),
+        (
+            [str(ROOT / "scripts" / "prepare-quartznet15x5-reference-myriad.sh")],
+            "QuartzNet MYRIAD artifact preparation",
+        ),
+    ]
+    for argv, label in commands:
+        print(
+            "[fixed512-controller] local limited run "
+            f"cpuset={cpuset} threads={LOCAL_THREADS} label={label}",
+            flush=True,
+        )
+        run_stream_checked(local_limited_command(cpuset, argv), label)
+
+    dataset = ROOT / "work" / "speech-asr" / "librispeech" / "dev-clean"
+    myriad = ROOT / "work" / "speech-asr" / "quartznet15x5-reference" / "myriad"
+    ir = myriad / "openvino" / "fp16"
+    dynamic = myriad / "dynamic" / "quartznet15x5_nvidia_ref.onnx"
+    for required in (
+        dataset / "manifest.jsonl",
+        dataset / "dataset.json",
+        ir / "quartznet15x5_nvidia_ref.xml",
+        ir / "quartznet15x5_nvidia_ref.bin",
+        ir / "artifacts.json",
+        dynamic,
+    ):
+        if not required.is_file():
+            raise ValueError(f"prepared artifact missing: {required}")
+    return dataset, ir, dynamic
 
 
 def validate_result(
@@ -124,7 +188,10 @@ def main() -> int:
             raise ValueError("invalid --cpuset")
 
         local_head = require_main_and_clean()
-        dataset, ir, dynamic = run_local_reference_preparation(args.device)
+        dataset, ir, dynamic = run_local_reference_preparation_limited(
+            args.device,
+            args.cpuset,
+        )
         manifest, manifest_sha = validate_local_dataset(dataset)
         xml = ir / "quartznet15x5_nvidia_ref.xml"
         binary = ir / "quartznet15x5_nvidia_ref.bin"
