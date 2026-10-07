@@ -1357,7 +1357,7 @@ spec = json.loads(Path("examples/speech-asr/models/cnn_ctc_v18/model_spec.json")
 canonical = hashlib.sha256(
     json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 ).hexdigest()
-assert canonical == "4cf0403f533563e7977663b3ccbfc17450ed55be426457d53c5ead1fbf2cf6f8"
+assert canonical == "008416f73aa2f90e1eb7b60cb2021175cbc0826b09810aed9aebbe41fe6f422c"
 assert spec["input_contract"]["shape"] == [1,64,512]
 assert spec["output_contract"]["shape"] == [1,256,39]
 frontend = spec["frontend"]
@@ -1375,7 +1375,7 @@ assert network["estimated_parameters"] == 18934631
 assert network["estimated_macs_fixed_input"] == 4827463680
 transfer = spec["transfer"]
 assert transfer["source_size_bytes"] == 71083664
-assert transfer["source_sha512"] == "74e8284e77098906afb7a15a861ef60ec14db1a4acb206fa719492fa43050ad69a91c245652c05c5f0ded38b5903ed55"
+assert transfer["source_sha384"] == "74e8284e77098906afb7a15a861ef60ec14db1a4acb206fa719492fa43050ad69a91c245652c05c5f0ded38b5903ed55"
 assert len(transfer["source_vocab"]) == 29
 assert transfer["fine_tune"] == "all_parameters"
 training = spec["training"]
@@ -1391,7 +1391,7 @@ grep -q 'V18_ARCHITECTURE' examples/speech-asr/python/speech_asr/orchestration.p
 grep -q '"cnn_ctc_v18": "train-cnn-ctc-v18.sh"' examples/speech-asr/python/speech_asr/orchestration.py || fail 'cnn_ctc_v18 training registration missing'
 grep -q '"cnn_ctc_v18": "evaluate-cnn-ctc-v18.sh"' examples/speech-asr/agent/edge_worker.py || fail 'cnn_ctc_v18 edge evaluator registration missing'
 grep -q 'DEFAULT_PARENT = "exp-dbcda9a6f7ae7d7f"' examples/speech-asr/agent/init_cnn_ctc_v18_pretrained_transfer.py || fail 'cnn_ctc_v18 parent changed'
-grep -q 'PRETRAINED_SHA512' examples/speech-asr/agent/init_cnn_ctc_v18_pretrained_transfer.py || fail 'cnn_ctc_v18 source hash pin missing'
+grep -q 'PRETRAINED_SHA384' examples/speech-asr/agent/init_cnn_ctc_v18_pretrained_transfer.py || fail 'cnn_ctc_v18 source hash pin missing'
 grep -q 'load_pretrained_quartznet' examples/speech-asr/training/train_cnn_ctc_v18.py || fail 'cnn_ctc_v18 trainer does not require pretrained import'
 test -f examples/speech-asr/training/verify_cnn_ctc_v18_pretrained.py || fail 'cnn_ctc_v18 pretrained import verifier missing'
 grep -q 'shared_decoder_symbol_count' examples/speech-asr/training/verify_cnn_ctc_v18_pretrained.py || fail 'cnn_ctc_v18 pretrained import symbol check missing'
