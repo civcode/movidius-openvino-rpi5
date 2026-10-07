@@ -192,11 +192,15 @@ V18_ARCHITECTURE = {
     "batchnorm_eps": 0.001,
 }
 
+V19_ARCHITECTURE = dict(V18_ARCHITECTURE)
+
 V18_PRETRAINED_SOURCE = {
     "path": "work/speech-asr/pretrained/quartznet15x5-en-base-v2/QuartzNet15x5-En-Base.nemo",
     "size_bytes": 71083664,
     "sha384": "74e8284e77098906afb7a15a861ef60ec14db1a4acb206fa719492fa43050ad69a91c245652c05c5f0ded38b5903ed55",
 }
+
+V19_PRETRAINED_SOURCE = dict(V18_PRETRAINED_SOURCE)
 
 
 def executor_model_basename(model_id: str) -> str:
@@ -219,6 +223,7 @@ def executor_model_basename(model_id: str) -> str:
         "cnn_ctc_v16",
         "cnn_ctc_v17",
         "cnn_ctc_v18",
+        "cnn_ctc_v19",
     }:
         return model_id
     raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
@@ -248,6 +253,7 @@ def validate_model_executor_request(
         "cnn_ctc_v16",
         "cnn_ctc_v17",
         "cnn_ctc_v18",
+        "cnn_ctc_v19",
     }:
         raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
     if model_spec.get("family") != "cnn_ctc":
@@ -255,7 +261,7 @@ def validate_model_executor_request(
     expected_frontend = {
         "kind": (
             "logmel-v3"
-            if model_id == "cnn_ctc_v18"
+            if model_id in {"cnn_ctc_v18", "cnn_ctc_v19"}
             else ("logmel-v2" if model_id == "cnn_ctc_v4" else "logmel-v1")
         )
     }
@@ -284,6 +290,7 @@ def validate_model_executor_request(
         "cnn_ctc_v16": V16_ARCHITECTURE,
         "cnn_ctc_v17": V17_ARCHITECTURE,
         "cnn_ctc_v18": V18_ARCHITECTURE,
+        "cnn_ctc_v19": V19_ARCHITECTURE,
     }[model_id]
     if model_spec.get("architecture") != expected_architecture:
         raise ValueError(
@@ -298,7 +305,7 @@ def validate_model_executor_request(
     if not isinstance(optimizer, Mapping):
         raise ValueError("training optimizer declaration is missing")
     expected_optimizer_kind = (
-        "novograd" if model_id in {"cnn_ctc_v17", "cnn_ctc_v18"} else "adam"
+        "novograd" if model_id in {"cnn_ctc_v17", "cnn_ctc_v18", "cnn_ctc_v19"} else "adam"
     )
     if dict(optimizer) != {
         "kind": expected_optimizer_kind,
@@ -311,10 +318,11 @@ def validate_model_executor_request(
         raise ValueError(
             f"{model_id} executor requires optimizer {expected_optimizer_kind!r}"
         )
-    if model_id == "cnn_ctc_v18":
-        if train_config.get("pretrained_source") != V18_PRETRAINED_SOURCE:
+    if model_id in {"cnn_ctc_v18", "cnn_ctc_v19"}:
+        expected_pretrained = V18_PRETRAINED_SOURCE if model_id in {"cnn_ctc_v18", "cnn_ctc_v19"} else V19_PRETRAINED_SOURCE
+        if train_config.get("pretrained_source") != expected_pretrained:
             raise ValueError(
-                "cnn_ctc_v18 requires the exact pinned pretrained source declaration"
+                f"{model_id} requires the exact pinned pretrained source declaration"
             )
 
     ctc_objective = train_config.get("ctc_objective")
@@ -394,6 +402,7 @@ def compatibility_probe_command(
         "cnn_ctc_v16",
         "cnn_ctc_v17",
         "cnn_ctc_v18",
+        "cnn_ctc_v19",
     }:
         return [
             str(root / "scripts" / f"probe-{model_id.replace('_', '-')}.sh"),
@@ -434,6 +443,7 @@ def training_command(
         "cnn_ctc_v16": "train-cnn-ctc-v16.sh",
         "cnn_ctc_v17": "train-cnn-ctc-v17.sh",
         "cnn_ctc_v18": "train-cnn-ctc-v18.sh",
+        "cnn_ctc_v19": "train-cnn-ctc-v19.sh",
     }.get(model_id)
     if executable is None:
         raise ValueError(f"unsupported Phase 11 model executor: {model_id!r}")
@@ -465,7 +475,7 @@ def training_command(
             "--checkpoint-selection",
             str(checkpoint_selection),
         ])
-    if model_id == "cnn_ctc_v18":
+    if model_id in {"cnn_ctc_v18", "cnn_ctc_v19"}:
         command.extend([
             "--pretrained",
             str(root / train_config["pretrained_source"]["path"]),
@@ -611,7 +621,7 @@ def pretraining_myriad_compatibility(
     max_softmax_abs_error = comparison.get("max_softmax_abs_error")
     reasons: list[str] = []
 
-    if model_id == "cnn_ctc_v18":
+    if model_id in {"cnn_ctc_v18", "cnn_ctc_v19"}:
         gate_kind = "pretrained-semantic-parity-v1"
         if (
             not isinstance(frame_argmax_agreement, (int, float))
