@@ -40,6 +40,11 @@ def train_config():
         "max_samples": None,
         "checkpoint_selection": "validation_cer",
         "optimizer": {"kind": "novograd", "learning_rate": 0.001},
+        "pretrained_source": {
+            "path": "work/speech-asr/pretrained/quartznet15x5-en-base-v2/QuartzNet15x5-En-Base.nemo",
+            "size_bytes": 71083664,
+            "sha512": "74e8284e77098906afb7a15a861ef60ec14db1a4acb206fa719492fa43050ad69a91c245652c05c5f0ded38b5903ed55",
+        },
         "training_manifest": {
             "id": "ami-model-quality-v4-architecture-screen-v1-train",
             "path": "work/speech-asr/ami/model-quality-v4-architecture-screen-v1/train.manifest.jsonl",
@@ -108,6 +113,8 @@ class CnnCtcV18Tests(unittest.TestCase):
             model_spec=model,
         )
         self.assertEqual(train[0], "/repo/scripts/train-cnn-ctc-v18.sh")
+        self.assertIn("--pretrained", train)
+        self.assertIn("/repo/work/speech-asr/pretrained/quartznet15x5-en-base-v2/QuartzNet15x5-En-Base.nemo", train)
         probe = compatibility_probe_command(
             root=pathlib.Path("/repo"),
             build_dir=pathlib.Path("/repo/work/attempt/cnn_ctc_v18"),
