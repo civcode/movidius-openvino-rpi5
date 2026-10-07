@@ -1468,6 +1468,8 @@ grep -q 'stream_output=True' examples/speech-asr/agent/run_experiment.py || fail
 grep -q '"initial_validation_checkpoint_candidate": True' examples/speech-asr/training/train_cnn_ctc_v19.py || fail 'cnn_ctc_v19 epoch-zero evidence missing'
 grep -q 'model_id in {"cnn_ctc_v18", "cnn_ctc_v19"}' examples/speech-asr/python/speech_asr/orchestration.py || fail 'cnn_ctc_v19 pretrained semantic MYRIAD gate missing'
 test -x scripts/tune-cnn-ctc-v19-decoder.sh || fail 'cnn_ctc_v19 decoder sweep entry point missing'
+test -x scripts/test-speech-asr-ctc-beam.sh || fail 'CTC beam uv/venv test entry point missing'
+grep -q 'scripts/python-training.sh' scripts/test-speech-asr-ctc-beam.sh || fail 'CTC beam tests must use uv-managed training venv'
 grep -q 'OMP_NUM_THREADS.*:-1' scripts/tune-cnn-ctc-v19-decoder.sh || fail 'decoder sweep must default OMP workers to one thread'
 grep -q 'MKL_NUM_THREADS.*:-1' scripts/tune-cnn-ctc-v19-decoder.sh || fail 'decoder sweep must default MKL workers to one thread'
 grep -q 'OPENBLAS_NUM_THREADS.*:-1' scripts/tune-cnn-ctc-v19-decoder.sh || fail 'decoder sweep must default OpenBLAS workers to one thread'
