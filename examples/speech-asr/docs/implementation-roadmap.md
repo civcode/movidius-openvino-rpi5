@@ -982,11 +982,26 @@ cached physical-logit utterances:
 - decoder mean `55.34163030793814 ms`;
 - wall time `71.22903373599956 s`.
 
-The next measurement is a physical v19 + frozen-decoder run through
-`evaluate-cnn-ctc-v19.sh --decoder-artifact ...`. This is a measurement step,
-not a new architecture decision. The evaluator must report paired
-per-utterance acoustic-plus-decoder latency and realtime factor. Do not add
-independent p50/p95 statistics to estimate a system percentile.
+The physical v19 + frozen-decoder deployment measurement is complete on the
+Raspberry Pi 5 using the exported native ARM64 OpenVINO host runtime. All 1,273
+utterances completed in one persistent MYRIAD session with zero restarts and
+exact frozen-decoder quality match.
 
-After that evidence is recorded, return to REVIEW before changing architecture,
-training policy, decoder parameters, benchmark data, or acceptance thresholds.
+Integrated deployment compute evidence:
+
+- MYRIAD inference p50/p95 `392.424125 / 392.5454856 ms`;
+- decoder p50/p95/mean
+  `44.00145399995381 / 150.2441755998006 / 60.10071448467321 ms`;
+- paired acoustic-plus-decoder p50/p95/mean
+  `436.4124369999538 / 542.6246731998006 / 452.5247842749317 ms`;
+- paired acoustic-plus-decoder RTF `0.25272784122997616`;
+- WER `0.5497732671129346`;
+- CER `0.4634567759027818`;
+- launcher backend `host`.
+
+The paired latency distribution is authoritative and excludes frontend/IPC.
+Do not add independent acoustic and decoder percentiles.
+
+Return to REVIEW now. Do not change architecture, training policy, decoder
+parameters, benchmark data, or acceptance thresholds until that review selects
+the next controlled step.

@@ -592,11 +592,22 @@ The Raspberry Pi CPU-only decoder reproof over the same cached physical logits
 measured p50 `39.573781999934 ms`, p95 `142.60984940001433 ms`, mean
 `55.34163030793814 ms`, and 71.229 seconds wall time for all 1,273 samples.
 
-For the next physical deployment measurement, supply the frozen decoder
-artifact to `evaluate-cnn-ctc-v19.sh`. The evaluator reports the decoder
-latency separately and also computes paired per-utterance
-`acoustic_plus_decoder` latency/RTF; do not estimate combined p95 by adding
-the two independent p95 values.
+The final integrated Raspberry Pi deployment reproof is also complete. It used
+the OpenVINO 2020.3.2 ARM64 runtime exported from the pinned Docker image and
+executed directly on the host, with all 1,273 utterances in one persistent
+MYRIAD session and zero restarts. Frozen decoder quality matched exactly at WER
+`0.5497732671129346` / CER `0.4634567759027818`.
+
+Integrated compute metrics were MYRIAD p50/p95
+`392.424125 / 392.5454856 ms`, decoder p50/p95/mean
+`44.00145399995381 / 150.2441755998006 / 60.10071448467321 ms`, and paired
+acoustic-plus-decoder p50/p95/mean
+`436.4124369999538 / 542.6246731998006 / 452.5247842749317 ms`. The paired
+acoustic-plus-decoder realtime factor was `0.25272784122997616`.
+
+Those paired values are authoritative; do not estimate combined p95 by adding
+independent acoustic and decoder percentiles. The deployment timing scope is
+MYRIAD `Infer()` plus CPU decoder compute only, excluding frontend and IPC.
 
 See
 `docs/adr/model-quality-v4-cnn-ctc-v19-conservative-transfer.md` and

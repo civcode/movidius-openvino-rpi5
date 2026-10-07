@@ -126,6 +126,15 @@ The controller prints the measured MYRIAD p50/p95, decoder p50/p95/mean,
 paired acoustic-plus-decoder p50/p95/mean, combined realtime factor, and whether
 WER/CER still exactly match the frozen decoder result.
 
+The frozen 2026-10-07 integrated reproof completed at repository commit
+`9ec080227130df59d66dd65da99e91ee52e6da73` with
+`launcher_backend=host`. It evaluated 1,273/1,273 utterances in one persistent
+MYRIAD session with zero restarts and exact WER/CER match. Paired
+acoustic-plus-decoder p50/p95/mean were
+`436.4124369999538 / 542.6246731998006 / 452.5247842749317 ms`, and paired
+RTF was `0.25272784122997616`. These are compute-only measurements for
+MYRIAD `Infer()` plus CPU decoder; frontend and IPC are excluded.
+
 
 ## Evaluation worker
 

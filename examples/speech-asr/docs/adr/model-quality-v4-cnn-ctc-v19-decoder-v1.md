@@ -1,6 +1,6 @@
 # ADR: freeze cnn_ctc_v19 acoustics and add CPU CTC beam/LM decoding
 
-Status: selected decoder frozen; Raspberry Pi CPU latency reproof complete
+Status: selected decoder frozen; Raspberry Pi integrated deployment reproof complete
 Date: 2026-10-07
 Acoustic reference: `exp-f4adb44ab833e896/attempt-0002`
 
@@ -97,11 +97,45 @@ The Pi result reproduced the selected decoder quality exactly:
 This closes the CPU-only Raspberry Pi latency reproof. The higher Pi latency
 relative to Oberon is now deployment evidence rather than an estimate.
 
+## Integrated Raspberry Pi deployment reproof
+
+The final paired deployment measurement completed on 2026-10-07 at repository
+commit `9ec080227130df59d66dd65da99e91ee52e6da73`. The OpenVINO 2020.3.2
+ARM64 runtime was exported from the pinned Docker image and executed directly
+on the Raspberry Pi host; the measurement is therefore pinned to
+`launcher_backend=host`, not Docker or automatic fallback.
+
+The evaluator processed all 1,273 ES2011 validation utterances in one persistent
+MYRIAD tensor-stream-v2 session with zero restarts. The first-sample persistent
+parity gate passed with valid-frame argmax agreement `1.0` and maximum absolute
+error `0.0`.
+
+Quality exactly matched the frozen selected decoder:
+
+- WER `0.5497732671129346`;
+- CER `0.4634567759027818`;
+- frozen-quality match `true`.
+
+Measured compute latency was:
+
+- MYRIAD inference p50 `392.424125 ms`;
+- MYRIAD inference p95 `392.5454856 ms`;
+- decoder p50 `44.00145399995381 ms`;
+- decoder p95 `150.2441755998006 ms`;
+- decoder mean `60.10071448467321 ms`;
+- paired acoustic-plus-decoder p50 `436.4124369999538 ms`;
+- paired acoustic-plus-decoder p95 `542.6246731998006 ms`;
+- paired acoustic-plus-decoder mean `452.5247842749317 ms`;
+- paired acoustic-plus-decoder realtime factor
+  `0.25272784122997616`.
+
+The paired values are the authoritative deployment percentiles. Their scope is
+per-utterance MYRIAD `Infer()` plus CPU decoder compute only; frontend work and
+IPC are excluded.
+
 Do not derive a deployed p95 by adding acoustic p95 and decoder p95. Percentiles
-must be computed from paired per-utterance measurements. The physical v19
-evaluator therefore records `acoustic_plus_decoder_ms` per sample and reports
-paired acoustic-plus-decoder p50/p95/mean latency plus realtime factor whenever
-a frozen decoder artifact is supplied.
+must be computed from paired per-utterance measurements. The integrated reproof
+above closes that measurement requirement.
 
 ## CPU execution policy
 
