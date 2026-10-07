@@ -233,6 +233,18 @@ def command_start_attempt(args: argparse.Namespace) -> None:
     if attempts:
         _index, _path, previous = attempts[-1]
         if previous["state"] != "AWAIT_REVIEW":
+            if args.resume_nonterminal:
+                print(
+                    json.dumps(
+                        {
+                            "status": "resumed",
+                            "attempt_id": previous["attempt_id"],
+                            "state": previous["state"],
+                        },
+                        sort_keys=True,
+                    )
+                )
+                return
             raise ValueError(
                 f"latest attempt is not terminal: {previous['attempt_id']} "
                 f"state={previous['state']}"
@@ -481,6 +493,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     start = sub.add_parser("start-attempt")
     start.add_argument("--experiment", type=pathlib.Path, required=True)
+    start.add_argument(
+        "--resume-nonterminal",
+        action="store_true",
+        help="return the latest nonterminal attempt instead of rejecting it",
+    )
     start.set_defaults(func=command_start_attempt)
 
     transition = sub.add_parser("transition")
