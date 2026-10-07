@@ -571,3 +571,33 @@ EXP="$(printf '%s\n' "$INIT_JSON" |
 ```
 
 See `docs/adr/model-quality-v4-cnn-ctc-v17-quartznet-reference-training.md`.
+
+## v19 frozen acoustic and decoder result
+
+`cnn_ctc_v19` is the current frozen acoustic reference. Conservative
+pretrained fine-tuning selected epoch 5 at validation CER
+`0.46201693255773774` / WER `0.5983588857698121`; the full 1,273-utterance
+Pi 5 + MA2450 evaluation reproduced that closely at CER
+`0.46230490122674656` / WER `0.5985748218527316`, with inference-only p50
+`392.428065 ms`, p95 `395.7003068 ms`, RTF `0.21930080610559416`, zero
+failures and zero persistent-server restarts.
+
+Decoder development is frozen separately from the acoustic graph. The selected
+CPU prefix-beam decoder uses beam width 8, token top-k 12, a character 5-gram
+LM, LM weight 0.30 and word bonus -0.20. It improves WER to
+`0.5497732671129346` while CER is effectively flat at
+`0.4634567759027818`.
+
+The Raspberry Pi CPU-only decoder reproof over the same cached physical logits
+measured p50 `39.573781999934 ms`, p95 `142.60984940001433 ms`, mean
+`55.34163030793814 ms`, and 71.229 seconds wall time for all 1,273 samples.
+
+For the next physical deployment measurement, supply the frozen decoder
+artifact to `evaluate-cnn-ctc-v19.sh`. The evaluator reports the decoder
+latency separately and also computes paired per-utterance
+`acoustic_plus_decoder` latency/RTF; do not estimate combined p95 by adding
+the two independent p95 values.
+
+See
+`docs/adr/model-quality-v4-cnn-ctc-v19-conservative-transfer.md` and
+`docs/adr/model-quality-v4-cnn-ctc-v19-decoder-v1.md`.

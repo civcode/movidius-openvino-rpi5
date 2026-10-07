@@ -957,49 +957,36 @@ trustworthy measurement from the Pi/Movidius target.
 
 # Immediate next work
 
-The full model-quality-v4 v3 baseline remains the direct ES2011 reference at
-CER `0.7588550365720209`. The 112-channel `cnn_ctc_v7` capacity ablation
-was rejected at CER `0.7670333467718712` and MA2450 p95 `19.7972674 ms`.
-Do not continue the width sweep.
+The architecture-screen sequence has advanced through pretrained transfer.
+`cnn_ctc_v19` is now the frozen acoustic reference, selected from
+`exp-f4adb44ab833e896/attempt-0002`.
 
-Architecture iteration now uses **architecture-screen-v1** before paying the
-full 32-epoch / 100%-data cost.
+Frozen physical acoustic evidence on the 1,273-record ES2011 validation set:
 
-The screen:
+- CER `0.46230490122674656`;
+- WER `0.5985748218527316`;
+- inference-only RTF `0.21930080610559416`;
+- MYRIAD inference p50/p95 `392.428065 / 395.7003068 ms`;
+- zero failures and zero persistent-server restarts.
 
-- derives an approximately 25% training subset from the frozen qualified v4
-  training manifest using
-  `u64_be(sha256(sample_id)[0:8]) % 4 == 0`;
-- requires all 48 training meetings to remain represented;
-- keeps the full frozen 1,273-record ES2011 validation manifest;
-- trains for 12 epochs with validation-CER checkpoint selection;
-- forbids sealed held-out evidence;
-- treats screen results as ranking evidence only.
+The decoder sweep is also complete. The selected CPU decoder is prefix beam
+width 8, token top-k 12, character 5-gram LM, LM weight 0.30 and word bonus
+-0.20. It improves WER to `0.5497732671129346` with CER
+`0.4634567759027818`.
 
-Establish the v3 screen control first:
+The Raspberry Pi 5 CPU-only decoder reproof is complete on the same 1,273
+cached physical-logit utterances:
 
-```bash
-git pull --ff-only
-./ci/verify-static.sh
-./scripts/test-speech-asr.sh
+- decoder p50 `39.573781999934 ms`;
+- decoder p95 `142.60984940001433 ms`;
+- decoder mean `55.34163030793814 ms`;
+- wall time `71.22903373599956 s`.
 
-./scripts/prepare-speech-architecture-screen-v1.sh
-./scripts/prepare-speech-architecture-screen-v1.sh --verify-only
-cat work/speech-asr/ami/model-quality-v4-architecture-screen-v1/screen.json
+The next measurement is a physical v19 + frozen-decoder run through
+`evaluate-cnn-ctc-v19.sh --decoder-artifact ...`. This is a measurement step,
+not a new architecture decision. The evaluator must report paired
+per-utterance acoustic-plus-decoder latency and realtime factor. Do not add
+independent p50/p95 statistics to estimate a system percentile.
 
-EXP="$(
-  ./scripts/init-cnn-ctc-v3-architecture-screen.sh |
-  python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])'
-)"
-./scripts/run-speech-experiment.sh --experiment "$EXP" --worker edge
-./scripts/review-speech-experiment.sh --experiment "$EXP"
-```
-
-Once the v3 proxy CER/trajectory is known, new architectures are ranked only
-against that control under the exact same subset, epoch budget and ES2011
-validation set. Promising candidates then advance to a larger-budget
-confirmation before any full-budget run.
-
-The next architecture hypothesis after the control is a higher-temporal-
-resolution, narrower dilated residual CNN; its screen experiment must not be
-initialized until the v3 proxy baseline is recorded.
+After that evidence is recorded, return to REVIEW before changing architecture,
+training policy, decoder parameters, benchmark data, or acceptance thresholds.

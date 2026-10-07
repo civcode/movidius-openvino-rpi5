@@ -1,6 +1,6 @@
 # ADR: freeze cnn_ctc_v19 acoustics and add CPU CTC beam/LM decoding
 
-Status: selected decoder frozen; Raspberry Pi CPU latency reproof pending
+Status: selected decoder frozen; Raspberry Pi CPU latency reproof complete
 Date: 2026-10-07
 Acoustic reference: `exp-f4adb44ab833e896/attempt-0002`
 
@@ -78,9 +78,30 @@ The selected profile is frozen into a versioned decoder artifact containing the
 trained LM counts plus sweep/model/dataset provenance. The v19 model spec and
 OpenVINO IR remain unchanged.
 
-Before declaring the full deployed system latency, re-run the CPU-only decoder
-benchmark on the Raspberry Pi 5. Oberon decoder timings are development
-evidence, not Pi runtime latency.
+## Raspberry Pi CPU latency reproof
+
+The frozen artifact was re-benchmarked on the Raspberry Pi 5 over the same
+1,273 cached physical-logit utterances with CPython 3.11.17, NumPy 1.26.4,
+`OMP_NUM_THREADS=1`, `MKL_NUM_THREADS=1`, `OPENBLAS_NUM_THREADS=1`, and
+CPU affinity restricted to cores 0-3.
+
+The Pi result reproduced the selected decoder quality exactly:
+
+- WER `0.5497732671129346`;
+- CER `0.4634567759027818`;
+- decoder p50 `39.573781999934 ms`;
+- decoder p95 `142.60984940001433 ms`;
+- decoder mean `55.34163030793814 ms`;
+- benchmark wall time `71.22903373599956 s`.
+
+This closes the CPU-only Raspberry Pi latency reproof. The higher Pi latency
+relative to Oberon is now deployment evidence rather than an estimate.
+
+Do not derive a deployed p95 by adding acoustic p95 and decoder p95. Percentiles
+must be computed from paired per-utterance measurements. The physical v19
+evaluator therefore records `acoustic_plus_decoder_ms` per sample and reports
+paired acoustic-plus-decoder p50/p95/mean latency plus realtime factor whenever
+a frozen decoder artifact is supplied.
 
 ## CPU execution policy
 

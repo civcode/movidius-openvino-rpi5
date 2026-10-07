@@ -1,6 +1,6 @@
 # ADR: cnn_ctc_v19 conservative pretrained fine-tuning
 
-Status: implemented; execution pending
+Status: implemented; selected execution complete
 Date: 2026-10-07
 Evidence parent: `exp-7c7ac81bc57f8f3b/attempt-0001`
 
@@ -48,6 +48,25 @@ source, and deployment path. Only the fine-tuning policy changes:
 The final checkpoint therefore cannot be replaced by a worse post-update model
 under validation-CER selection: if no fine-tuned epoch beats the pretrained
 baseline, v19 reloads and deploys epoch 0.
+
+## v19 result
+
+The selected execution completed as `exp-f4adb44ab833e896/attempt-0002`.
+Epoch 5 beat the pretrained epoch-zero baseline and became the frozen acoustic
+reference:
+
+- validation CER `0.46201693255773774`;
+- validation WER `0.5983588857698121`;
+- physical MYRIAD CER `0.46230490122674656`;
+- physical MYRIAD WER `0.5985748218527316`;
+- inference-only RTF `0.21930080610559416`;
+- physical inference p50/p95 `392.428065 / 395.7003068 ms`;
+- 1,273/1,273 validation utterances completed with zero failures and zero
+  persistent-server restarts.
+
+The conservative fine-tuning policy therefore succeeded: AMI adaptation
+improved materially over the pretrained starting point without changing the
+v18/v19 inference topology.
 
 ## Physical compatibility
 
