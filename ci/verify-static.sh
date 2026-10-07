@@ -1393,6 +1393,11 @@ grep -q '"cnn_ctc_v18": "evaluate-cnn-ctc-v18.sh"' examples/speech-asr/agent/edg
 grep -q 'DEFAULT_PARENT = "exp-dbcda9a6f7ae7d7f"' examples/speech-asr/agent/init_cnn_ctc_v18_pretrained_transfer.py || fail 'cnn_ctc_v18 parent changed'
 grep -q 'PRETRAINED_SHA512' examples/speech-asr/agent/init_cnn_ctc_v18_pretrained_transfer.py || fail 'cnn_ctc_v18 source hash pin missing'
 grep -q 'load_pretrained_quartznet' examples/speech-asr/training/train_cnn_ctc_v18.py || fail 'cnn_ctc_v18 trainer does not require pretrained import'
+test -f examples/speech-asr/training/verify_cnn_ctc_v18_pretrained.py || fail 'cnn_ctc_v18 pretrained import verifier missing'
+grep -q 'shared_decoder_symbol_count' examples/speech-asr/training/verify_cnn_ctc_v18_pretrained.py || fail 'cnn_ctc_v18 pretrained import symbol check missing'
+grep -q 'encoder_source_tensors_used' examples/speech-asr/training/verify_cnn_ctc_v18_pretrained.py || fail 'cnn_ctc_v18 pretrained import encoder check missing'
+grep -q 'verify_cnn_ctc_v18_pretrained.py' scripts/prepare-cnn-ctc-v18-pretrained.sh || fail 'cnn_ctc_v18 source preparation does not verify tensor import'
+grep -q 'PRETRAINED_IMPORT' examples/speech-asr/agent/init_cnn_ctc_v18_pretrained_transfer.py || fail 'cnn_ctc_v18 initializer does not require import verification'
 grep -q '"pretrained_initialization"' examples/speech-asr/training/train_cnn_ctc_v18.py || fail 'cnn_ctc_v18 pretrained evidence missing'
 grep -q '"initial_validation"' examples/speech-asr/training/train_cnn_ctc_v18.py || fail 'cnn_ctc_v18 zero-step validation evidence missing'
 grep -q 'MAX_SERVER_RESTARTS = 4' examples/speech-asr/evaluation/evaluate_cnn_ctc_v18.py || fail 'cnn_ctc_v18 persistent-server restart guard missing'
@@ -1485,6 +1490,7 @@ for name in [
     "examples/speech-asr/training/cnn_ctc_v18.py",
     "examples/speech-asr/training/pretrained_cnn_ctc_v18.py",
     "examples/speech-asr/training/prepare_cnn_ctc_v18_pretrained.py",
+    "examples/speech-asr/training/verify_cnn_ctc_v18_pretrained.py",
     "examples/speech-asr/training/novograd.py",
     "examples/speech-asr/training/train_cnn_ctc_v10.py",
     "examples/speech-asr/training/train_cnn_ctc_v11.py",
