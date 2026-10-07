@@ -98,7 +98,7 @@ def require_main_and_clean() -> str:
     if branch != "main":
         raise ValueError(f"controller checkout must remain on main, got {branch!r}")
     dirty = run_capture(
-        ["git", "status", "--porcelain", "--untracked-files=no]
+        ["git", "status", "--porcelain", "--untracked-files=no"]
     ).stdout.strip()
     if dirty:
         raise ValueError("controller tracked worktree must be clean")
