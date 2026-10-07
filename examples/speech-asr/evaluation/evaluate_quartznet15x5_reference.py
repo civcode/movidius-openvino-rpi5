@@ -32,6 +32,9 @@ from quartznet15x5_reference import (  # noqa: E402
 )
 from speech_asr.cnn_ctc import greedy_decode_logits_diagnostics  # noqa: E402
 from speech_asr.evaluation import character_error_counts, word_error_counts  # noqa: E402
+from speech_asr.quartznet_reference_frontend import (  # noqa: E402
+    nemo_reference_features_numpy,
+)
 
 
 DEFAULT_ARCHIVE = (
@@ -98,6 +101,7 @@ def main() -> int:
     parser.add_argument("--spec", type=pathlib.Path, default=DEFAULT_SPEC)
     parser.add_argument("--vocab", type=pathlib.Path, default=DEFAULT_VOCAB)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
+    parser.add_argument("--frontend", choices=("torch", "numpy"), default="torch")
     parser.add_argument("--max-samples", type=int)
     parser.add_argument("--progress-interval", type=int, default=50)
     parser.add_argument("--output", type=pathlib.Path, default=DEFAULT_OUTPUT)
@@ -144,11 +148,18 @@ def main() -> int:
                 if len(samples) != int(record["sample_count"]):
                     raise ValueError(f"{record['id']}: sample count changed")
 
-                features, valid_frames = nemo_reference_features(
-                    samples,
-                    spec,
-                    device=device,
-                )
+                if args.frontend == "torch":
+                    features, valid_frames = nemo_reference_features(
+                        samples,
+                        spec,
+                        device=device,
+                    )
+                else:
+                    features_np, valid_frames = nemo_reference_features_numpy(
+                        samples,
+                        spec,
+                    )
+                    features = torch.from_numpy(features_np).to(device)
                 logits = model(features)[0]
                 valid_output = reference_output_length(valid_frames, spec)
                 if valid_output < 1 or valid_output > logits.shape[0]:
@@ -214,6 +225,7 @@ def main() -> int:
             "shared_decoder_symbol_count": imported["shared_decoder_symbol_count"],
             "target_only_symbol_count": imported["target_only_symbol_count"],
             "frontend": {
+                "implementation": args.frontend,
                 "kind": spec["frontend"]["kind"],
                 "stft_center": spec["frontend"]["stft_center"],
                 "hann_periodic": spec["frontend"]["hann_periodic"],

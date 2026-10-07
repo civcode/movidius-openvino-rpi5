@@ -7,7 +7,7 @@ source "$ROOT/scripts/lib/python-env.sh"
 profile="${1:-}"
 case "$profile" in
     tools) python_env_ensure_venv "$ROOT/work/venv-tools" 3.11 ;;
-    apps) python_env_ensure_requirements "$ROOT/work/venv-apps" 3.11 "$ROOT/requirements/apps.txt" "import numpy, cv2, onnxruntime" ;;
+    apps) python_env_ensure_requirements "$ROOT/work/venv-apps" 3.11 "$ROOT/requirements/apps.txt" "import numpy, cv2, onnxruntime, soundfile" ;;
     cpu) python_env_ensure_requirements "$ROOT/work/venv-cpu" 3.11 "$ROOT/requirements/cpu-tensorflow.txt" "import numpy, cv2, tensorflow" ;;
     mo-onnx) python_env_ensure_requirements "$ROOT/work/venv-mo-onnx" 3.10 "$ROOT/requirements/mo-onnx.txt" "import numpy, onnx, networkx, defusedxml, google.protobuf" ;;
     mo-tensorflow) python_env_ensure_requirements "$ROOT/work/venv-mo-tensorflow" 3.11 "$ROOT/requirements/mo-tensorflow.txt" "import numpy, tensorflow, networkx, defusedxml, google.protobuf" ;;
