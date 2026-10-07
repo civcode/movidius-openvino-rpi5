@@ -517,32 +517,48 @@ def main() -> int:
                         ["logits"],
                         {"features": features},
                     )[0]
-                    comparison = compare_arrays(reference_logits, logits)
-                    if comparison.get("frame_argmax_agreement") != 1.0:
+                    full_comparison = compare_arrays(reference_logits, logits)
+                    valid_output_frames = int(item["valid_output_frames"])
+                    valid_comparison = compare_arrays(
+                        reference_logits[:, :valid_output_frames, :],
+                        logits[:, :valid_output_frames, :],
+                    )
+                    if valid_comparison.get("frame_argmax_agreement") != 1.0:
                         raise RuntimeError(
-                            "ONNX/MYRIAD semantic parity failed: "
-                            f"argmax={comparison.get('frame_argmax_agreement')}"
+                            "ONNX/MYRIAD valid-frame semantic parity failed: "
+                            f"argmax={valid_comparison.get('frame_argmax_agreement')}"
                         )
-                    if comparison.get("max_frame_total_variation", 1.0) > MAX_FRAME_TOTAL_VARIATION:
+                    if (
+                        valid_comparison.get("max_frame_total_variation", 1.0)
+                        > MAX_FRAME_TOTAL_VARIATION
+                    ):
                         raise RuntimeError(
-                            "ONNX/MYRIAD semantic parity failed: "
+                            "ONNX/MYRIAD valid-frame semantic parity failed: "
                             f"max_frame_total_variation="
-                            f"{comparison.get('max_frame_total_variation')}"
+                            f"{valid_comparison.get('max_frame_total_variation')}; "
+                            f"full_tensor_max_frame_total_variation="
+                            f"{full_comparison.get('max_frame_total_variation')}"
                         )
                     parity = {
                         "sample_id": record["id"],
                         "tensor_frames": tensor_frames,
+                        "valid_output_frames": valid_output_frames,
                         "thresholds": {
-                            "frame_argmax_agreement": 1.0,
-                            "max_frame_total_variation": MAX_FRAME_TOTAL_VARIATION,
+                            "valid_frame_argmax_agreement": 1.0,
+                            "valid_max_frame_total_variation": MAX_FRAME_TOTAL_VARIATION,
                         },
-                        "comparison": comparison,
+                        "valid_comparison": valid_comparison,
+                        "full_tensor_comparison": full_comparison,
                     }
                     print(
                         "[quartznet-myriad] semantic parity: PASS "
                         f"sample={record['id']} "
-                        f"argmax={comparison['frame_argmax_agreement']:.9f} "
-                        f"max_tv={comparison['max_frame_total_variation']:.9f}",
+                        f"valid_argmax="
+                        f"{valid_comparison['frame_argmax_agreement']:.9f} "
+                        f"valid_max_tv="
+                        f"{valid_comparison['max_frame_total_variation']:.9f} "
+                        f"full_max_tv="
+                        f"{full_comparison['max_frame_total_variation']:.9f}",
                         flush=True,
                     )
 

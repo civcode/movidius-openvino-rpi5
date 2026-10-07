@@ -248,11 +248,11 @@ def validate_result(
         raise ValueError("edge result execution mode changed")
 
     parity = result.get("semantic_parity", {})
-    comparison = parity.get("comparison", {})
+    comparison = parity.get("valid_comparison", {})
     if comparison.get("frame_argmax_agreement") != 1.0:
-        raise ValueError("edge ONNX/MYRIAD frame argmax parity failed")
+        raise ValueError("edge ONNX/MYRIAD valid-frame argmax parity failed")
     if float(comparison.get("max_frame_total_variation", 1.0)) > MAX_FRAME_TOTAL_VARIATION:
-        raise ValueError("edge ONNX/MYRIAD probability parity failed")
+        raise ValueError("edge ONNX/MYRIAD valid-frame probability parity failed")
 
     if full:
         if result.get("samples") != EXPECTED_SAMPLES or result.get("full_dev_clean") is not True:
@@ -478,12 +478,15 @@ def main() -> int:
             "cer": quality["cer"],
             "qualified_pytorch_wer": quality["qualified_pytorch_wer"],
             "absolute_wer_delta": quality["absolute_wer_delta"],
-            "semantic_frame_argmax_agreement": result["semantic_parity"]["comparison"][
-                "frame_argmax_agreement"
-            ],
-            "semantic_max_frame_total_variation": result["semantic_parity"]["comparison"][
-                "max_frame_total_variation"
-            ],
+            "semantic_valid_frame_argmax_agreement": result["semantic_parity"][
+                "valid_comparison"
+            ]["frame_argmax_agreement"],
+            "semantic_valid_max_frame_total_variation": result["semantic_parity"][
+                "valid_comparison"
+            ]["max_frame_total_variation"],
+            "semantic_full_tensor_max_frame_total_variation": result[
+                "semantic_parity"
+            ]["full_tensor_comparison"]["max_frame_total_variation"],
             "shape_sessions": myriad["shape_sessions"],
             "inference_latency_p50_ms": myriad["inference_latency_p50_ms"],
             "inference_latency_p95_ms": myriad["inference_latency_p95_ms"],

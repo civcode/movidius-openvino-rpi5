@@ -90,8 +90,11 @@ class QuartzNetReferenceMyriadTests(unittest.TestCase):
         self.assertIn("qualify-quartznet15x5-reference-numpy.sh", self.controller)
         self.assertIn("prepare-quartznet15x5-reference-myriad.sh", self.controller)
         self.assertIn('myriad.get("runtime_backend") != "host"', self.controller)
+        self.assertIn('"valid_comparison"', self.controller)
         self.assertIn("frame_argmax_agreement", self.controller)
         self.assertIn("max_frame_total_variation", self.controller)
+        self.assertIn('"full_tensor_comparison"', self.evaluator)
+        self.assertIn('"valid_comparison"', self.evaluator)
 
 
 if __name__ == "__main__":
