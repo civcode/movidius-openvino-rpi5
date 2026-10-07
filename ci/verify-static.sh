@@ -1484,6 +1484,8 @@ test -x scripts/decode-cnn-ctc-v19-logits.sh || fail 'v19 runtime decoder entry 
 test -x scripts/benchmark-cnn-ctc-v19-decoder.sh || fail 'v19 CPU decoder benchmark entry point missing'
 grep -q 'def build_decoder_artifact' examples/speech-asr/python/speech_asr/ctc_beam.py || fail 'v19 decoder artifact builder missing'
 grep -q 'def decode_with_artifact' examples/speech-asr/python/speech_asr/ctc_beam.py || fail 'v19 runtime artifact decode missing'
+grep -q 'class FrozenCtcDecoder' examples/speech-asr/python/speech_asr/ctc_beam.py || fail 'v19 reusable runtime decoder missing'
+grep -q 'FrozenCtcDecoder.from_artifact' examples/speech-asr/evaluation/benchmark_cnn_ctc_v19_decoder.py || fail 'v19 decoder benchmark must reuse materialized LM'
 grep -q '0.5497732671129346' examples/speech-asr/tools/freeze_cnn_ctc_v19_decoder.py || fail 'v19 selected decoder WER evidence changed'
 grep -q '0.4634567759027818' examples/speech-asr/tools/freeze_cnn_ctc_v19_decoder.py || fail 'v19 selected decoder CER evidence changed'
 grep -q '"--decoder-artifact"' examples/speech-asr/evaluation/evaluate_cnn_ctc_v19.py || fail 'v19 physical evaluator decoder artifact option missing'
