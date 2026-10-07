@@ -27,7 +27,11 @@ from speech_asr.cnn_ctc import (  # noqa: E402
     manifest_record_eligibility,
 )
 from speech_asr.contracts import validate_speech_sample  # noqa: E402
-from speech_asr.ctc_beam import CharacterNgramLM, prefix_beam_decode  # noqa: E402
+from speech_asr.ctc_beam import (  # noqa: E402
+    CharacterNgramLM,
+    build_decoder_artifact,
+    prefix_beam_decode,
+)
 from speech_asr.evaluation import (  # noqa: E402
     character_error_counts,
     latency_summary_ms,
@@ -385,8 +389,47 @@ def main() -> int:
             json.dumps(output, sort_keys=True, indent=2) + "\n",
             encoding="utf-8",
         )
+
+        decoder_artifact = build_decoder_artifact(
+            acoustic_model="cnn_ctc_v19",
+            vocab=vocab,
+            config=selected["config"],
+            lm=lm,
+            provenance={
+                "sweep_result_sha256": sha256_path(output_path),
+                "source_experiment_id": request["experiment_id"],
+                "source_attempt_id": attempt.name,
+                "source_hardware_sha256": sha256_path(hardware_path),
+                "validation_manifest_sha256": sha256_path(validation_manifest),
+                "lm_training_manifest_sha256": sha256_path(args.train_manifest),
+                "selected_wer": selected["wer"],
+                "selected_cer": selected["cer"],
+                "decoder_latency_p50_ms_on_oberon": selected[
+                    "decode_latency_p50_ms"
+                ],
+                "decoder_latency_p95_ms_on_oberon": selected[
+                    "decode_latency_p95_ms"
+                ],
+            },
+        )
+        artifact_path = output_path.with_name("decoder-artifact-v1.json")
+        artifact_path.write_text(
+            json.dumps(
+                decoder_artifact,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
         print(json.dumps(output, sort_keys=True, indent=2))
         print(f"decoder sweep: {output_path}", flush=True)
+        print(
+            f"decoder artifact: {artifact_path} "
+            f"sha256={sha256_path(artifact_path)}",
+            flush=True,
+        )
         return 0
     except Exception as exc:
         print(f"error: {exc}", file=sys.stderr)
