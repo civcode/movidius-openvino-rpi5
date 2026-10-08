@@ -1,6 +1,6 @@
 # ADR: fixed-T=512 QuartzNet streaming on MA2450
 
-Status: implemented; 200-utterance physical diagnostic passed; full WER qualification pending
+Status: accepted; full 2,703-utterance physical qualification passed
 Date: 2026-10-07
 
 ## Context
@@ -84,9 +84,56 @@ Measured diagnostic result:
 
 The same 200-sample WER/CER was reproduced before and after separating the
 Oberon and Pi CPU-affinity policies, so the host CPU-limit correction did not
-change recognition semantics. This diagnostic is encouraging but is not
-authoritative; the acceptance gate remains the full 2,703-utterance dev-clean
-run.
+change recognition semantics.
+
+## Full 2,703-utterance physical qualification
+
+The authoritative LibriSpeech dev-clean qualification completed successfully on
+Pi 5 + MA2450 from repository commit
+`98ac27e45e69a883de8b7f9ae0a0fe8977e058cf`. Later ROCm/CUDA selector work
+does not alter this frozen edge result.
+
+Measured result:
+
+- samples: `2703 / 2703`
+- fixed-window inferences: `6429`
+- windows per utterance, mean: `2.378468368479467`
+- network loads: `1`
+- unmeasured warmups: `1`
+- model load: `2009.517596 ms`
+- first-window ONNX/MYRIAD valid-frame argmax agreement: `0.99609375`
+- first-window max frame total variation: `0.0695266401494683`
+  (diagnostic only)
+- WER: `0.03922649902577111`
+- CER: `0.012895078075833026`
+- frozen whole-utterance PyTorch reference WER:
+  `0.037939781625675524`
+- absolute WER delta from whole-utterance reference:
+  `0.0012867174000955883`
+- fixed-window WER acceptance ceiling: `0.05`
+- WER gate: **PASS**
+- MYRIAD inference p50: `394.101793 ms`
+- MYRIAD inference p95: `396.0079184 ms`
+- MYRIAD inference mean: `394.1237425708507 ms`
+- overlap-inclusive inference-only RTF: `0.13063547982851126`
+- frontend p50 / p95: `4.861740 / 6.517406 ms`
+- frontend RTF: `0.0015521516708959379`
+- result status: **PASS**
+
+The fixed-window policy therefore increases absolute WER by only about
+`0.1287` percentage points relative to the frozen whole-utterance PyTorch
+reference while eliminating runtime shape switching and all exposure to the
+large-temporal-shape MYRIAD failure regime.
+
+### Deployment consequence
+
+The accepted production architecture is one permanently loaded
+`[1,64,512]` QuartzNet network, approximately 5.11-second inference windows,
+2.56-second hop, center-owned overlap stitching, and one global greedy CTC
+collapse.
+
+Multiple resident networks remain a proven and potentially useful MA2450
+capability, but they are not required for this ASR deployment.
 
 ## Commands
 
@@ -104,5 +151,5 @@ Physical Pi 5 + MA2450 run from the controller host:
 ./scripts/run-quartznet15x5-reference-fixed512-edge.sh
 ```
 
-Use `--max-samples N` for a non-authoritative diagnostic. Full qualification
-must run all 2,703 dev-clean utterances.
+Use `--max-samples N` for a non-authoritative diagnostic. The full 2,703
+dev-clean qualification above is the frozen acceptance result.
