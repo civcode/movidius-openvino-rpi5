@@ -9,17 +9,44 @@ import os
 import statistics
 import time
 
-import torch
 
 
-def observed_backend() -> str | None:
-    if not torch.cuda.is_available():
+def observed_backend(torch_module) -> str | None:
+    if not torch_module.cuda.is_available():
         return None
-    if getattr(torch.version, "hip", None):
+    if getattr(torch_module.version, "hip", None):
         return "rocm"
-    if getattr(torch.version, "cuda", None):
+    if getattr(torch_module.version, "cuda", None):
         return "cuda"
     return "unknown"
+
+
+def thread_affinity_summary() -> dict:
+    masks: dict[tuple[int, ...], int] = {}
+    union: set[int] = set()
+    task_dir = "/proc/self/task"
+    try:
+        tids = [int(value) for value in os.listdir(task_dir) if value.isdigit()]
+    except OSError:
+        tids = [0]
+
+    for tid in tids:
+        try:
+            mask = tuple(sorted(os.sched_getaffinity(tid)))
+        except (OSError, ProcessLookupError):
+            continue
+        masks[mask] = masks.get(mask, 0) + 1
+        union.update(mask)
+
+    return {
+        "thread_count_observed": sum(masks.values()),
+        "thread_affinity_union": sorted(union),
+        "thread_affinity_union_count": len(union),
+        "thread_affinity_mask_counts": {
+            ",".join(str(cpu) for cpu in mask): count
+            for mask, count in sorted(masks.items())
+        },
+    }
 
 
 def main() -> int:
@@ -30,9 +57,13 @@ def main() -> int:
     parser.add_argument("--iterations", type=int, default=10)
     args = parser.parse_args()
 
+    launch_affinity = sorted(os.sched_getaffinity(0))
+
+    import torch
+
     if args.device_index < 0:
         raise SystemExit("--device-index must be >= 0")
-    backend = observed_backend()
+    backend = observed_backend(torch)
     if backend != args.device:
         raise SystemExit(
             f"requested {args.device}, but PyTorch backend is {backend or 'unavailable'}; "
@@ -84,9 +115,15 @@ def main() -> int:
         "torch_version": torch.__version__,
         "torch_cuda_version": getattr(torch.version, "cuda", None),
         "torch_hip_version": getattr(torch.version, "hip", None),
-        "cpu_affinity": sorted(os.sched_getaffinity(0)),
-        "cpu_affinity_count": len(os.sched_getaffinity(0)),
+        "launch_cpu_affinity": launch_affinity,
+        "launch_cpu_affinity_count": len(launch_affinity),
+        "main_thread_cpu_affinity_after_rocm": sorted(os.sched_getaffinity(0)),
+        "main_thread_cpu_affinity_count_after_rocm": len(os.sched_getaffinity(0)),
+        "hsa_override_cpu_affinity_debug": os.environ.get(
+            "HSA_OVERRIDE_CPU_AFFINITY_DEBUG"
+        ),
         "torch_cpu_threads": torch.get_num_threads(),
+        **thread_affinity_summary(),
         "matrix_size": n,
         "iterations": args.iterations,
         "gemm_ms_median": statistics.median(times),
