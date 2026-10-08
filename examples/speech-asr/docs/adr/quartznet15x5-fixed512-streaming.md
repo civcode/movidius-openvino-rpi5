@@ -135,6 +135,49 @@ collapse.
 Multiple resident networks remain a proven and potentially useful MA2450
 capability, but they are not required for this ASR deployment.
 
+
+## Live runtime
+
+The accepted policy is implemented as an online state machine in
+`speech_asr.quartznet_fixed512_live` and exposed by
+`scripts/quartznet-fixed512-live.sh`.
+
+The runtime keeps exactly one `T=512` MYRIAD network loaded through the
+existing persistent tensor-stream protocol. Incoming audio is retained only
+until it is no longer needed by a future overlapping window. CTC frames are
+committed only when the next overlapping window can no longer replace them;
+uncommitted frames may still be shown as tentative command-line text. Final
+decoding therefore preserves the center-owned overlap policy used by the full
+2,703-utterance qualification.
+
+The Pi wrapper is pinned independently to CPUs `0-3` with four OMP, MKL, and
+OpenBLAS threads.
+
+WAV input:
+
+```bash
+./scripts/quartznet-fixed512-live.sh --wav recording.wav --show-timing
+```
+
+Add `--wav-realtime` to replay the file at wall-clock speed rather than as
+fast as inference permits.
+
+ALSA microphone input:
+
+```bash
+./scripts/quartznet-fixed512-live.sh --microphone --show-timing
+```
+
+Use `--alsa-device NAME` to select a non-default ALSA source and
+`--list-microphones` to print ALSA device names. Microphone capture uses
+`arecord` at 16 kHz, mono, signed 16-bit PCM. Ctrl+C stops capture, processes
+the remaining partial window, and prints the final transcript.
+
+With the accepted 128-output-frame hop, the first partial text requires the
+initial 5.11-second inference window; subsequent updates occur every 2.56
+seconds of incoming audio. The qualified MA2450 inference time is about 394 ms
+per fixed window.
+
 ## Commands
 
 Local ONNX policy diagnostic:
