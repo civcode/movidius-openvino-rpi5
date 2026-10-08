@@ -64,16 +64,68 @@ DEFAULT_HYPOTHESES = (
 )
 
 
-def choose_device(request: str) -> torch.device:
+def torch_accelerator_backend() -> str | None:
+    if not torch.cuda.is_available():
+        return None
+    if getattr(torch.version, "hip", None):
+        return "rocm"
+    if getattr(torch.version, "cuda", None):
+        return "cuda"
+    return "unknown"
+
+
+def choose_device(request: str, index: int) -> tuple[torch.device, str]:
+    if index < 0:
+        raise ValueError("--device-index must be >= 0")
     if request == "cpu":
-        return torch.device("cpu")
-    if request == "cuda":
-        if not torch.cuda.is_available():
-            raise ValueError("--device cuda requested but CUDA is unavailable")
-        return torch.device("cuda")
+        return torch.device("cpu"), "cpu"
+
+    backend = torch_accelerator_backend()
+    if request in {"cuda", "rocm"}:
+        if backend != request:
+            raise ValueError(
+                f"--device {request} requested but this PyTorch build exposes "
+                f"{backend or 'no GPU backend'} "
+                f"(torch.version.cuda={getattr(torch.version, 'cuda', None)!r}, "
+                f"torch.version.hip={getattr(torch.version, 'hip', None)!r})"
+            )
+        if index >= torch.cuda.device_count():
+            raise ValueError(
+                f"--device-index {index} requested but only "
+                f"{torch.cuda.device_count()} {request} device(s) are visible"
+            )
+        return torch.device(f"cuda:{index}"), request
+
     if request == "auto":
-        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if backend in {"cuda", "rocm"}:
+            if index >= torch.cuda.device_count():
+                raise ValueError(
+                    f"--device-index {index} requested but only "
+                    f"{torch.cuda.device_count()} accelerator device(s) are visible"
+                )
+            return torch.device(f"cuda:{index}"), backend
+        return torch.device("cpu"), "cpu"
     raise ValueError(f"unsupported device: {request}")
+
+
+def accelerator_runtime(device: torch.device, backend: str) -> dict:
+    result = {
+        "backend": backend,
+        "torch_device": str(device),
+        "torch_cuda_version": getattr(torch.version, "cuda", None),
+        "torch_hip_version": getattr(torch.version, "hip", None),
+    }
+    if backend in {"cuda", "rocm"}:
+        index = 0 if device.index is None else int(device.index)
+        props = torch.cuda.get_device_properties(index)
+        result.update(
+            {
+                "device_index": index,
+                "device_name": torch.cuda.get_device_name(index),
+                "device_total_memory_bytes": int(props.total_memory),
+            }
+        )
+    return result
 
 
 def sum_rate(values) -> float:
@@ -100,7 +152,12 @@ def main() -> int:
     parser.add_argument("--manifest", type=pathlib.Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--spec", type=pathlib.Path, default=DEFAULT_SPEC)
     parser.add_argument("--vocab", type=pathlib.Path, default=DEFAULT_VOCAB)
-    parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
+    parser.add_argument(
+        "--device",
+        choices=("auto", "cpu", "cuda", "rocm"),
+        default="auto",
+    )
+    parser.add_argument("--device-index", type=int, default=0)
     parser.add_argument("--frontend", choices=("torch", "numpy"), default="torch")
     parser.add_argument("--max-samples", type=int)
     parser.add_argument("--progress-interval", type=int, default=50)
@@ -120,7 +177,10 @@ def main() -> int:
                 raise ValueError("--max-samples must be positive")
             records = records[: args.max_samples]
 
-        device = choose_device(args.device)
+        device, accelerator_backend = choose_device(
+            args.device,
+            args.device_index,
+        )
         model, imported = load_reference_model(
             args.archive,
             spec=spec,
@@ -234,6 +294,7 @@ def main() -> int:
             },
             "runtime": {
                 "device": str(device),
+                "accelerator": accelerator_runtime(device, accelerator_backend),
                 "python_version": platform.python_version(),
                 "torch_version": torch.__version__,
                 "numpy_version": np.__version__,
