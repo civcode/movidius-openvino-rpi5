@@ -2,6 +2,7 @@ import json
 import pathlib
 import sys
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -12,11 +13,13 @@ sys.path.insert(0, str(SPEECH / "python"))
 from speech_asr.cnn_ctc import greedy_decode_logits  # noqa: E402
 from speech_asr.quartznet_fixed512 import (  # noqa: E402
     DEFAULT_HOP_OUTPUT_FRAMES,
+    FULL_WINDOW_SAMPLES,
     Fixed512LogitStitcher,
     plan_fixed512_windows,
     quartznet_output_frames,
 )
 from speech_asr.quartznet_fixed512_live import (  # noqa: E402
+    Fixed512StreamingRecognizer,
     IncrementalCtcDecoder,
     OnlineFixed512LogitStitcher,
 )
@@ -192,6 +195,67 @@ class QuartzNetFixed512LiveTests(unittest.TestCase):
                         self.vocab, pause_space_frames=30,
                         pause_delimiter=invalid,
                     )
+
+    def test_first_live_window_commits_maximal_safe_prefix(self):
+        blank = self.vocab["blank_index"]
+        letter = self.vocab["tokens"].index("a")
+        logits = np.zeros((256, 29), dtype=np.float32)
+        logits[:, blank] = 2.0
+        logits[150, letter] = 4.0
+
+        def infer(_features):
+            return logits, 1.0
+
+        with patch(
+            "speech_asr.quartznet_fixed512_live.fixed512_features",
+            return_value=(np.zeros((1, 64, 512), dtype=np.float32), 511, 256),
+        ):
+            for hop, safe_frames in ((64, 160), (128, 192)):
+                with self.subTest(hop=hop):
+                    recognizer = Fixed512StreamingRecognizer(
+                        spec=self.spec, vocab=self.vocab, infer=infer,
+                        hop_output_frames=hop,
+                    )
+                    first = recognizer.push_audio(
+                        np.zeros((FULL_WINDOW_SAMPLES,), dtype=np.float32)
+                    )[0]
+                    self.assertEqual(first.committed_output_frames, safe_frames)
+                    self.assertEqual(first.committed_text, "a")
+
+    def test_early_commits_match_offline_center_owned_for_64_and_128(self):
+        sample_count = 170000
+        valid_features, _ = reference_feature_lengths(sample_count, self.spec)
+        output_frames = quartznet_output_frames(valid_features, self.spec)
+        rng = np.random.default_rng(2026)
+
+        for hop in (64, 128):
+            with self.subTest(hop=hop):
+                windows = plan_fixed512_windows(
+                    sample_count, self.spec, hop_output_frames=hop
+                )
+                offline = Fixed512LogitStitcher(output_frames, 29)
+                online = OnlineFixed512LogitStitcher(self.vocab)
+
+                for window in windows:
+                    logits = rng.normal(
+                        size=(window.valid_output_frames, 29),
+                    ).astype(np.float32)
+                    offline.add(window, logits)
+                    online.add_window(window, logits)
+                    if window.sample_count == FULL_WINDOW_SAMPLES:
+                        # Mirror safe boundary for fully captured live windows.
+                        limit = min(
+                            window.start_output_frame + (256 + hop) // 2,
+                            window.end_output_frame,
+                        )
+                        if limit > online.next_commit_frame:
+                            online.commit_before(limit)
+
+                offline_logits, _ = offline.finish()
+                expected = greedy_decode_logits(offline_logits, self.vocab)
+                online.commit_before(output_frames)
+                self.assertEqual(online.committed_text, expected)
+                self.assertEqual(online.partial_text, expected)
 
     def test_online_final_text_matches_offline_center_owned_stitch(self):
         sample_count = 150000
