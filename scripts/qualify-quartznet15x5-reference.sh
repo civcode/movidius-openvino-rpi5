@@ -4,14 +4,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCE="$ROOT/work/speech-asr/pretrained/quartznet15x5-en-base-v2/QuartzNet15x5-En-Base.nemo"
 DEVICE="auto"
+DEVICE_INDEX=0
 MAX_SAMPLES=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --device) [[ $# -ge 2 ]] || { echo "--device needs auto|cpu|cuda" >&2; exit 2; }; DEVICE="$2"; shift 2 ;;
+        --device) [[ $# -ge 2 ]] || { echo "--device needs auto|cpu|cuda|rocm" >&2; exit 2; }; DEVICE="$2"; shift 2 ;;
+        --device-index) [[ $# -ge 2 ]] || { echo "--device-index needs a non-negative integer" >&2; exit 2; }; DEVICE_INDEX="$2"; shift 2 ;;
         --max-samples) [[ $# -ge 2 ]] || { echo "--max-samples needs a positive integer" >&2; exit 2; }; MAX_SAMPLES="$2"; shift 2 ;;
         -h|--help)
-            echo "usage: $0 [--device auto|cpu|cuda] [--max-samples N]"
+            echo "usage: $0 [--device auto|cpu|cuda|rocm] [--device-index N] [--max-samples N]"
             echo "Runs source preparation, LibriSpeech dev-clean preparation, zero-training PyTorch WER, and ONNX parity."
             exit 0
             ;;
@@ -19,7 +21,8 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-case "$DEVICE" in auto|cpu|cuda) ;; *) echo "invalid --device: $DEVICE" >&2; exit 2 ;; esac
+case "$DEVICE" in auto|cpu|cuda|rocm) ;; *) echo "invalid --device: $DEVICE" >&2; exit 2 ;; esac
+[[ "$DEVICE_INDEX" =~ ^[0-9]+$ ]] || { echo "invalid --device-index: $DEVICE_INDEX" >&2; exit 2; }
 if [[ -n "$MAX_SAMPLES" && ! "$MAX_SAMPLES" =~ ^[1-9][0-9]*$ ]]; then
     echo "invalid --max-samples: $MAX_SAMPLES" >&2
     exit 2
@@ -29,7 +32,7 @@ fi
 
 "$ROOT/scripts/prepare-librispeech-dev-clean.sh"
 
-eval_args=(--archive "$SOURCE" --device "$DEVICE")
+eval_args=(--archive "$SOURCE" --device "$DEVICE" --device-index "$DEVICE_INDEX")
 [[ -n "$MAX_SAMPLES" ]] && eval_args+=(--max-samples "$MAX_SAMPLES")
 
 # A full-corpus WER miss is qualification evidence, not a reason to discard the
