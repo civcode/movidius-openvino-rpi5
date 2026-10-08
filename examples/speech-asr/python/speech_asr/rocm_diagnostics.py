@@ -31,7 +31,12 @@ def parse_cpuset(value: str) -> set[int]:
 
 
 def inspect_rocm_affinity(expected_cpus: set[int]) -> dict:
-    """Fail if the ROCm bootstrap or any observed Linux thread loses CPUs."""
+    """Check that the main thread retains its mask and workers stay in range.
+
+    OpenMP may deliberately pin individual worker threads to subsets of the
+    requested CPU set. Those narrower masks are useful diagnostic data, not
+    evidence that the entire ROCm process has collapsed to one CPU.
+    """
     if os.environ.get("SPEECH_ROCM_AFFINITY_RESTORED") != "1":
         raise RuntimeError("ROCm affinity bootstrap marker is missing")
     expected = tuple(sorted(expected_cpus))
@@ -43,17 +48,23 @@ def inspect_rocm_affinity(expected_cpus: set[int]) -> dict:
             f"ROCm main-thread affinity drift: expected={expected}, actual={main_mask}"
         )
     counts: dict[str, int] = {}
+    narrow_threads = 0
+    narrow_examples: list[dict] = []
     task_ids = [int(tid) for tid in os.listdir("/proc/self/task") if tid.isdigit()]
     for tid in task_ids:
         try:
             mask = tuple(sorted(os.sched_getaffinity(tid)))
         except ProcessLookupError:
             continue  # A thread may finish between listing and inspection.
-        if mask != expected:
+        if not mask or not set(mask).issubset(expected_cpus):
             raise RuntimeError(
-                f"ROCm thread affinity drift: tid={tid}, "
-                f"expected={expected}, actual={mask}"
+                f"ROCm thread affinity outside requested CPUs: tid={tid}, "
+                f"allowed={expected}, actual={mask}"
             )
+        if mask != expected:
+            narrow_threads += 1
+            if len(narrow_examples) < 8:
+                narrow_examples.append({"tid": tid, "cpus": list(mask)})
         key = ",".join(str(cpu) for cpu in mask)
         counts[key] = counts.get(key, 0) + 1
     if not counts:
@@ -62,6 +73,8 @@ def inspect_rocm_affinity(expected_cpus: set[int]) -> dict:
         "main_thread_affinity": list(main_mask),
         "thread_affinity_mask_counts": counts,
         "thread_count_observed": sum(counts.values()),
+        "narrow_thread_count": narrow_threads,
+        "narrow_thread_examples": narrow_examples,
     }
 
 
