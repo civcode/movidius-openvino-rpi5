@@ -129,6 +129,8 @@ grep -q 'SPEECH_LIVE_CPUSET:-0-3' scripts/quartznet-fixed512-live.sh || fail 'Qu
 grep -q 'SPEECH_LIVE_THREADS:-4' scripts/quartznet-fixed512-live.sh || fail 'QuartzNet live Pi thread count changed'
 grep -q 'SPEECH_ROCM_CPUSET:-0-15' scripts/python-training.sh || fail 'ROCm CPU affinity default changed'
 grep -q 'SPEECH_ROCM_THREADS:-16' scripts/python-training.sh || fail 'ROCm CPU thread count changed'
+grep -q 'HSA_OVERRIDE_CPU_AFFINITY_DEBUG=0' scripts/python-training.sh || fail 'ROCm helper threads are not constrained to parent CPU affinity'
+grep -q 'thread_affinity_union_count' examples/speech-asr/tools/probe_torch_accelerator.py || fail 'ROCm probe does not inspect all process thread affinities'
 grep -q 'taskset -c "$cpuset"' scripts/python-training.sh || fail 'ROCm launcher is not CPU-affinity constrained'
 test -x scripts/probe-torch-accelerator.sh || fail 'PyTorch accelerator probe wrapper missing'
 test -f examples/speech-asr/tools/probe_torch_accelerator.py || fail 'PyTorch accelerator probe missing'
