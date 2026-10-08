@@ -121,6 +121,14 @@ test -x scripts/evaluate-quartznet15x5-reference-fixed512-myriad.sh || fail 'Qua
 test -f examples/speech-asr/evaluation/run_quartznet15x5_reference_fixed512_edge.py || fail 'QuartzNet fixed512 edge controller missing'
 grep -q 'network_loads") != 1' examples/speech-asr/evaluation/run_quartznet15x5_reference_fixed512_edge.py || fail 'QuartzNet fixed512 edge controller does not enforce one network load'
 test -x scripts/run-quartznet15x5-reference-fixed512-edge.sh || fail 'QuartzNet fixed512 edge wrapper missing'
+test -x scripts/probe-torch-accelerator.sh || fail 'PyTorch accelerator probe wrapper missing'
+test -f examples/speech-asr/tools/probe_torch_accelerator.py || fail 'PyTorch accelerator probe missing'
+test -f requirements/training-rocm.txt || fail 'ROCm evaluation requirements missing'
+grep -q 'training-rocm)' scripts/prepare-python-env.sh || fail 'ROCm Python environment profile missing'
+grep -q 'SPEECH_TORCH_BACKEND' scripts/python-training.sh || fail 'training Python launcher lacks backend selection'
+grep -q '"rocm"' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference.py || fail 'QuartzNet evaluator lacks ROCm device selection'
+grep -q 'torch.version, "hip"' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference.py || fail 'QuartzNet evaluator does not verify HIP backend'
+grep -q -- '"--device-index"' examples/speech-asr/evaluation/evaluate_quartznet15x5_reference.py || fail 'QuartzNet evaluator lacks device index selection'
 test -f examples/speech-asr/docs/adr/quartznet15x5-fixed512-streaming.md || fail 'QuartzNet fixed512 ADR missing'
 test -f examples/speech-asr/contracts/streaming-v1.json || fail 'Phase 7 streaming contract missing'
 test -f examples/speech-asr/contracts/streaming-replay-result-v1.schema.json || fail 'Phase 7 replay result schema missing'
@@ -1619,6 +1627,7 @@ for name in [
     "examples/speech-asr/python/speech_asr/streaming.py",
     "examples/speech-asr/evaluation/replay_streaming.py",
     "examples/speech-asr/tools/make_streaming_updates.py",
+    "examples/speech-asr/tools/probe_torch_accelerator.py",
     "examples/speech-asr/python/speech_asr/contracts.py",
     "examples/speech-asr/python/speech_asr/cnn_ctc.py",
     "examples/speech-asr/python/speech_asr/cnn_ctc_frontend.py",
