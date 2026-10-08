@@ -7,10 +7,12 @@ import argparse
 import json
 import os
 import pathlib
+import select
 import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 
 import numpy as np
@@ -203,6 +205,26 @@ def microphone_command(device: str) -> list[str]:
     ]
 
 
+class Pcm16ChunkDecoder:
+    """Preserve sample boundaries across arbitrary ALSA pipe read sizes."""
+
+    def __init__(self) -> None:
+        self.pending = b""
+        self.total_samples = 0
+
+    def decode(self, payload: bytes) -> np.ndarray:
+        data = self.pending + payload
+        complete = len(data) & ~1
+        self.pending = data[complete:]
+        values = np.frombuffer(data[:complete], dtype="<i2").astype(np.float32)
+        self.total_samples += int(values.size)
+        return values / 32768.0
+
+    def finish(self) -> None:
+        if self.pending:
+            raise RuntimeError("microphone capture ended with a truncated PCM16 sample")
+
+
 def feed_microphone(
     recognizer: Fixed512StreamingRecognizer,
     console: ConsoleTranscript,
@@ -216,58 +238,70 @@ def feed_microphone(
     console.status(
         f"[fixed512-live] microphone={device} 16kHz mono; Ctrl+C to stop"
     )
-    proc = subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        bufsize=0,
-    )
-    if proc.stdout is None or proc.stderr is None:
-        proc.kill()
-        raise RuntimeError("unable to open ALSA capture pipes")
+    decoder = Pcm16ChunkDecoder()
+    # A file-backed stderr stream avoids deadlocking if ALSA emits more
+    # diagnostics than an undrained subprocess.PIPE can hold.
+    with tempfile.TemporaryFile(mode="w+b") as capture_errors:
+        proc = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=capture_errors,
+            bufsize=0,
+        )
+        if proc.stdout is None:
+            proc.kill()
+            proc.wait()
+            raise RuntimeError("unable to open ALSA capture pipe")
 
-    stop_requested = False
-    previous_sigint = signal.getsignal(signal.SIGINT)
+        stop_requested = False
+        previous_sigint = signal.getsignal(signal.SIGINT)
 
-    def request_stop(_signum, _frame) -> None:
-        nonlocal stop_requested
-        if not stop_requested:
-            stop_requested = True
-            console.status(
-                "[fixed512-live] stop requested; finishing current inference"
+        def request_stop(_signum, _frame) -> None:
+            nonlocal stop_requested
+            if not stop_requested:
+                stop_requested = True
+                console.status(
+                    "[fixed512-live] stop requested; finishing current inference"
+                )
+
+        signal.signal(signal.SIGINT, request_stop)
+        try:
+            while not stop_requested:
+                # A bounded wait keeps Ctrl+C responsive even if arecord
+                # stops producing PCM while its stdout remains open.
+                readable, _, _ = select.select([proc.stdout], [], [], 0.2)
+                if not readable:
+                    continue
+                payload = os.read(proc.stdout.fileno(), read_frames * 2)
+                if not payload:
+                    break
+                samples = decoder.decode(payload)
+                if samples.size:
+                    for update in recognizer.push_audio(samples):
+                        console.update(update)
+        finally:
+            signal.signal(signal.SIGINT, previous_sigint)
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=2.0)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait(timeout=2.0)
+            proc.stdout.close()
+
+        capture_errors.seek(0)
+        errors = capture_errors.read().decode("utf-8", errors="replace").strip()
+        if not stop_requested and proc.returncode != 0:
+            detail = errors.splitlines()[-1] if errors else "no ALSA details available"
+            raise RuntimeError(
+                f"arecord exited with status {proc.returncode}: {detail}"
             )
+        if not stop_requested and decoder.total_samples == 0:
+            raise RuntimeError("microphone capture ended without recording audio")
+        decoder.finish()
 
-    signal.signal(signal.SIGINT, request_stop)
-    try:
-        bytes_per_read = read_frames * 2
-        while not stop_requested:
-            payload = proc.stdout.read(bytes_per_read)
-            if not payload:
-                break
-            usable = len(payload) - (len(payload) % 2)
-            if usable == 0:
-                continue
-            pcm = np.frombuffer(payload[:usable], dtype="<i2")
-            samples = pcm.astype(np.float32) / 32768.0
-            for update in recognizer.push_audio(samples):
-                console.update(update)
-            if stop_requested:
-                break
-    finally:
-        signal.signal(signal.SIGINT, previous_sigint)
-        if proc.poll() is None:
-            proc.terminate()
-            try:
-                proc.wait(timeout=2.0)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait(timeout=2.0)
-
-    stderr = proc.stderr.read().decode("utf-8", errors="replace").strip()
-    if proc.returncode not in {0, -15} and stderr:
-        console.status("[fixed512-live] arecord: " + stderr.splitlines()[-1])
     console.update(recognizer.finalize())
-
 
 def list_microphones() -> int:
     if shutil.which("arecord") is None:
@@ -309,6 +343,8 @@ def main() -> int:
         if args.feed_samples < 1 or args.read_frames < 1:
             raise ValueError("audio feed/read sizes must be positive")
 
+        if args.wav is not None and not args.wav.is_file():
+            raise ValueError(f"WAV file missing: {args.wav}")
         spec, vocab = load_contracts(args.spec, args.vocab)
         xml, binary = validate_ir(args.ir_dir)
         runtime_preflight(args.platform, args.runtime_backend)
