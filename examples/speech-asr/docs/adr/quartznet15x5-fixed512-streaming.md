@@ -210,6 +210,15 @@ Hardware-free I/O tests:
 The accepted fixed512 inference and stitching implementation remains
 unchanged.
 
+The terminal emits only the new **committed** portion of the transcript,
+without repeatedly repainting the growing full line. This prevents older
+text from being duplicated when it wraps across terminal rows, and makes
+stdout usable as a continuous stream for downstream consumers. Tentative
+overlap-window previews are not printed because they can change; finalization
+prints any remaining decoded text and ends with a newline. A long recording
+can thus produce multiple screen rows but every confirmed character is sent
+only once. `--show-timing` still prints diagnostics on stderr.
+
 For microphone listening, the live terminal can *display* a space after
 a long CTC blank interval (600 ms by default). The original CTC transcript,
 logit stitching, MYRIAD model, and qualified WAV-mode behavior are unchanged.
