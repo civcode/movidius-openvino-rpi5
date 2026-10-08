@@ -87,17 +87,27 @@ class IncrementalCtcDecoder:
     can optionally separate words for the interactive microphone display.
     """
 
-    def __init__(self, vocab: dict, *, pause_space_frames: int = 0):
+    def __init__(
+        self,
+        vocab: dict,
+        *,
+        pause_space_frames: int = 0,
+        pause_delimiter: str = " ",
+    ):
         self.tokens = tuple(vocab["tokens"])
         self.blank = int(vocab["blank_index"])
         if not (0 <= self.blank < len(self.tokens)):
             raise ValueError("invalid CTC blank index")
         if pause_space_frames < 0:
             raise ValueError("pause_space_frames must not be negative")
+        if len(pause_delimiter) != 1 or not pause_delimiter.isprintable():
+            raise ValueError("pause_delimiter must be one printable character")
         self.pause_space_frames = pause_space_frames
+        self.pause_delimiter = pause_delimiter
         self.previous: int | None = None
         self.emitted: list[str] = []
-        self._display_emitted: list[str] = []
+        # None marks a generated pause, distinct from a model-predicted space.
+        self._display_emitted: list[str | None] = []
         self._blank_run = 0
 
     @staticmethod
@@ -108,7 +118,7 @@ class IncrementalCtcDecoder:
         blank: int,
         previous: int | None,
         emitted: list[str],
-        display_emitted: list[str],
+        display_emitted: list[str | None],
         blank_run: int,
         pause_space_frames: int,
     ) -> tuple[int | None, int]:
@@ -126,14 +136,33 @@ class IncrementalCtcDecoder:
                         pause_space_frames
                         and blank_run >= pause_space_frames
                         and display_emitted
-                        and display_emitted[-1] != " "
+                        and display_emitted[-1] not in (" ", None)
                         and token != " "
                     ):
-                        display_emitted.append(" ")
+                        display_emitted.append(None)
                     display_emitted.append(token)
                 blank_run = 0
             previous = value
         return previous, blank_run
+
+    @staticmethod
+    def _render_display(values: Sequence[str | None], delimiter: str) -> str:
+        # Normalize model-predicted text, but never normalize away a custom
+        # punctuation separator such as "#" or "$".
+        parts: list[str] = []
+        segment: list[str] = []
+        for value in values:
+            if value is None:
+                part = normalize_text_v1("".join(segment))
+                if part:
+                    parts.append(part)
+                segment.clear()
+            else:
+                segment.append(value)
+        tail = normalize_text_v1("".join(segment))
+        if tail:
+            parts.append(tail)
+        return delimiter.join(parts)
 
     def push(self, values: Sequence[int]) -> str:
         self.previous, self._blank_run = self._advance(
@@ -161,7 +190,9 @@ class IncrementalCtcDecoder:
             blank_run=self._blank_run,
             pause_space_frames=self.pause_space_frames,
         )
-        return normalize_text_v1("".join(display_emitted if display else emitted))
+        if display:
+            return self._render_display(display_emitted, self.pause_delimiter)
+        return normalize_text_v1("".join(emitted))
 
     @property
     def text(self) -> str:
@@ -169,17 +200,25 @@ class IncrementalCtcDecoder:
 
     @property
     def display_text(self) -> str:
-        return normalize_text_v1("".join(self._display_emitted))
+        return self._render_display(self._display_emitted, self.pause_delimiter)
 
 
 
 class OnlineFixed512LogitStitcher:
     """Streaming form of the accepted center-owned fixed512 stitcher."""
 
-    def __init__(self, vocab: dict, *, pause_space_frames: int = 0):
+    def __init__(
+        self,
+        vocab: dict,
+        *,
+        pause_space_frames: int = 0,
+        pause_delimiter: str = " ",
+    ):
         self.classes = len(vocab["tokens"])
         self.decoder = IncrementalCtcDecoder(
-            vocab, pause_space_frames=pause_space_frames
+            vocab,
+            pause_space_frames=pause_space_frames,
+            pause_delimiter=pause_delimiter,
         )
         self.next_commit_frame = 0
         self._pending: dict[int, tuple[float, int, np.ndarray]] = {}
@@ -272,6 +311,7 @@ class Fixed512StreamingRecognizer:
         infer: InferenceFunction,
         hop_output_frames: int = DEFAULT_HOP_OUTPUT_FRAMES,
         pause_space_frames: int = 0,
+        pause_delimiter: str = " ",
         squelch_dbfs: float | None = None,
     ) -> None:
         validate_fixed512_geometry(spec)
@@ -295,7 +335,9 @@ class Fixed512StreamingRecognizer:
         self.hop_output_frames = hop_output_frames
         self.hop_samples = hop_output_frames * OUTPUT_STRIDE_SAMPLES
         self.stitcher = OnlineFixed512LogitStitcher(
-            vocab, pause_space_frames=pause_space_frames
+            vocab,
+            pause_space_frames=pause_space_frames,
+            pause_delimiter=pause_delimiter,
         )
 
         self.total_samples = 0
