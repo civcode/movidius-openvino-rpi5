@@ -427,8 +427,17 @@ class Fixed512StreamingRecognizer:
         self._window_index += 1
 
         if commit_live_prefix:
+            # The next (as-yet-unseen) window is hop_output_frames later.
+            # Its center is thus one hop after this window's center. Frames
+            # before the midpoint of those centers are already guaranteed
+            # to remain owned by this window under offline center stitching.
+            # Waiting for only one hop unnecessarily adds ~2.6-3.8 seconds
+            # of confirmed-text delay, especially with a 64-frame hop.
+            safe_prefix_frames = (
+                FULL_OUTPUT_FRAMES + self.hop_output_frames
+            ) // 2
             commit_limit = min(
-                start_output + self.hop_output_frames,
+                start_output + safe_prefix_frames,
                 window.end_output_frame,
             )
             if commit_limit > self.stitcher.next_commit_frame:
