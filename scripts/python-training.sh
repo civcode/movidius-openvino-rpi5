@@ -20,6 +20,7 @@ case "$backend" in
             OMP_NUM_THREADS="$threads" \
             MKL_NUM_THREADS="$threads" \
             OPENBLAS_NUM_THREADS="$threads" \
+            HSA_OVERRIDE_CPU_AFFINITY_DEBUG=0 \
             taskset -c "$cpuset" \
             "$ROOT/work/venv-training-rocm/bin/python" "$@"
         ;;
