@@ -23,6 +23,8 @@ import torch
 HERE = pathlib.Path(__file__).resolve().parent
 SPEECH_ROOT = HERE.parent
 ROOT = SPEECH_ROOT.parents[1]
+# runpy.run_path does not add the target script directory to sys.path.
+sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(SPEECH_ROOT / "python"))
 sys.path.insert(0, str(SPEECH_ROOT / "training"))
 
