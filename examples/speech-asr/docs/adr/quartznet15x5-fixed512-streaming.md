@@ -173,6 +173,32 @@ Use `--alsa-device NAME` to select a non-default ALSA source and
 `arecord` at 16 kHz, mono, signed 16-bit PCM. Ctrl+C stops capture, processes
 the remaining partial window, and prints the final transcript.
 
+Quick start on the **Pi 5 with the MA2450 attached**:
+
+```bash
+./scripts/quartznet-fixed512-live.sh --list-microphones
+./scripts/quartznet-fixed512-live.sh --wav recording.wav --show-timing
+./scripts/quartznet-fixed512-live.sh --microphone --alsa-device default --show-timing
+```
+
+Microphone enumeration and `--help` do not acquire the MYRIAD device lock.
+Actual inference retains the existing single-MYRIAD, four-core Pi policy; it
+does not use the Oberon ROCm training launcher. WAV loading automatically
+converts supported integer-PCM WAV formats to 16 kHz mono. A missing,
+inaccessible, or busy ALSA device reports an explicit capture error rather
+than silently returning an empty transcript. PCM framing is preserved even
+if the capture pipe splits a 16-bit sample between reads.
+
+Hardware-free I/O tests:
+
+```bash
+./scripts/python-apps.sh -m unittest discover -s tests/python \
+  -p 'test_speech_asr_quartznet_live_io.py' -v
+```
+
+The accepted fixed512 inference and stitching implementation remains
+unchanged.
+
 With the accepted 128-output-frame hop, the first partial text requires the
 initial 5.11-second inference window; subsequent updates occur every 2.56
 seconds of incoming audio. The qualified MA2450 inference time is about 394 ms
