@@ -93,6 +93,54 @@ def validate_ir(ir_dir: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
     return xml, binary
 
 
+def locate_fixed512_ir(
+    requested: pathlib.Path,
+    *,
+    staged_root: pathlib.Path | None = None,
+) -> pathlib.Path:
+    """Reuse the model previously staged by the fixed512 edge qualification.
+
+    The controller stores IR files below a run-specific fixed512-eval directory,
+    whereas the interactive app defaults to the build output directory.
+    Explicit --ir-dir arguments always take precedence.
+    """
+    if requested != DEFAULT_IR_DIR:
+        return requested
+    try:
+        validate_ir(requested)
+        return requested
+    except (ValueError, OSError):
+        pass
+
+    if staged_root is None:
+        staged_root = ROOT / "work/speech-asr/fixed512-eval"
+
+    candidates: list[pathlib.Path] = []
+    for candidate in staged_root.glob("*/input/openvino/fp16"):
+        try:
+            validate_ir(candidate)
+        except (ValueError, OSError, json.JSONDecodeError):
+            continue
+        candidates.append(candidate)
+
+    if candidates:
+        # Prefer the most recently staged complete fixed512 artifact.
+        chosen = max(candidates, key=lambda path: (path.stat().st_mtime, str(path)))
+        print(
+            f"[fixed512-live] using previously staged fixed512 model: {chosen}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return chosen
+
+    raise ValueError(
+        "fixed512 model not found in the default build directory or any "
+        f"edge qualification staging directory under {staged_root}. "
+        "Copy quartznet15x5_nvidia_ref.xml, .bin, and artifacts.json from "
+        "Oberon's prepared fixed512 IR, or supply --ir-dir PATH."
+    )
+
+
 def runtime_preflight(platform_name: str, backend: str) -> None:
     proc = subprocess.run(
         [
@@ -346,7 +394,8 @@ def main() -> int:
         if args.wav is not None and not args.wav.is_file():
             raise ValueError(f"WAV file missing: {args.wav}")
         spec, vocab = load_contracts(args.spec, args.vocab)
-        xml, binary = validate_ir(args.ir_dir)
+        ir_dir = locate_fixed512_ir(args.ir_dir)
+        xml, binary = validate_ir(ir_dir)
         runtime_preflight(args.platform, args.runtime_backend)
 
         command = [
