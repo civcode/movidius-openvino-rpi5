@@ -267,10 +267,32 @@ soft speech may be lost. `--no-squelch` disables the gate entirely.
 `--show-timing` remains optional. The gate cannot distinguish a loud noise
 from speech, so the Pi microphone run is the decisive real-world test.
 
-With the accepted 128-output-frame hop, the first partial text requires the
-initial 5.11-second inference window; subsequent updates occur every 2.56
-seconds of incoming audio. The qualified MA2450 inference time is about 394 ms
-per fixed window.
+The first model inference still needs the first **5.11 seconds** of audio;
+the qualified MA2450 inference time is approximately **394 ms** per window.
+The live decoder now commits all frames guaranteed to retain their
+center-owned logit even after the next overlapping window arrives. This
+reduces the delay of confirmed text while preserving final offline parity:
+
+- 64-frame hop: updates every 1.28 seconds; first complete window safely
+  commits 160 output frames (3.20 seconds of audio), rather than just 64.
+- 128-frame hop (qualified configuration): updates every 2.56 seconds;
+  first complete window safely commits 192 output frames (3.84 seconds),
+  rather than just 128.
+
+Use `--show-preview` to see a **short, tentative** suffix of the current
+window as `[preview] ...` on stderr. Preview text may be revised by later
+windows and is not intended for downstream parsing. The normal stdout
+stream remains append-only committed text, with no repeated full sentences.
+
+```bash
+./scripts/quartznet-fixed512-live.sh --microphone \
+  --alsa-device "plughw:CARD=MICROPHONE,DEV=0" \
+  --hop-output-frames 64 --show-preview
+```
+
+Neither the earlier confirmation boundary nor the preview option reduces the
+initial 5.11-second window requirement. Achieving first speech output sooner
+would need a separate policy for short/padded windows and accuracy checks.
 
 ## Commands
 
