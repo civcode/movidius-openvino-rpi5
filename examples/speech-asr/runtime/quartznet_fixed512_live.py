@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import unicodedata
 
 import numpy as np
 
@@ -167,11 +168,11 @@ def runtime_preflight(platform_name: str, backend: str) -> None:
 
 
 class ConsoleTranscript:
-    """Append stable CTC text once instead of repainting wrapped terminal lines.
+    """Print stable text once and, on a TTY, revise only its temporary suffix.
 
-    Partial previews may change as overlapping windows are stitched. Only the
-    committed prefix is append-safe; the final event emits any remaining text.
-    This also makes stdout suitable for downstream consumers of pause markers.
+    Long transcripts must never be repainted: they wrap over many rows. The
+    optional preview is rendered after the committed text and erased in place
+    before another update. Non-TTY stdout always remains committed-only text.
     """
 
     def __init__(self, *, plain: bool, show_timing: bool, show_preview: bool = False):
@@ -181,55 +182,138 @@ class ConsoleTranscript:
         self.printed_text = ""
         self.last_preview = ""
         self._output_open = False
+        self._column = 0
+        self._pending_wrap = False
+        self._preview_rows = 0
+        self._preview_column = 0
+        self._preview_started_after_wrap = False
+
+    @staticmethod
+    def _cell_width(char: str) -> int:
+        # The recognized vocabulary is ASCII, but pause delimiters may contain
+        # other printable characters. Handle combining and wide glyphs.
+        if unicodedata.combining(char) or unicodedata.category(char) == "Cf":
+            return 0
+        return 2 if unicodedata.east_asian_width(char) in ("F", "W") else 1
+
+    @classmethod
+    def _layout(
+        cls, text: str, column: int, pending_wrap: bool, columns: int
+    ) -> tuple[int, bool, int, int | None, int | None]:
+        """Track physical terminal rows, including the right-edge wrap state."""
+        row = 0
+        first_row = None
+        first_column = None
+        for char in text:
+            if char == "\n":
+                row += 1
+                column = 0
+                pending_wrap = False
+                continue
+            width = cls._cell_width(char)
+            if not width:
+                continue
+            if pending_wrap or column + width > columns:
+                row += 1
+                column = 0
+                pending_wrap = False
+            if first_row is None:
+                first_row, first_column = row, column
+            if column + width == columns:
+                column = columns - 1
+                pending_wrap = True
+            else:
+                column += width
+        return column, pending_wrap, row, first_row, first_column
+
+    def _erase_preview(self) -> None:
+        if not self._preview_rows:
+            return
+        # Only clear the screen cells containing the temporary suffix.
+        # The confirmed transcript above and to the left is untouched.
+        back = self._preview_rows - 1
+        sys.stdout.write("\r")
+        if back:
+            sys.stdout.write(f"\033[{back}A")
+        sys.stdout.write(f"\033[{self._preview_column + 1}G\033[K")
+        for _ in range(back):
+            sys.stdout.write("\033[1B\r\033[2K")
+        if back:
+            sys.stdout.write(f"\033[{back}A")
+        sys.stdout.write(f"\033[{self._preview_column + 1}G")
+        sys.stdout.flush()
+        # If the first preview glyph forced a wrap, that wrap has already
+        # happened physically. Keep tracking the new row, not the old margin.
+        if self._preview_started_after_wrap:
+            self._column = self._preview_column
+            self._pending_wrap = False
+        self._preview_rows = 0
+        self._preview_started_after_wrap = False
+        self.last_preview = ""
+
+    def _write_stable(self, text: str) -> None:
+        if not text:
+            return
+        if self.tty:
+            columns = max(2, shutil.get_terminal_size((80, 24)).columns)
+            self._column, self._pending_wrap, _, _, _ = self._layout(
+                text, self._column, self._pending_wrap, columns
+            )
+        sys.stdout.write(text)
+        sys.stdout.flush()
+        self._output_open = True
+
+    def _write_preview(self, suffix: str) -> None:
+        if not suffix:
+            return
+        columns = max(2, shutil.get_terminal_size((80, 24)).columns)
+        _, _, last_row, first_row, first_column = self._layout(
+            suffix, self._column, self._pending_wrap, columns
+        )
+        if first_row is None or first_column is None:
+            return
+        self._preview_rows = last_row - first_row + 1
+        self._preview_column = first_column
+        self._preview_started_after_wrap = first_row > 0
+        sys.stdout.write(suffix)
+        sys.stdout.flush()
 
     def _end_output_line(self) -> None:
+        if self.tty:
+            self._erase_preview()
         if self._output_open:
             sys.stdout.write("\n")
             sys.stdout.flush()
             self._output_open = False
+            self._column = 0
+            self._pending_wrap = False
 
     def update(self, value: Fixed512LiveUpdate) -> None:
-        # Do not stream mutable CTC previews: they can be replaced by the next
-        # center-owned overlapping window. Committed text is append-stable.
+        if self.tty:
+            self._erase_preview()
+
+        # Only committed frames may be appended permanently: partial preview
+        # tokens can change after center-owned overlap stitching.
         text = value.partial_text if value.final else value.committed_text
         if text.startswith(self.printed_text):
             new_text = text[len(self.printed_text):]
         else:
-            # Defensive fallback if a future text normalizer edits an already
-            # printed prefix: start a new line rather than silently corrupt it.
             self._end_output_line()
             new_text = text
-        if new_text:
-            sys.stdout.write(new_text)
-            sys.stdout.flush()
-            self._output_open = True
+        self._write_stable(new_text)
         self.printed_text = text
 
         if value.final:
-            # Leave the shell prompt on its own line, even for an empty result.
             if self._output_open:
                 self._end_output_line()
             else:
                 sys.stdout.write("\n")
                 sys.stdout.flush()
+            return
 
-        if self.show_preview and not value.final:
-            # The uncommitted suffix can change after overlap stitching.
-            # Keep it on stderr and to one short line; stdout remains an
-            # append-only stream of confirmed text for downstream programs.
-            suffix = (
-                value.partial_text[len(value.committed_text):]
-                if value.partial_text.startswith(value.committed_text)
-                else value.partial_text[-80:]
-            )
-            suffix = suffix[-80:]
-            if suffix and suffix != self.last_preview:
-                if self.tty:
-                    self._end_output_line()
-                print(f"[preview] {suffix}", file=sys.stderr, flush=True)
-            self.last_preview = suffix
-
-        if self.show_timing and not value.final:
+        # Diagnostics are separate from transcript output. On a TTY the
+        # preview comes after timing so diagnostics cannot interrupt it.
+        if self.show_timing:
             if self.tty:
                 self._end_output_line()
             print(
@@ -241,6 +325,22 @@ class ConsoleTranscript:
                 file=sys.stderr,
                 flush=True,
             )
+
+        if self.show_preview:
+            suffix = (
+                value.partial_text[len(value.committed_text):]
+                if value.partial_text.startswith(value.committed_text)
+                else ""
+            )
+            if self.tty:
+                self._write_preview(suffix)
+            else:
+                # A pipe must never receive revisions or ANSI cursor codes.
+                # Continue supporting the original stderr preview for pipes.
+                suffix = suffix[-80:]
+                if suffix and suffix != self.last_preview:
+                    print(f"[preview] {suffix}", file=sys.stderr, flush=True)
+            self.last_preview = suffix
 
     def status(self, message: str) -> None:
         if self.tty:
@@ -456,7 +556,7 @@ def main() -> int:
     parser.add_argument(
         "--show-preview",
         action="store_true",
-        help="show latest tentative uncommitted CTC suffix on stderr",
+        help="show revisable tentative text inline on TTY (stderr for pipes)",
     )
     parser.add_argument("--show-timing", action="store_true")
     args = parser.parse_args()
