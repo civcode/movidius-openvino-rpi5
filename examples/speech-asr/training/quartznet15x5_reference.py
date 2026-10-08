@@ -96,8 +96,6 @@ def nemo_reference_features(
     spec: dict,
     *,
     device: torch.device,
-    window: torch.Tensor | None = None,
-    bank: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, int]:
     """Reproduce the historical NeMo FilterbankFeatures eval path.
 
@@ -125,13 +123,12 @@ def nemo_reference_features(
         ),
         dim=1,
     )
-    if window is None:
-        window = torch.hann_window(
-            int(frontend["window_samples"]),
-            periodic=bool(frontend["hann_periodic"]),
-            dtype=torch.float32,
-            device=device,
-        )
+    window = torch.hann_window(
+        int(frontend["window_samples"]),
+        periodic=bool(frontend["hann_periodic"]),
+        dtype=torch.float32,
+        device=device,
+    )
     spectrum = torch.stft(
         audio,
         n_fft=int(frontend["fft_size"]),
@@ -146,17 +143,14 @@ def nemo_reference_features(
         raise ValueError("reference frontend requires power spectrogram")
     spectrum = spectrum.pow(2.0)
 
-    if bank is None:
-        mel_spec = {"frontend": {
-            "sample_rate_hz": int(frontend["sample_rate_hz"]),
-            "fft_size": int(frontend["fft_size"]),
-            "mel_bins": int(frontend["mel_bins"]),
-            "fmin_hz": float(frontend["fmin_hz"]),
-            "fmax_hz": float(frontend["fmax_hz"]),
-        }}
-        bank = torch.from_numpy(mel_filterbank_slaney(mel_spec)).to(
-            device=device, dtype=torch.float32
-        )
+    mel_spec = {"frontend": {
+        "sample_rate_hz": int(frontend["sample_rate_hz"]),
+        "fft_size": int(frontend["fft_size"]),
+        "mel_bins": int(frontend["mel_bins"]),
+        "fmin_hz": float(frontend["fmin_hz"]),
+        "fmax_hz": float(frontend["fmax_hz"]),
+    }}
+    bank = torch.from_numpy(mel_filterbank_slaney(mel_spec)).to(device=device, dtype=torch.float32)
     features = torch.matmul(bank.unsqueeze(0), spectrum)
     features = torch.log(features + float(frontend["log_guard_value"]))
 
@@ -179,29 +173,6 @@ def nemo_reference_features(
             value=float(frontend["pad_value"]),
         )
     return features.contiguous(), valid_frames
-
-
-
-def reference_frontend_constants(spec: dict, *, device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
-    """Create immutable frontend buffers once for a many-utterance benchmark."""
-    frontend = spec["frontend"]
-    window = torch.hann_window(
-        int(frontend["window_samples"]),
-        periodic=bool(frontend["hann_periodic"]),
-        dtype=torch.float32,
-        device=device,
-    )
-    mel_spec = {"frontend": {
-        "sample_rate_hz": int(frontend["sample_rate_hz"]),
-        "fft_size": int(frontend["fft_size"]),
-        "mel_bins": int(frontend["mel_bins"]),
-        "fmin_hz": float(frontend["fmin_hz"]),
-        "fmax_hz": float(frontend["fmax_hz"]),
-    }}
-    bank = torch.from_numpy(mel_filterbank_slaney(mel_spec)).to(
-        device=device, dtype=torch.float32
-    )
-    return window, bank
 
 
 def reference_output_length(feature_frames: int, spec: dict) -> int:

@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import pathlib
 import platform
 import sys
@@ -35,11 +34,6 @@ from speech_asr.cnn_ctc import greedy_decode_logits_diagnostics  # noqa: E402
 from speech_asr.evaluation import character_error_counts, word_error_counts  # noqa: E402
 from speech_asr.quartznet_reference_frontend import (  # noqa: E402
     nemo_reference_features_numpy,
-)
-from speech_asr.rocm_diagnostics import (  # noqa: E402
-    inspect_rocm_affinity,
-    parse_cpuset,
-    summarize_model_timings,
 )
 
 
@@ -167,16 +161,6 @@ def main() -> int:
     parser.add_argument("--frontend", choices=("torch", "numpy"), default="torch")
     parser.add_argument("--max-samples", type=int)
     parser.add_argument("--progress-interval", type=int, default=50)
-    parser.add_argument(
-        "--benchmark",
-        action="store_true",
-        help="record synchronized acoustic-model forward latency and model-only RTF",
-    )
-    parser.add_argument(
-        "--verify-rocm-affinity",
-        action="store_true",
-        help="fail if the ROCm bootstrap or any sampled thread loses its CPU mask",
-    )
     parser.add_argument("--output", type=pathlib.Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--hypotheses", type=pathlib.Path, default=DEFAULT_HYPOTHESES)
     args = parser.parse_args()
@@ -205,38 +189,6 @@ def main() -> int:
         model.to(device)
         model.eval()
 
-        if args.verify_rocm_affinity and accelerator_backend != "rocm":
-            raise ValueError("--verify-rocm-affinity requires --device rocm")
-        expected_cpus = (
-            parse_cpuset(os.environ.get("SPEECH_ROCM_CPUSET", "0-15"))
-            if args.verify_rocm_affinity else None
-        )
-        affinity_stats = {
-            "checks": 0,
-            "max_narrow_threads_observed": 0,
-            "narrow_thread_observations": 0,
-            "first_narrow_thread_examples": [],
-        }
-
-        def check_affinity() -> dict:
-            snapshot = inspect_rocm_affinity(expected_cpus)
-            affinity_stats["checks"] += 1
-            count = snapshot["narrow_thread_count"]
-            affinity_stats["max_narrow_threads_observed"] = max(
-                affinity_stats["max_narrow_threads_observed"], count
-            )
-            affinity_stats["narrow_thread_observations"] += count
-            if count and not affinity_stats["first_narrow_thread_examples"]:
-                affinity_stats["first_narrow_thread_examples"] = snapshot[
-                    "narrow_thread_examples"
-                ]
-            return snapshot
-
-        if expected_cpus is not None:
-            check_affinity()
-
-        model_latencies_ms = []
-        benchmark_audio_seconds = 0.0
         word_counts = []
         char_counts = []
         hypotheses = []
@@ -268,20 +220,7 @@ def main() -> int:
                         spec,
                     )
                     features = torch.from_numpy(features_np).to(device)
-                if args.benchmark and accelerator_backend in {"rocm", "cuda"}:
-                    torch.cuda.synchronize(device)
-                model_started = time.perf_counter() if args.benchmark else None
                 logits = model(features)[0]
-                if args.benchmark:
-                    if accelerator_backend in {"rocm", "cuda"}:
-                        torch.cuda.synchronize(device)
-                    model_latencies_ms.append(
-                        (time.perf_counter() - model_started) * 1000.0
-                    )
-                    benchmark_audio_seconds += len(samples) / sample_rate
-                if expected_cpus is not None:
-                    check_affinity()
-
                 valid_output = reference_output_length(valid_frames, spec)
                 if valid_output < 1 or valid_output > logits.shape[0]:
                     raise ValueError(
@@ -363,19 +302,6 @@ def main() -> int:
                 "wall_seconds": time.monotonic() - started,
             },
         }
-
-        if args.benchmark:
-            result["runtime"]["model_benchmark"] = summarize_model_timings(
-                model_latencies_ms, benchmark_audio_seconds
-            )
-        if expected_cpus is not None:
-            affinity_snapshot = check_affinity()
-            result["runtime"]["rocm_affinity"] = {
-                "status": "pass",
-                "expected_cpus": sorted(expected_cpus),
-                **affinity_stats,
-                **affinity_snapshot,
-            }
 
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(
