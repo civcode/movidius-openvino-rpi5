@@ -3,14 +3,16 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEVICE=auto
+DEVICE_INDEX=0
 OUT="$ROOT/work/speech-asr/quartznet15x5-reference/numpy-frontend"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --device) [[ $# -ge 2 ]] || { echo "--device needs auto|cpu|cuda" >&2; exit 2; }; DEVICE="$2"; shift 2 ;;
+        --device) [[ $# -ge 2 ]] || { echo "--device needs auto|cpu|cuda|rocm" >&2; exit 2; }; DEVICE="$2"; shift 2 ;;
+        --device-index) [[ $# -ge 2 ]] || { echo "--device-index needs a non-negative integer" >&2; exit 2; }; DEVICE_INDEX="$2"; shift 2 ;;
         --output-dir) [[ $# -ge 2 ]] || { echo "--output-dir needs a path" >&2; exit 2; }; OUT="$2"; shift 2 ;;
         -h|--help)
-            echo "usage: $0 [--device auto|cpu|cuda] [--output-dir PATH]"
+            echo "usage: $0 [--device auto|cpu|cuda|rocm] [--device-index N] [--output-dir PATH]"
             exit 0
             ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
@@ -18,7 +20,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 mkdir -p "$OUT"
-"$ROOT/scripts/evaluate-quartznet15x5-reference.sh"     --device "$DEVICE"     --frontend numpy     --output "$OUT/result.json"     --hypotheses "$OUT/hypotheses.jsonl"
+"$ROOT/scripts/evaluate-quartznet15x5-reference.sh"     --device "$DEVICE"     --device-index "$DEVICE_INDEX"     --frontend numpy     --output "$OUT/result.json"     --hypotheses "$OUT/hypotheses.jsonl"
 
 "$ROOT/scripts/python.sh" - "$OUT/result.json" <<'PY'
 import json, pathlib, sys
