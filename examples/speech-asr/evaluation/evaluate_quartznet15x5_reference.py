@@ -211,11 +211,29 @@ def main() -> int:
             parse_cpuset(os.environ.get("SPEECH_ROCM_CPUSET", "0-15"))
             if args.verify_rocm_affinity else None
         )
-        affinity_checks = 0
-        affinity_snapshot = None
+        affinity_stats = {
+            "checks": 0,
+            "max_narrow_threads_observed": 0,
+            "narrow_thread_observations": 0,
+            "first_narrow_thread_examples": [],
+        }
+
+        def check_affinity() -> dict:
+            snapshot = inspect_rocm_affinity(expected_cpus)
+            affinity_stats["checks"] += 1
+            count = snapshot["narrow_thread_count"]
+            affinity_stats["max_narrow_threads_observed"] = max(
+                affinity_stats["max_narrow_threads_observed"], count
+            )
+            affinity_stats["narrow_thread_observations"] += count
+            if count and not affinity_stats["first_narrow_thread_examples"]:
+                affinity_stats["first_narrow_thread_examples"] = snapshot[
+                    "narrow_thread_examples"
+                ]
+            return snapshot
+
         if expected_cpus is not None:
-            affinity_snapshot = inspect_rocm_affinity(expected_cpus)
-            affinity_checks += 1
+            check_affinity()
 
         model_latencies_ms = []
         benchmark_audio_seconds = 0.0
@@ -262,8 +280,7 @@ def main() -> int:
                     )
                     benchmark_audio_seconds += len(samples) / sample_rate
                 if expected_cpus is not None:
-                    affinity_snapshot = inspect_rocm_affinity(expected_cpus)
-                    affinity_checks += 1
+                    check_affinity()
 
                 valid_output = reference_output_length(valid_frames, spec)
                 if valid_output < 1 or valid_output > logits.shape[0]:
@@ -352,12 +369,11 @@ def main() -> int:
                 model_latencies_ms, benchmark_audio_seconds
             )
         if expected_cpus is not None:
-            affinity_snapshot = inspect_rocm_affinity(expected_cpus)
-            affinity_checks += 1
+            affinity_snapshot = check_affinity()
             result["runtime"]["rocm_affinity"] = {
                 "status": "pass",
                 "expected_cpus": sorted(expected_cpus),
-                "checks": affinity_checks,
+                **affinity_stats,
                 **affinity_snapshot,
             }
 
