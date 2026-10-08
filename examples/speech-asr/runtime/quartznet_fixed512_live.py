@@ -295,6 +295,9 @@ def feed_microphone(
             stdout=subprocess.PIPE,
             stderr=capture_errors,
             bufsize=0,
+            # Let the Python SIGINT handler drain/finalize audio before
+            # explicitly terminating ALSA capture in the finally block.
+            start_new_session=True,
         )
         if proc.stdout is None:
             proc.kill()
