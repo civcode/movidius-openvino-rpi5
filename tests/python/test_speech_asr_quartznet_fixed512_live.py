@@ -52,6 +52,65 @@ class QuartzNetFixed512LiveTests(unittest.TestCase):
         decoder.push([a, blank, a])
         self.assertEqual(decoder.text, "aa")
 
+    def test_pause_spacing_is_display_only(self):
+        a = self.vocab["tokens"].index("a")
+        b = self.vocab["tokens"].index("b")
+        blank = self.vocab["blank_index"]
+        decoder = IncrementalCtcDecoder(self.vocab, pause_space_frames=30)
+        decoder.push([a] + [blank] * 30 + [b])
+        self.assertEqual(decoder.text, "ab")
+        self.assertEqual(decoder.display_text, "a b")
+        self.assertEqual(decoder.preview([], display=True), "a b")
+
+    def test_pause_spacing_survives_commit_and_preview_boundaries(self):
+        a = self.vocab["tokens"].index("a")
+        b = self.vocab["tokens"].index("b")
+        blank = self.vocab["blank_index"]
+        decoder = IncrementalCtcDecoder(self.vocab, pause_space_frames=30)
+        decoder.push([a] + [blank] * 10)
+        self.assertEqual(decoder.preview([blank] * 20 + [b]), "ab")
+        self.assertEqual(
+            decoder.preview([blank] * 20 + [b], display=True), "a b"
+        )
+        self.assertEqual(decoder.display_text, "a")
+        decoder.push([blank] * 20)
+        self.assertEqual(decoder.display_text, "a")
+        decoder.push([b])
+        self.assertEqual(decoder.display_text, "a b")
+        self.assertEqual(decoder.text, "ab")
+
+    def test_pause_spacing_does_not_add_duplicate_or_trailing_spaces(self):
+        a = self.vocab["tokens"].index("a")
+        b = self.vocab["tokens"].index("b")
+        space = self.vocab["tokens"].index(" ")
+        blank = self.vocab["blank_index"]
+        decoder = IncrementalCtcDecoder(self.vocab, pause_space_frames=20)
+        decoder.push([blank] * 30 + [a] + [blank] * 20 + [space])
+        decoder.push([blank] * 20 + [b] + [blank] * 30)
+        self.assertEqual(decoder.display_text, "a b")
+        self.assertEqual(decoder.text, "a b")
+
+    def test_short_ctc_blank_gap_does_not_create_space(self):
+        a = self.vocab["tokens"].index("a")
+        b = self.vocab["tokens"].index("b")
+        blank = self.vocab["blank_index"]
+        decoder = IncrementalCtcDecoder(self.vocab, pause_space_frames=30)
+        decoder.push([a] + [blank] * 29 + [b])
+        self.assertEqual(decoder.display_text, "ab")
+
+    def test_pause_spacing_disabled_preserves_previous_behavior(self):
+        a = self.vocab["tokens"].index("a")
+        b = self.vocab["tokens"].index("b")
+        blank = self.vocab["blank_index"]
+        decoder = IncrementalCtcDecoder(self.vocab)
+        decoder.push([a] + [blank] * 60 + [b])
+        self.assertEqual(decoder.text, "ab")
+        self.assertEqual(decoder.display_text, "ab")
+
+    def test_pause_spacing_rejects_negative_threshold(self):
+        with self.assertRaisesRegex(ValueError, "pause_space_frames"):
+            IncrementalCtcDecoder(self.vocab, pause_space_frames=-1)
+
     def test_online_final_text_matches_offline_center_owned_stitch(self):
         sample_count = 150000
         windows = plan_fixed512_windows(sample_count, self.spec)
