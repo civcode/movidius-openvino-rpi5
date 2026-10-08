@@ -100,8 +100,8 @@ class IncrementalCtcDecoder:
             raise ValueError("invalid CTC blank index")
         if pause_space_frames < 0:
             raise ValueError("pause_space_frames must not be negative")
-        if len(pause_delimiter) != 1 or not pause_delimiter.isprintable():
-            raise ValueError("pause_delimiter must be one printable character")
+        if not isinstance(pause_delimiter, str) or not pause_delimiter or not pause_delimiter.isprintable():
+            raise ValueError("pause_delimiter must be a non-empty printable string")
         self.pause_space_frames = pause_space_frames
         self.pause_delimiter = pause_delimiter
         self.previous: int | None = None
@@ -121,6 +121,7 @@ class IncrementalCtcDecoder:
         display_emitted: list[str | None],
         blank_run: int,
         pause_space_frames: int,
+        pause_delimiter: str,
     ) -> tuple[int | None, int]:
         for raw in values:
             value = int(raw)
@@ -136,8 +137,11 @@ class IncrementalCtcDecoder:
                         pause_space_frames
                         and blank_run >= pause_space_frames
                         and display_emitted
-                        and display_emitted[-1] not in (" ", None)
-                        and token != " "
+                        and display_emitted[-1] is not None
+                        and (
+                            pause_delimiter != " "
+                            or display_emitted[-1] != " "
+                        )
                     ):
                         display_emitted.append(None)
                     display_emitted.append(token)
@@ -174,6 +178,7 @@ class IncrementalCtcDecoder:
             display_emitted=self._display_emitted,
             blank_run=self._blank_run,
             pause_space_frames=self.pause_space_frames,
+            pause_delimiter=self.pause_delimiter,
         )
         return self.text
 
@@ -189,6 +194,7 @@ class IncrementalCtcDecoder:
             display_emitted=display_emitted,
             blank_run=self._blank_run,
             pause_space_frames=self.pause_space_frames,
+            pause_delimiter=self.pause_delimiter,
         )
         if display:
             return self._render_display(display_emitted, self.pause_delimiter)
