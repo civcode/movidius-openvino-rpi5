@@ -205,6 +205,8 @@ def main() -> int:
     try:
         if args.max_samples is not None and args.max_samples < 1:
             raise ValueError("--max-samples must be positive")
+        if args.device_index < 0:
+            raise ValueError("--device-index must be >= 0")
         if not 1 <= args.hop_output_frames <= 256:
             raise ValueError("--hop-output-frames must be in 1..256")
         if not all(ch.isdigit() or ch in ",-" for ch in args.local_cpuset):
