@@ -100,6 +100,26 @@ class QuartzNetLiveInputTests(unittest.TestCase):
                     live.feed_microphone(recognizer, FakeConsole(), device="fake", read_frames=32)
         self.assertEqual(recognizer.finalizations, 0)
 
+    def test_control_c_stops_capture_and_finalizes(self):
+        recognizer = FakeRecognizer()
+        console = FakeConsole()
+
+        def request_stop_on_wait(*_args):
+            handler = live.signal.getsignal(live.signal.SIGINT)
+            handler(live.signal.SIGINT, None)
+            return ([], [], [])
+
+        with mock.patch.object(live.shutil, "which", return_value="/usr/bin/arecord"):
+            with mock.patch.object(
+                live, "microphone_command",
+                return_value=[sys.executable, "-c", "import time;time.sleep(30)"],
+            ):
+                with mock.patch.object(live.select, "select", side_effect=request_stop_on_wait):
+                    live.feed_microphone(recognizer, console, device="fake", read_frames=32)
+        self.assertEqual(recognizer.finalizations, 1)
+        self.assertEqual(console.updates, ["finished"])
+        self.assertTrue(any("stop requested" in text for text in console.messages))
+
     def test_missing_microphone_tool_has_clear_error(self):
         with mock.patch.object(live.shutil, "which", return_value=None):
             with self.assertRaisesRegex(RuntimeError, "arecord is required"):
