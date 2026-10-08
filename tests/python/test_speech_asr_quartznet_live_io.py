@@ -237,7 +237,7 @@ class QuartzNetLiveInputTests(unittest.TestCase):
                     final=True,
                 ))
         self.assertEqual(
-            stdout.getvalue(), "hello there friend[ref_delimiter]next\\n"
+            stdout.getvalue(), "hello there friend[ref_delimiter]next\n"
         )
         self.assertEqual(stderr.getvalue(), "")
 
@@ -264,8 +264,8 @@ class QuartzNetLiveInputTests(unittest.TestCase):
                     partial=long_prefix + " end",
                     final=True,
                 ))
-        self.assertEqual(stdout.getvalue(), long_prefix + " end\\n")
-        self.assertNotIn("\\033", stdout.getvalue())
+        self.assertEqual(stdout.getvalue(), long_prefix + " end\n")
+        self.assertNotIn("\033", stdout.getvalue())
 
     def test_console_status_starts_fresh_line_without_reprinting(self):
         class FakeTty(io.StringIO):
@@ -283,7 +283,7 @@ class QuartzNetLiveInputTests(unittest.TestCase):
                 console.update(self.console_update(
                     committed="hello", partial="hello there", final=True
                 ))
-        self.assertEqual(stdout.getvalue(), "hello\\n there\\n")
+        self.assertEqual(stdout.getvalue(), "hello\n there\n")
         self.assertIn("stop requested", stderr.getvalue())
 
     def test_list_microphones_does_not_start_inference(self):
