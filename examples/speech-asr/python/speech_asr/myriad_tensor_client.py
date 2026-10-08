@@ -57,6 +57,9 @@ class PersistentTensorServer:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             bufsize=0,
+            # Ctrl+C belongs to the interactive client. Keep the persistent
+            # MYRIAD model alive until it finishes the final audio window.
+            start_new_session=True,
         )
         if self.proc.stdin is None or self.proc.stdout is None or self.proc.stderr is None:
             self.proc.kill()
