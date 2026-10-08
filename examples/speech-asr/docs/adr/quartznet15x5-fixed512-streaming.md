@@ -173,6 +173,17 @@ Use `--alsa-device NAME` to select a non-default ALSA source and
 `arecord` at 16 kHz, mono, signed 16-bit PCM. Ctrl+C stops capture, processes
 the remaining partial window, and prints the final transcript.
 
+The live CLI looks for the fixed512 XML/BIN/manifest in the usual
+`work/speech-asr/quartznet15x5-reference/myriad/openvino/fp16/` build output.
+On the Pi, the existing qualification may instead have staged those files
+under `work/speech-asr/fixed512-eval/<run-id>/input/openvino/fp16/`.
+If the usual build output is absent, the app automatically reuses the most
+recent *complete, shape-validated* staged model. An explicit `--ir-dir PATH`
+always takes precedence. If neither exists, prepare the model on Oberon with
+`./scripts/prepare-quartznet15x5-reference-myriad.sh` and copy the three
+compiled artifacts (`.xml`, `.bin`, `artifacts.json`) to the Pi before running
+the WAV/microphone app. The live CLI itself does not compile models.
+
 Quick start on the **Pi 5 with the MA2450 attached**:
 
 ```bash
