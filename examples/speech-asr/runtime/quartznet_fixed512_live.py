@@ -391,6 +391,20 @@ def main() -> int:
             "default 600 ms for microphone, off for WAV; 0 disables"
         ),
     )
+    squelch = parser.add_mutually_exclusive_group()
+    squelch.add_argument(
+        "--squelch-dbfs",
+        type=float,
+        help=(
+            "suppress quiet microphone CTC output below this RMS level; "
+            "default -40 dBFS for microphone, disabled for WAV"
+        ),
+    )
+    squelch.add_argument(
+        "--no-squelch",
+        action="store_true",
+        help="disable automatic microphone silence suppression",
+    )
     parser.add_argument("--log", type=pathlib.Path, default=DEFAULT_LOG)
     parser.add_argument("--plain", action="store_true")
     parser.add_argument("--show-timing", action="store_true")
@@ -413,6 +427,17 @@ def main() -> int:
         pause_space_frames = (
             (pause_ms * 16 + OUTPUT_STRIDE_SAMPLES - 1) // OUTPUT_STRIDE_SAMPLES
         )
+
+        squelch_dbfs = (
+            None if args.no_squelch else (
+                args.squelch_dbfs if args.squelch_dbfs is not None
+                else (-40.0 if args.microphone else None)
+            )
+        )
+        if squelch_dbfs is not None and (
+            not np.isfinite(squelch_dbfs) or not -90 <= squelch_dbfs <= -10
+        ):
+            raise ValueError("--squelch-dbfs must be between -90 and -10")
 
         if args.wav is not None and not args.wav.is_file():
             raise ValueError(f"WAV file missing: {args.wav}")
@@ -453,6 +478,11 @@ def main() -> int:
                 "[fixed512-live] MYRIAD ready "
                 f"load_ms={server.load_ms:.3f} T={FIXED_TENSOR_FRAMES}"
             )
+            if args.microphone:
+                console.status(
+                    "[fixed512-live] squelch="
+                    + ("off" if squelch_dbfs is None else f"{squelch_dbfs:g} dBFS")
+                )
 
             def infer(features: np.ndarray) -> tuple[np.ndarray, float]:
                 flat, infer_ms = server.infer(features)
@@ -464,6 +494,7 @@ def main() -> int:
                 infer=infer,
                 hop_output_frames=args.hop_output_frames,
                 pause_space_frames=pause_space_frames,
+                squelch_dbfs=squelch_dbfs,
             )
             if args.wav is not None:
                 if not args.wav.is_file():
