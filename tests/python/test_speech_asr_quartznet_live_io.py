@@ -290,6 +290,130 @@ class QuartzNetLiveInputTests(unittest.TestCase):
         )
         self.assertEqual(stdout.getvalue(), "stable")
 
+    def test_console_tty_preview_is_inline_and_replaced_by_confirmation(self):
+        class FakeTty(io.StringIO):
+            def isatty(self):
+                return True
+
+        stdout, stderr = FakeTty(), io.StringIO()
+        with mock.patch.object(live.sys, "stdout", stdout):
+            with mock.patch.object(live.sys, "stderr", stderr):
+                with mock.patch.object(
+                    live.shutil, "get_terminal_size",
+                    return_value=__import__("os").terminal_size((80, 24)),
+                ):
+                    console = live.ConsoleTranscript(
+                        plain=False, show_timing=False, show_preview=True
+                    )
+                    console.update(self.console_update(
+                        committed="hello", partial="hello tentative",
+                    ))
+                    self.assertEqual(stdout.getvalue(), "hello tentative")
+                    console.update(self.console_update(
+                        committed="hello there", partial="hello there next",
+                    ))
+                    console.update(self.console_update(
+                        committed="hello there",
+                        partial="hello there[ref_delimiter]world", final=True,
+                    ))
+
+        rendered = stdout.getvalue()
+        self.assertEqual(rendered.count("hello"), 1)
+        self.assertEqual(rendered.count("[ref_delimiter]"), 1)
+        self.assertIn("\033[K", rendered)
+        self.assertTrue(rendered.endswith("[ref_delimiter]world\n"))
+        self.assertNotIn("[preview]", rendered)
+        self.assertEqual(stderr.getvalue(), "")
+
+    def test_console_tty_preview_erase_handles_wrapped_rows(self):
+        class FakeTty(io.StringIO):
+            def isatty(self):
+                return True
+
+        stdout, stderr = FakeTty(), io.StringIO()
+        with mock.patch.object(live.sys, "stdout", stdout):
+            with mock.patch.object(live.sys, "stderr", stderr):
+                with mock.patch.object(
+                    live.shutil, "get_terminal_size",
+                    return_value=__import__("os").terminal_size((12, 24)),
+                ):
+                    console = live.ConsoleTranscript(
+                        plain=False, show_timing=False, show_preview=True
+                    )
+                    console.update(self.console_update(
+                        committed="abcdefghi",
+                        partial="abcdefghiXYZABCDEFGHIJ",
+                    ))
+                    self.assertEqual(console._preview_rows, 2)
+                    console.update(self.console_update(
+                        committed="abcdefghiOK",
+                        partial="abcdefghiOK maybe",
+                    ))
+                    console.update(self.console_update(
+                        committed="abcdefghiOK",
+                        partial="abcdefghiOK", final=True,
+                    ))
+        rendered = stdout.getvalue()
+        self.assertEqual(rendered.count("abcdefghi"), 1)
+        self.assertIn("\033[1A", rendered)
+        self.assertIn("\033[2K", rendered)
+        self.assertTrue(rendered.endswith("\n"))
+        self.assertEqual(stderr.getvalue(), "")
+
+    def test_console_tty_preview_can_begin_after_right_edge_wrap(self):
+        class FakeTty(io.StringIO):
+            def isatty(self):
+                return True
+
+        stdout, stderr = FakeTty(), io.StringIO()
+        with mock.patch.object(live.sys, "stdout", stdout):
+            with mock.patch.object(live.sys, "stderr", stderr):
+                with mock.patch.object(
+                    live.shutil, "get_terminal_size",
+                    return_value=__import__("os").terminal_size((10, 24)),
+                ):
+                    console = live.ConsoleTranscript(
+                        plain=False, show_timing=False, show_preview=True
+                    )
+                    console.update(self.console_update(
+                        committed="abcdefghij", partial="abcdefghijP",
+                    ))
+                    self.assertTrue(console._preview_started_after_wrap)
+                    console.update(self.console_update(
+                        committed="abcdefghij!", partial="abcdefghij!Q",
+                    ))
+                    self.assertFalse(console._pending_wrap)
+                    self.assertEqual(console._column, 1)
+                    console.update(self.console_update(
+                        committed="abcdefghij!", partial="abcdefghij!",
+                        final=True,
+                    ))
+        self.assertEqual(stdout.getvalue().count("abcdefghij"), 1)
+        self.assertEqual(stderr.getvalue(), "")
+
+    def test_console_tty_status_clears_tentative_preview(self):
+        class FakeTty(io.StringIO):
+            def isatty(self):
+                return True
+
+        stdout, stderr = FakeTty(), io.StringIO()
+        with mock.patch.object(live.sys, "stdout", stdout):
+            with mock.patch.object(live.sys, "stderr", stderr):
+                console = live.ConsoleTranscript(
+                    plain=False, show_timing=False, show_preview=True
+                )
+                console.update(self.console_update(
+                    committed="one", partial="one tentative",
+                ))
+                console.status("[fixed512-live] stop requested")
+                self.assertEqual(console._preview_rows, 0)
+                console.update(self.console_update(
+                    committed="one", partial="one final", final=True
+                ))
+        self.assertEqual(stdout.getvalue().count("one"), 1)
+        self.assertTrue(stdout.getvalue().endswith(" final\n"))
+        self.assertIn("stop requested", stderr.getvalue())
+
     def test_console_tty_keeps_wrapped_transcript_append_only(self):
         class FakeTty(io.StringIO):
             def isatty(self):
