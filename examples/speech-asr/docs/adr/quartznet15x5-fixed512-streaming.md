@@ -223,6 +223,79 @@ correct all word boundaries. Tune or disable it on the Pi:
   --alsa-device "plughw:CARD=MICROPHONE,DEV=0" --pause-space-ms 0
 ```
 
+The pause separator can be any **non-empty printable string**, not just the
+default space. Use `--pause-delimiter TEXT` to insert a literal marker whenever
+the microphone detects a speech pause long enough for `--pause-space-ms`.
+Shell-quote markers containing punctuation, spaces, or special characters:
+
+```bash
+./scripts/quartznet-fixed512-live.sh --microphone \
+  --alsa-device "plughw:CARD=MICROPHONE,DEV=0" \
+  --pause-delimiter '[ref_delimiter]'
+
+./scripts/quartznet-fixed512-live.sh --microphone \
+  --alsa-device "plughw:CARD=MICROPHONE,DEV=0" \
+  --pause-delimiter ' to stop
+silent-room microphone noise being decoded as stray vowels such as
+`e o e o`. It measures audio energy in 20 ms blocks, requires several active
+blocks to open, and allows 200 ms of surrounding audio for soft consonants.
+Below-threshold regions are forced to the CTC blank token *after* MYRIAD
+inference. Source WAV evaluation, the trained model, and the fixed512 overlap
+policy are unchanged. This is a simple noise gate, not a trained speech VAD.
+
+For the Marantz MPM-2000U on edge:
+
+```bash
+./scripts/quartznet-fixed512-live.sh --microphone \
+  --alsa-device "plughw:CARD=MICROPHONE,DEV=0" \
+  --hop-output-frames 64
+```
+
+Use `--squelch-dbfs -35` for stronger suppression if background noise still
+produces characters, or `--squelch-dbfs -50` to keep quieter speech. A
+higher (less negative) threshold suppresses more audio; if set too high,
+soft speech may be lost. `--no-squelch` disables the gate entirely.
+`--show-timing` remains optional. The gate cannot distinguish a loud noise
+from speech, so the Pi microphone run is the decisive real-world test.
+
+With the accepted 128-output-frame hop, the first partial text requires the
+initial 5.11-second inference window; subsequent updates occur every 2.56
+seconds of incoming audio. The qualified MA2450 inference time is about 394 ms
+per fixed window.
+
+## Commands
+
+Local ONNX policy diagnostic:
+
+```bash
+./scripts/evaluate-quartznet15x5-reference-fixed512.sh \
+  --engine onnx \
+  --max-samples 100
+```
+
+Physical Pi 5 + MA2450 run from the controller host:
+
+```bash
+./scripts/run-quartznet15x5-reference-fixed512-edge.sh
+```
+
+Use `--max-samples N` for a non-authoritative diagnostic. The full 2,703
+dev-clean qualification above is the frozen acceptance result.
+
+
+./scripts/quartznet-fixed512-live.sh --microphone \
+  --alsa-device "plughw:CARD=MICROPHONE,DEV=0" \
+  --pause-delimiter '#'
+```
+
+For example, two phrases separated by a detected pause display as
+`first phrase[ref_delimiter]second phrase`. The chosen marker survives
+text normalization verbatim. Normal model-predicted spaces *within* speech
+are not replaced; the marker represents only detected pauses. The original
+CTC transcript used for model parity remains unchanged. The
+`--pause-space-ms 0` option disables generated delimiters irrespective
+of `--pause-delimiter`.
+
 Microphone-only squelch is enabled by default at **-40 dBFS** to stop
 silent-room microphone noise being decoded as stray vowels such as
 `e o e o`. It measures audio energy in 20 ms blocks, requires several active
