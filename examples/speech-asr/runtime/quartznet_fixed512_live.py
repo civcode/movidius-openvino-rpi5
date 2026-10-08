@@ -8,6 +8,7 @@ import json
 import os
 import pathlib
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -225,9 +226,21 @@ def feed_microphone(
         proc.kill()
         raise RuntimeError("unable to open ALSA capture pipes")
 
+    stop_requested = False
+    previous_sigint = signal.getsignal(signal.SIGINT)
+
+    def request_stop(_signum, _frame) -> None:
+        nonlocal stop_requested
+        if not stop_requested:
+            stop_requested = True
+            console.status(
+                "[fixed512-live] stop requested; finishing current inference"
+            )
+
+    signal.signal(signal.SIGINT, request_stop)
     try:
         bytes_per_read = read_frames * 2
-        while True:
+        while not stop_requested:
             payload = proc.stdout.read(bytes_per_read)
             if not payload:
                 break
@@ -238,9 +251,10 @@ def feed_microphone(
             samples = pcm.astype(np.float32) / 32768.0
             for update in recognizer.push_audio(samples):
                 console.update(update)
-    except KeyboardInterrupt:
-        console.status("[fixed512-live] stopping microphone capture")
+            if stop_requested:
+                break
     finally:
+        signal.signal(signal.SIGINT, previous_sigint)
         if proc.poll() is None:
             proc.terminate()
             try:
