@@ -279,10 +279,17 @@ reduces the delay of confirmed text while preserving final offline parity:
   first complete window safely commits 192 output frames (3.84 seconds),
   rather than just 128.
 
-Use `--show-preview` to see a **short, tentative** suffix of the current
-window as `[preview] ...` on stderr. Preview text may be revised by later
-windows and is not intended for downstream parsing. The normal stdout
-stream remains append-only committed text, with no repeated full sentences.
+Use `--show-preview` to see tentative recognition **inline with the
+normal transcript** on an interactive TTY. Only the tentative suffix is
+erased and replaced when overlap stitching refines it; confirmed text is
+printed just once. Wrapped multi-line previews are cleared without redrawing
+the growing confirmed transcript.
+
+When stdout is redirected or piped, it remains an append-only committed-text
+stream with no terminal escape sequences; the tentative preview stays on
+stderr as `[preview] ...` for compatibility. `--plain` also selects that
+noninteractive behavior. Preview text may change and should not be used as
+confirmed transcription for downstream processing.
 
 ```bash
 ./scripts/quartznet-fixed512-live.sh --microphone \
