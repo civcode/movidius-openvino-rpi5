@@ -387,9 +387,15 @@ def main() -> int:
         type=int,
         default=None,
         help=(
-            "insert display-only spaces after long CTC blank runs; "
+            "insert display-only separators after long CTC blank runs; "
             "default 600 ms for microphone, off for WAV; 0 disables"
         ),
+    )
+    parser.add_argument(
+        "--pause-delimiter",
+        default=" ",
+        metavar="CHAR",
+        help="one printable character inserted at a speech pause (default: space)",
     )
     squelch = parser.add_mutually_exclusive_group()
     squelch.add_argument(
@@ -419,6 +425,8 @@ def main() -> int:
             raise ValueError("audio feed/read sizes must be positive")
         if args.pause_space_ms is not None and args.pause_space_ms < 0:
             raise ValueError("--pause-space-ms must be >= 0")
+        if len(args.pause_delimiter) != 1 or not args.pause_delimiter.isprintable():
+            raise ValueError("--pause-delimiter must be one printable character")
         pause_ms = (
             args.pause_space_ms
             if args.pause_space_ms is not None
@@ -494,6 +502,7 @@ def main() -> int:
                 infer=infer,
                 hop_output_frames=args.hop_output_frames,
                 pause_space_frames=pause_space_frames,
+                pause_delimiter=args.pause_delimiter,
                 squelch_dbfs=squelch_dbfs,
             )
             if args.wav is not None:
