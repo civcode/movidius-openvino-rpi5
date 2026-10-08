@@ -21,8 +21,12 @@ case "$backend" in
             MKL_NUM_THREADS="$threads" \
             OPENBLAS_NUM_THREADS="$threads" \
             HSA_OVERRIDE_CPU_AFFINITY_DEBUG=0 \
+            SPEECH_ROCM_CPUSET="$cpuset" \
+            SPEECH_ROCM_THREADS="$threads" \
             taskset -c "$cpuset" \
-            "$ROOT/work/venv-training-rocm/bin/python" "$@"
+            "$ROOT/work/venv-training-rocm/bin/python" \
+            "$ROOT/scripts/python-rocm-affinity.py" \
+            "$@"
         ;;
     auto|cpu|cuda)
         "$ROOT/scripts/prepare-python-env.sh" training >/dev/null
