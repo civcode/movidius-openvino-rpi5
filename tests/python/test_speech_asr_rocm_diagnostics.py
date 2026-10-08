@@ -35,9 +35,20 @@ class RocmDiagnosticsTests(unittest.TestCase):
 
     @mock.patch.dict(os.environ, {"SPEECH_ROCM_AFFINITY_RESTORED": "1"})
     @mock.patch("os.listdir", return_value=["123", "124"])
-    def test_affinity_detects_helper_thread_drift(self, listed):
+    def test_affinity_allows_pinned_worker_and_reports_mask(self, listed):
         def mask(tid):
-            return {0} if tid == 124 else {0, 1}
+            return {1} if tid == 124 else {0, 1}
+        with mock.patch("os.sched_getaffinity", side_effect=mask):
+            snapshot = inspect_rocm_affinity({0, 1})
+        self.assertEqual(snapshot["narrow_thread_count"], 1)
+        self.assertEqual(snapshot["thread_affinity_mask_counts"], {"0,1": 1, "1": 1})
+        self.assertEqual(snapshot["narrow_thread_examples"], [{"tid": 124, "cpus": [1]}])
+
+    @mock.patch.dict(os.environ, {"SPEECH_ROCM_AFFINITY_RESTORED": "1"})
+    @mock.patch("os.listdir", return_value=["123", "124"])
+    def test_affinity_rejects_worker_outside_requested_cpuset(self, listed):
+        def mask(tid):
+            return {16} if tid == 124 else {0, 1}
         with mock.patch("os.sched_getaffinity", side_effect=mask):
             with self.assertRaisesRegex(RuntimeError, "tid=124"):
                 inspect_rocm_affinity({0, 1})
