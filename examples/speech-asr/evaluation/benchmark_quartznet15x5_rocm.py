@@ -41,6 +41,7 @@ from quartznet15x5_reference import (  # noqa: E402
     load_reference_spec,
     load_reference_vocab,
     nemo_reference_features,
+    reference_frontend_constants,
     reference_output_length,
 )
 from speech_asr.cnn_ctc import greedy_decode, greedy_decode_logits_diagnostics  # noqa: E402
@@ -99,6 +100,10 @@ def main() -> int:
             raise ValueError("--verify-rocm-affinity requires ROCm")
         model, imported = load_reference_model(args.archive, spec=spec, vocab=vocab)
         model.to(device).eval()
+        window, bank = (
+            reference_frontend_constants(spec, device=device)
+            if args.frontend == "torch" else (None, None)
+        )
 
         expected_cpus = (
             parse_cpuset(os.environ.get("SPEECH_ROCM_CPUSET", "0-15"))
@@ -134,6 +139,8 @@ def main() -> int:
         with torch.inference_mode():
             for padded_frames, indices in batches:
                 prepared = []
+                preparation_started = time.perf_counter()
+                audio_read_before = stage["audio_read_seconds"]
                 for index in indices:
                     record = records[index]
                     io_started = time.perf_counter()
@@ -148,17 +155,15 @@ def main() -> int:
                         raise ValueError(f"{record['id']}: audio must be mono")
                     if len(samples) != int(record["sample_count"]):
                         raise ValueError(f"{record['id']}: sample count changed")
-                    frontend_started = time.perf_counter()
                     if args.frontend == "torch":
                         features, valid_frames = nemo_reference_features(
-                            samples, spec, device=device
+                            samples, spec, device=device, window=window, bank=bank
                         )
                     else:
                         numpy_features, valid_frames = nemo_reference_features_numpy(
                             samples, spec
                         )
                         features = torch.from_numpy(numpy_features).to(device)
-                    stage["frontend_seconds"] += time.perf_counter() - frontend_started
                     if int(features.shape[-1]) != padded_frames:
                         raise ValueError(
                             f"{record['id']}: feature shape changed "
@@ -168,8 +173,15 @@ def main() -> int:
 
                 # Explicit boundaries make stage timings interpretable. They
                 # also prevent model timings from including queued frontend work.
-                torch.cuda.synchronize(device)
                 joined = torch.cat([item[4] for item in prepared], dim=0)
+                torch.cuda.synchronize(device)
+                # Include GPU frontend and concatenation time, but exclude
+                # audio reads already tracked separately.
+                preparation_seconds = time.perf_counter() - preparation_started
+                audio_read_seconds = stage["audio_read_seconds"] - audio_read_before
+                stage["frontend_seconds"] += max(
+                    0.0, preparation_seconds - audio_read_seconds
+                )
                 begin = time.perf_counter()
                 output = model(joined)
                 torch.cuda.synchronize(device)
