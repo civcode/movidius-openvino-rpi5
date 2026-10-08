@@ -122,6 +122,15 @@ def main() -> int:
         "hsa_override_cpu_affinity_debug": os.environ.get(
             "HSA_OVERRIDE_CPU_AFFINITY_DEBUG"
         ),
+        "rocm_affinity_restored": os.environ.get(
+            "SPEECH_ROCM_AFFINITY_RESTORED"
+        ),
+        "rocm_affinity_cpus": os.environ.get(
+            "SPEECH_ROCM_AFFINITY_CPUS"
+        ),
+        "rocm_affinity_threads": os.environ.get(
+            "SPEECH_ROCM_AFFINITY_THREADS"
+        ),
         "torch_cpu_threads": torch.get_num_threads(),
         **thread_affinity_summary(),
         "matrix_size": n,
