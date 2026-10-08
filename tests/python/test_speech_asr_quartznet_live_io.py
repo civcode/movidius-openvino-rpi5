@@ -241,6 +241,55 @@ class QuartzNetLiveInputTests(unittest.TestCase):
         )
         self.assertEqual(stderr.getvalue(), "")
 
+    def test_console_preview_shows_tentative_suffix_only_on_stderr(self):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(live.sys, "stdout", stdout):
+            with mock.patch.object(live.sys, "stderr", stderr):
+                console = live.ConsoleTranscript(
+                    plain=True, show_timing=False, show_preview=True,
+                )
+                console.update(self.console_update(
+                    committed="hello", partial="hello tentative",
+                ))
+                # Repeated preview must not print the same text again.
+                console.update(self.console_update(
+                    committed="hello", partial="hello tentative",
+                ))
+                console.update(self.console_update(
+                    committed="hello", partial="hello testing",
+                ))
+                console.update(self.console_update(
+                    committed="hello testing", partial="hello testing soon",
+                ))
+                console.update(self.console_update(
+                    committed="hello testing",
+                    partial="hello testing done",
+                    final=True,
+                ))
+        self.assertEqual(stdout.getvalue(), "hello testing done\n")
+        self.assertEqual(
+            stderr.getvalue(),
+            "[preview]  tentative\n"
+            "[preview]  testing\n"
+            "[preview]  soon\n",
+        )
+        self.assertNotIn("hello", stderr.getvalue())
+
+    def test_console_preview_is_bounded_to_one_short_suffix(self):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(live.sys, "stdout", stdout):
+            with mock.patch.object(live.sys, "stderr", stderr):
+                console = live.ConsoleTranscript(
+                    plain=True, show_timing=False, show_preview=True,
+                )
+                console.update(self.console_update(
+                    committed="stable", partial="stable" + "z" * 200,
+                ))
+        self.assertEqual(
+            stderr.getvalue(), "[preview] " + "z" * 80 + "\n"
+        )
+        self.assertEqual(stdout.getvalue(), "stable")
+
     def test_console_tty_keeps_wrapped_transcript_append_only(self):
         class FakeTty(io.StringIO):
             def isatty(self):
