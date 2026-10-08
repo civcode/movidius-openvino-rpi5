@@ -174,10 +174,12 @@ class ConsoleTranscript:
     This also makes stdout suitable for downstream consumers of pause markers.
     """
 
-    def __init__(self, *, plain: bool, show_timing: bool):
+    def __init__(self, *, plain: bool, show_timing: bool, show_preview: bool = False):
         self.tty = sys.stdout.isatty() and not plain
         self.show_timing = show_timing
+        self.show_preview = show_preview
         self.printed_text = ""
+        self.last_preview = ""
         self._output_open = False
 
     def _end_output_line(self) -> None:
@@ -210,6 +212,22 @@ class ConsoleTranscript:
             else:
                 sys.stdout.write("\n")
                 sys.stdout.flush()
+
+        if self.show_preview and not value.final:
+            # The uncommitted suffix can change after overlap stitching.
+            # Keep it on stderr and to one short line; stdout remains an
+            # append-only stream of confirmed text for downstream programs.
+            suffix = (
+                value.partial_text[len(value.committed_text):]
+                if value.partial_text.startswith(value.committed_text)
+                else value.partial_text[-80:]
+            )
+            suffix = suffix[-80:]
+            if suffix and suffix != self.last_preview:
+                if self.tty:
+                    self._end_output_line()
+                print(f"[preview] {suffix}", file=sys.stderr, flush=True)
+            self.last_preview = suffix
 
         if self.show_timing and not value.final:
             if self.tty:
@@ -435,6 +453,11 @@ def main() -> int:
     )
     parser.add_argument("--log", type=pathlib.Path, default=DEFAULT_LOG)
     parser.add_argument("--plain", action="store_true")
+    parser.add_argument(
+        "--show-preview",
+        action="store_true",
+        help="show latest tentative uncommitted CTC suffix on stderr",
+    )
     parser.add_argument("--show-timing", action="store_true")
     args = parser.parse_args()
 
@@ -494,6 +517,7 @@ def main() -> int:
         console = ConsoleTranscript(
             plain=args.plain,
             show_timing=args.show_timing,
+            show_preview=args.show_preview,
         )
         with PersistentTensorServer(
             command=command,
