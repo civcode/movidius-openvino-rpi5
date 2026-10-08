@@ -121,6 +121,15 @@ test -x scripts/evaluate-quartznet15x5-reference-fixed512-myriad.sh || fail 'Qua
 test -f examples/speech-asr/evaluation/run_quartznet15x5_reference_fixed512_edge.py || fail 'QuartzNet fixed512 edge controller missing'
 grep -q 'network_loads") != 1' examples/speech-asr/evaluation/run_quartznet15x5_reference_fixed512_edge.py || fail 'QuartzNet fixed512 edge controller does not enforce one network load'
 test -x scripts/run-quartznet15x5-reference-fixed512-edge.sh || fail 'QuartzNet fixed512 edge wrapper missing'
+test -f examples/speech-asr/python/speech_asr/quartznet_fixed512_live.py || fail 'QuartzNet fixed512 online streaming core missing'
+test -f examples/speech-asr/python/speech_asr/myriad_tensor_client.py || fail 'Persistent MYRIAD tensor client missing'
+test -f examples/speech-asr/runtime/quartznet_fixed512_live.py || fail 'QuartzNet fixed512 live CLI missing'
+test -x scripts/quartznet-fixed512-live.sh || fail 'QuartzNet fixed512 live wrapper missing'
+grep -q 'SPEECH_LIVE_CPUSET:-0-3' scripts/quartznet-fixed512-live.sh || fail 'QuartzNet live Pi CPU affinity default changed'
+grep -q 'SPEECH_LIVE_THREADS:-4' scripts/quartznet-fixed512-live.sh || fail 'QuartzNet live Pi thread count changed'
+grep -q 'SPEECH_ROCM_CPUSET:-0-15' scripts/python-training.sh || fail 'ROCm CPU affinity default changed'
+grep -q 'SPEECH_ROCM_THREADS:-16' scripts/python-training.sh || fail 'ROCm CPU thread count changed'
+grep -q 'taskset -c "$cpuset"' scripts/python-training.sh || fail 'ROCm launcher is not CPU-affinity constrained'
 test -x scripts/probe-torch-accelerator.sh || fail 'PyTorch accelerator probe wrapper missing'
 test -f examples/speech-asr/tools/probe_torch_accelerator.py || fail 'PyTorch accelerator probe missing'
 test -f requirements/training-rocm.txt || fail 'ROCm evaluation requirements missing'
@@ -1627,6 +1636,11 @@ for name in [
     "examples/speech-asr/python/speech_asr/streaming.py",
     "examples/speech-asr/evaluation/replay_streaming.py",
     "examples/speech-asr/tools/make_streaming_updates.py",
+    "examples/speech-asr/python/speech_asr/quartznet_fixed512_live.py",
+    "examples/speech-asr/python/speech_asr/myriad_tensor_client.py",
+    "examples/speech-asr/runtime/quartznet_fixed512_live.py",
+    "examples/speech-asr/tools/probe_torch_accelerator.py",
+    "tests/python/test_speech_asr_quartznet_fixed512_live.py",
     "examples/speech-asr/tools/probe_torch_accelerator.py",
     "examples/speech-asr/python/speech_asr/contracts.py",
     "examples/speech-asr/python/speech_asr/cnn_ctc.py",
