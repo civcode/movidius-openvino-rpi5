@@ -29,6 +29,57 @@ from .text import normalize_text_v1
 InferenceFunction = Callable[[np.ndarray], tuple[np.ndarray, float]]
 
 
+def squelch_silent_logits(
+    logits: np.ndarray,
+    samples: np.ndarray,
+    *,
+    valid_output_frames: int,
+    blank_index: int,
+    threshold_dbfs: float,
+) -> np.ndarray:
+    """Replace quiet-audio CTC predictions with blank, preserving time alignment.
+
+    Voice activity is estimated in 20 ms output-frame intervals. Require
+    approximately 80 ms of activity within a 120 ms span; retain 200 ms on
+    either side of activity to protect soft word onsets and tails. This gate
+    changes only live decoding, never the audio frontend or MYRIAD model.
+    """
+    values = np.asarray(logits, dtype=np.float32)
+    if values.ndim != 2 or not 0 <= blank_index < values.shape[1]:
+        raise ValueError("invalid logits/blank index for microphone squelch")
+    if not 0 <= valid_output_frames <= values.shape[0]:
+        raise ValueError("invalid valid_output_frames for microphone squelch")
+    if not np.isfinite(threshold_dbfs) or not -90 <= threshold_dbfs <= -10:
+        raise ValueError("squelch threshold must be between -90 and -10 dBFS")
+    if not valid_output_frames:
+        return values.copy()
+
+    audio = np.asarray(samples, dtype=np.float32).reshape(-1)
+    interval = OUTPUT_STRIDE_SAMPLES
+    # The final model frame may represent fewer than 320 real audio samples.
+    frame_audio = np.zeros((valid_output_frames * interval,), dtype=np.float32)
+    copied = min(audio.size, frame_audio.size)
+    frame_audio[:copied] = audio[:copied]
+    frames = frame_audio.reshape(valid_output_frames, interval)
+    rms = np.sqrt(np.mean(frames * frames, axis=1, dtype=np.float64))
+    above = (rms >= 10.0 ** (threshold_dbfs / 20.0)).astype(np.int8)
+
+    # Isolated clicks should not open the gate. Tolerate small gaps in speech.
+    seeds = np.convolve(above, np.ones(6, dtype=np.int8), mode="full")
+    seeds = seeds[2 : 2 + valid_output_frames] >= 4
+    context = 10  # 200 ms before and after candidate speech
+    expanded = np.convolve(
+        seeds.astype(np.int8), np.ones(2 * context + 1, dtype=np.int8),
+        mode="full",
+    )[context : context + valid_output_frames] > 0
+
+    silenced = np.flatnonzero(~expanded)
+    masked = values.copy()
+    masked[silenced, :] = -10000.0
+    masked[silenced, blank_index] = 10000.0
+    return masked
+
+
 class IncrementalCtcDecoder:
     """Greedy CTC collapse, with optional pause-spaced *display* text.
 
@@ -221,6 +272,7 @@ class Fixed512StreamingRecognizer:
         infer: InferenceFunction,
         hop_output_frames: int = DEFAULT_HOP_OUTPUT_FRAMES,
         pause_space_frames: int = 0,
+        squelch_dbfs: float | None = None,
     ) -> None:
         validate_fixed512_geometry(spec)
         if not 1 <= hop_output_frames <= FULL_OUTPUT_FRAMES:
@@ -232,6 +284,11 @@ class Fixed512StreamingRecognizer:
         if len(vocab["tokens"]) != 29 or int(vocab["blank_index"]) != 28:
             raise ValueError("fixed512 live runtime requires the 29-class source vocab")
 
+        if squelch_dbfs is not None and (
+            not np.isfinite(squelch_dbfs) or not -90 <= squelch_dbfs <= -10
+        ):
+            raise ValueError("squelch threshold must be between -90 and -10 dBFS")
+        self.squelch_dbfs = squelch_dbfs
         self.spec = spec
         self.vocab = vocab
         self.infer = infer
@@ -300,6 +357,14 @@ class Fixed512StreamingRecognizer:
             )
         if not np.isfinite(values).all():
             raise RuntimeError("fixed512 inference returned non-finite logits")
+        if self.squelch_dbfs is not None:
+            values = squelch_silent_logits(
+                values,
+                segment,
+                valid_output_frames=valid_outputs,
+                blank_index=int(self.vocab["blank_index"]),
+                threshold_dbfs=self.squelch_dbfs,
+            )
 
         window = Fixed512Window(
             index=self._window_index,
