@@ -167,29 +167,53 @@ def runtime_preflight(platform_name: str, backend: str) -> None:
 
 
 class ConsoleTranscript:
+    """Append stable CTC text once instead of repainting wrapped terminal lines.
+
+    Partial previews may change as overlapping windows are stitched. Only the
+    committed prefix is append-safe; the final event emits any remaining text.
+    This also makes stdout suitable for downstream consumers of pause markers.
+    """
+
     def __init__(self, *, plain: bool, show_timing: bool):
         self.tty = sys.stdout.isatty() and not plain
         self.show_timing = show_timing
-        self.last_partial = ""
-        self._line_active = False
+        self.printed_text = ""
+        self._output_open = False
+
+    def _end_output_line(self) -> None:
+        if self._output_open:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+            self._output_open = False
 
     def update(self, value: Fixed512LiveUpdate) -> None:
-        text = value.partial_text
+        # Do not stream mutable CTC previews: they can be replaced by the next
+        # center-owned overlapping window. Committed text is append-stable.
+        text = value.partial_text if value.final else value.committed_text
+        if text.startswith(self.printed_text):
+            new_text = text[len(self.printed_text):]
+        else:
+            # Defensive fallback if a future text normalizer edits an already
+            # printed prefix: start a new line rather than silently corrupt it.
+            self._end_output_line()
+            new_text = text
+        if new_text:
+            sys.stdout.write(new_text)
+            sys.stdout.flush()
+            self._output_open = True
+        self.printed_text = text
+
         if value.final:
-            if self.tty:
-                sys.stdout.write("\r\033[2K")
-            print(text, flush=True)
-            self._line_active = False
-        elif text != self.last_partial:
-            if self.tty:
-                sys.stdout.write("\r\033[2K" + text)
-                sys.stdout.flush()
-                self._line_active = True
+            # Leave the shell prompt on its own line, even for an empty result.
+            if self._output_open:
+                self._end_output_line()
             else:
-                print(f"[partial] {text}", flush=True)
-        self.last_partial = text
+                sys.stdout.write("\n")
+                sys.stdout.flush()
 
         if self.show_timing and not value.final:
+            if self.tty:
+                self._end_output_line()
             print(
                 "[fixed512-live] "
                 f"window={value.window_index} "
@@ -201,10 +225,8 @@ class ConsoleTranscript:
             )
 
     def status(self, message: str) -> None:
-        if self.tty and self._line_active:
-            sys.stdout.write("\r\033[2K")
-            sys.stdout.flush()
-            self._line_active = False
+        if self.tty:
+            self._end_output_line()
         print(message, file=sys.stderr, flush=True)
 
 
