@@ -1647,6 +1647,9 @@ for name in [
     "examples/speech-asr/runtime/quartznet_fixed512_live.py",
     "examples/speech-asr/tools/probe_torch_accelerator.py",
     "examples/speech-asr/python/speech_asr/rocm_diagnostics.py",
+    "examples/speech-asr/python/speech_asr/quartznet_batching.py",
+    "examples/speech-asr/evaluation/benchmark_quartznet15x5_rocm.py",
+    "tests/python/test_speech_asr_quartznet_batching.py",
     "tests/python/test_speech_asr_rocm_diagnostics.py",
     "tests/python/test_torch_accelerator_affinity.py",
     "tests/python/test_speech_asr_quartznet_fixed512_live.py",
@@ -1825,5 +1828,6 @@ PY_CHECK
 # Run the ROCm affinity probe regression tests without requiring a GPU or torch.
 python3 -m unittest discover -s tests/python -p 'test_torch_accelerator_affinity.py'
 python3 -m unittest discover -s tests/python -p 'test_speech_asr_rocm_diagnostics.py'
+python3 -m unittest discover -s tests/python -p 'test_speech_asr_quartznet_batching.py'
 
 echo 'static multi-platform checks: PASS'
