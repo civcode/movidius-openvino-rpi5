@@ -33,12 +33,22 @@ EXPECTED_SAMPLES = 2703
 LOCAL_THREADS = 16
 
 
-def local_limited_command(cpuset: str, argv: list[str]) -> list[str]:
-    return [
+def local_limited_command(
+    cpuset: str,
+    argv: list[str],
+    *,
+    torch_backend: str | None = None,
+) -> list[str]:
+    environment = [
         "env",
         f"OMP_NUM_THREADS={LOCAL_THREADS}",
         f"MKL_NUM_THREADS={LOCAL_THREADS}",
         f"OPENBLAS_NUM_THREADS={LOCAL_THREADS}",
+    ]
+    if torch_backend in {"cuda", "rocm"}:
+        environment.append(f"SPEECH_TORCH_BACKEND={torch_backend}")
+    return [
+        *environment,
         "taskset",
         "-c",
         cpuset,
@@ -48,6 +58,7 @@ def local_limited_command(cpuset: str, argv: list[str]) -> list[str]:
 
 def run_local_reference_preparation_limited(
     device: str,
+    device_index: int,
     cpuset: str,
 ) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path]:
     commands = [
@@ -64,6 +75,8 @@ def run_local_reference_preparation_limited(
                 str(ROOT / "scripts" / "qualify-quartznet15x5-reference-numpy.sh"),
                 "--device",
                 device,
+                "--device-index",
+                str(device_index),
             ],
             "NumPy source-reference qualification",
         ),
@@ -78,7 +91,11 @@ def run_local_reference_preparation_limited(
             f"cpuset={cpuset} threads={LOCAL_THREADS} label={label}",
             flush=True,
         )
-        run_stream_checked(local_limited_command(cpuset, argv), label)
+        backend = device if label == "NumPy source-reference qualification" else None
+        run_stream_checked(
+            local_limited_command(cpuset, argv, torch_backend=backend),
+            label,
+        )
 
     dataset = ROOT / "work" / "speech-asr" / "librispeech" / "dev-clean"
     myriad = ROOT / "work" / "speech-asr" / "quartznet15x5-reference" / "myriad"
@@ -171,7 +188,12 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--worker", default="edge")
     parser.add_argument("--edge-repo")
-    parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
+    parser.add_argument(
+        "--device",
+        choices=("auto", "cpu", "cuda", "rocm"),
+        default="auto",
+    )
+    parser.add_argument("--device-index", type=int, default=0)
     parser.add_argument("--local-cpuset", default="0-15")
     parser.add_argument("--cpuset", default="0-3")
     parser.add_argument("--hop-output-frames", type=int, default=128)
@@ -193,6 +215,7 @@ def main() -> int:
         local_head = require_main_and_clean()
         dataset, ir, dynamic = run_local_reference_preparation_limited(
             args.device,
+            args.device_index,
             args.local_cpuset,
         )
         manifest, manifest_sha = validate_local_dataset(dataset)
