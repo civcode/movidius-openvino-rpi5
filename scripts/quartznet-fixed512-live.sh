@@ -3,6 +3,17 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Listing microphones and --help need neither MYRIAD nor a CPU affinity lock.
+for arg in "$@"; do
+    case "$arg" in
+        --list-microphones|-h|--help)
+            exec "$ROOT/scripts/python-apps.sh" \
+                "$ROOT/examples/speech-asr/runtime/quartznet_fixed512_live.py" "$@"
+            ;;
+    esac
+done
+
 CPUSET="${SPEECH_LIVE_CPUSET:-0-3}"
 THREADS="${SPEECH_LIVE_THREADS:-4}"
 LOCK_PATH="${SPEECH_MYRIAD_LOCK:-/tmp/movidius-speech-asr-myriad.lock}"
