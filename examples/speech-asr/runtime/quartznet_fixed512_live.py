@@ -27,6 +27,7 @@ from speech_asr.myriad_tensor_client import PersistentTensorServer  # noqa: E402
 from speech_asr.quartznet_fixed512 import (  # noqa: E402
     FIXED_TENSOR_FRAMES,
     FULL_OUTPUT_FRAMES,
+    OUTPUT_STRIDE_SAMPLES,
 )
 from speech_asr.quartznet_fixed512_live import (  # noqa: E402
     Fixed512LiveUpdate,
@@ -381,6 +382,15 @@ def main() -> int:
         default="host",
     )
     parser.add_argument("--hop-output-frames", type=int, default=128)
+    parser.add_argument(
+        "--pause-space-ms",
+        type=int,
+        default=None,
+        help=(
+            "insert display-only spaces after long CTC blank runs; "
+            "default 600 ms for microphone, off for WAV; 0 disables"
+        ),
+    )
     parser.add_argument("--log", type=pathlib.Path, default=DEFAULT_LOG)
     parser.add_argument("--plain", action="store_true")
     parser.add_argument("--show-timing", action="store_true")
@@ -393,6 +403,16 @@ def main() -> int:
             parser.error("choose --wav PATH or --microphone")
         if args.feed_samples < 1 or args.read_frames < 1:
             raise ValueError("audio feed/read sizes must be positive")
+        if args.pause_space_ms is not None and args.pause_space_ms < 0:
+            raise ValueError("--pause-space-ms must be >= 0")
+        pause_ms = (
+            args.pause_space_ms
+            if args.pause_space_ms is not None
+            else (600 if args.microphone else 0)
+        )
+        pause_space_frames = (
+            (pause_ms * 16 + OUTPUT_STRIDE_SAMPLES - 1) // OUTPUT_STRIDE_SAMPLES
+        )
 
         if args.wav is not None and not args.wav.is_file():
             raise ValueError(f"WAV file missing: {args.wav}")
@@ -443,6 +463,7 @@ def main() -> int:
                 vocab=vocab,
                 infer=infer,
                 hop_output_frames=args.hop_output_frames,
+                pause_space_frames=pause_space_frames,
             )
             if args.wav is not None:
                 if not args.wav.is_file():
