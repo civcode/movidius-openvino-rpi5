@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import pathlib
 import sys
 import tempfile
@@ -203,6 +204,87 @@ class QuartzNetLiveInputTests(unittest.TestCase):
         )
         self.assertEqual(recognizer.finalizations, 1)
         self.assertEqual(console.updates, ["finished"])
+
+    @staticmethod
+    def console_update(*, committed, partial, final=False):
+        return types.SimpleNamespace(
+            committed_text=committed,
+            partial_text=partial,
+            final=final,
+            window_index=0,
+            source_seconds=5.12,
+            inference_ms=394.0,
+            committed_output_frames=128,
+        )
+
+    def test_console_streams_committed_text_once_not_repeated_previews(self):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(live.sys, "stdout", stdout):
+            with mock.patch.object(live.sys, "stderr", stderr):
+                console = live.ConsoleTranscript(plain=True, show_timing=False)
+                console.update(self.console_update(
+                    committed="hello", partial="hello wrong preview"
+                ))
+                console.update(self.console_update(
+                    committed="hello there", partial="hello there tentative"
+                ))
+                console.update(self.console_update(
+                    committed="hello there", partial="hello there changed"
+                ))
+                console.update(self.console_update(
+                    committed="hello there friend",
+                    partial="hello there friend[ref_delimiter]next",
+                    final=True,
+                ))
+        self.assertEqual(
+            stdout.getvalue(), "hello there friend[ref_delimiter]next\\n"
+        )
+        self.assertEqual(stderr.getvalue(), "")
+
+    def test_console_tty_keeps_wrapped_transcript_append_only(self):
+        class FakeTty(io.StringIO):
+            def isatty(self):
+                return True
+
+        stdout, stderr = FakeTty(), io.StringIO()
+        long_prefix = "a" * 200
+        with mock.patch.object(live.sys, "stdout", stdout):
+            with mock.patch.object(live.sys, "stderr", stderr):
+                console = live.ConsoleTranscript(plain=False, show_timing=False)
+                console.update(self.console_update(
+                    committed=long_prefix,
+                    partial=long_prefix + "preview",
+                ))
+                console.update(self.console_update(
+                    committed=long_prefix + " end",
+                    partial=long_prefix + " end maybe",
+                ))
+                console.update(self.console_update(
+                    committed=long_prefix + " end",
+                    partial=long_prefix + " end",
+                    final=True,
+                ))
+        self.assertEqual(stdout.getvalue(), long_prefix + " end\\n")
+        self.assertNotIn("\\033", stdout.getvalue())
+
+    def test_console_status_starts_fresh_line_without_reprinting(self):
+        class FakeTty(io.StringIO):
+            def isatty(self):
+                return True
+
+        stdout, stderr = FakeTty(), io.StringIO()
+        with mock.patch.object(live.sys, "stdout", stdout):
+            with mock.patch.object(live.sys, "stderr", stderr):
+                console = live.ConsoleTranscript(plain=False, show_timing=False)
+                console.update(self.console_update(
+                    committed="hello", partial="hello there"
+                ))
+                console.status("[fixed512-live] stop requested")
+                console.update(self.console_update(
+                    committed="hello", partial="hello there", final=True
+                ))
+        self.assertEqual(stdout.getvalue(), "hello\\n there\\n")
+        self.assertIn("stop requested", stderr.getvalue())
 
     def test_list_microphones_does_not_start_inference(self):
         with mock.patch.object(live.shutil, "which", return_value="/usr/bin/arecord"):
