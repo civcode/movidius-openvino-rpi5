@@ -185,7 +185,7 @@ class QuartzNetFixed512LiveTests(unittest.TestCase):
         self.assertEqual(decoder.display_text, "ab")
 
     def test_pause_delimiter_rejects_empty_or_nonprintable_string(self):
-        for invalid in ("", "hello\\nworld"):
+        for invalid in ("", "hello\nworld"):
             with self.subTest(invalid=invalid):
                 with self.assertRaisesRegex(ValueError, "printable string"):
                     IncrementalCtcDecoder(
