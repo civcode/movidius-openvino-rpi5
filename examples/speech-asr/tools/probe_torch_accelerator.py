@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import statistics
 import time
 
@@ -83,6 +84,9 @@ def main() -> int:
         "torch_version": torch.__version__,
         "torch_cuda_version": getattr(torch.version, "cuda", None),
         "torch_hip_version": getattr(torch.version, "hip", None),
+        "cpu_affinity": sorted(os.sched_getaffinity(0)),
+        "cpu_affinity_count": len(os.sched_getaffinity(0)),
+        "torch_cpu_threads": torch.get_num_threads(),
         "matrix_size": n,
         "iterations": args.iterations,
         "gemm_ms_median": statistics.median(times),
