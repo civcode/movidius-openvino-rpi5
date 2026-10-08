@@ -49,6 +49,25 @@ def thread_affinity_summary() -> dict:
     }
 
 
+
+def rocm_affinity_issues(
+    launch_affinity: list[int],
+    main_affinity: list[int],
+    thread_summary: dict,
+    restored_marker: str | None,
+) -> list[str]:
+    """Diagnose affinity regressions even when the ROCm GEMM itself passes."""
+    issues: list[str] = []
+    if restored_marker != "1":
+        issues.append("ROCm affinity bootstrap marker is missing")
+    if main_affinity != launch_affinity:
+        issues.append("main thread CPU affinity changed after ROCm initialization")
+    expected_mask = ",".join(str(cpu) for cpu in launch_affinity)
+    mask_counts = thread_summary["thread_affinity_mask_counts"]
+    if not mask_counts or any(mask != expected_mask for mask in mask_counts):
+        issues.append("one or more ROCm process threads have a different CPU affinity")
+    return issues
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", choices=("cuda", "rocm"), required=True)
@@ -104,8 +123,20 @@ def main() -> int:
         (2.0 * n * n * n) / (ms / 1000.0) / 1.0e12
         for ms in times
     ]
+    main_affinity_after = sorted(os.sched_getaffinity(0))
+    thread_summary = thread_affinity_summary()
+    affinity_issues = (
+        rocm_affinity_issues(
+            launch_affinity,
+            main_affinity_after,
+            thread_summary,
+            os.environ.get("SPEECH_ROCM_AFFINITY_RESTORED"),
+        )
+        if args.device == "rocm"
+        else []
+    )
     result = {
-        "status": "pass",
+        "status": "fail" if affinity_issues else "pass",
         "requested_backend": args.device,
         "observed_backend": backend,
         "device_index": args.device_index,
@@ -117,8 +148,8 @@ def main() -> int:
         "torch_hip_version": getattr(torch.version, "hip", None),
         "launch_cpu_affinity": launch_affinity,
         "launch_cpu_affinity_count": len(launch_affinity),
-        "main_thread_cpu_affinity_after_rocm": sorted(os.sched_getaffinity(0)),
-        "main_thread_cpu_affinity_count_after_rocm": len(os.sched_getaffinity(0)),
+        "main_thread_cpu_affinity_after_rocm": main_affinity_after,
+        "main_thread_cpu_affinity_count_after_rocm": len(main_affinity_after),
         "hsa_override_cpu_affinity_debug": os.environ.get(
             "HSA_OVERRIDE_CPU_AFFINITY_DEBUG"
         ),
@@ -131,8 +162,9 @@ def main() -> int:
         "rocm_affinity_threads": os.environ.get(
             "SPEECH_ROCM_AFFINITY_THREADS"
         ),
+        "rocm_affinity_issues": affinity_issues,
         "torch_cpu_threads": torch.get_num_threads(),
-        **thread_affinity_summary(),
+        **thread_summary,
         "matrix_size": n,
         "iterations": args.iterations,
         "gemm_ms_median": statistics.median(times),
@@ -141,7 +173,7 @@ def main() -> int:
         "gemm_tflops_max": max(tflops),
     }
     print(json.dumps(result, sort_keys=True, indent=2))
-    return 0
+    return 1 if affinity_issues else 0
 
 
 if __name__ == "__main__":
