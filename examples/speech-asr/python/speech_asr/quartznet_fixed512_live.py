@@ -30,15 +30,24 @@ InferenceFunction = Callable[[np.ndarray], tuple[np.ndarray, float]]
 
 
 class IncrementalCtcDecoder:
-    """Greedy CTC collapse whose state can be extended frame by frame."""
+    """Greedy CTC collapse, with optional pause-spaced *display* text.
 
-    def __init__(self, vocab: dict):
+    The canonical CTC transcript is not modified. Long blank-only stretches
+    can optionally separate words for the interactive microphone display.
+    """
+
+    def __init__(self, vocab: dict, *, pause_space_frames: int = 0):
         self.tokens = tuple(vocab["tokens"])
         self.blank = int(vocab["blank_index"])
         if not (0 <= self.blank < len(self.tokens)):
             raise ValueError("invalid CTC blank index")
+        if pause_space_frames < 0:
+            raise ValueError("pause_space_frames must not be negative")
+        self.pause_space_frames = pause_space_frames
         self.previous: int | None = None
         self.emitted: list[str] = []
+        self._display_emitted: list[str] = []
+        self._blank_run = 0
 
     @staticmethod
     def _advance(
@@ -48,48 +57,79 @@ class IncrementalCtcDecoder:
         blank: int,
         previous: int | None,
         emitted: list[str],
-    ) -> int | None:
+        display_emitted: list[str],
+        blank_run: int,
+        pause_space_frames: int,
+    ) -> tuple[int | None, int]:
         for raw in values:
             value = int(raw)
             if not 0 <= value < len(tokens):
                 raise ValueError(f"CTC index out of range: {value}")
-            if value != blank and value != previous:
-                emitted.append(tokens[value])
+            if value == blank:
+                blank_run += 1
+            else:
+                if value != previous:
+                    token = tokens[value]
+                    emitted.append(token)
+                    if (
+                        pause_space_frames
+                        and blank_run >= pause_space_frames
+                        and display_emitted
+                        and display_emitted[-1] != " "
+                        and token != " "
+                    ):
+                        display_emitted.append(" ")
+                    display_emitted.append(token)
+                blank_run = 0
             previous = value
-        return previous
+        return previous, blank_run
 
     def push(self, values: Sequence[int]) -> str:
-        self.previous = self._advance(
+        self.previous, self._blank_run = self._advance(
             values,
             tokens=self.tokens,
             blank=self.blank,
             previous=self.previous,
             emitted=self.emitted,
+            display_emitted=self._display_emitted,
+            blank_run=self._blank_run,
+            pause_space_frames=self.pause_space_frames,
         )
         return self.text
 
-    def preview(self, values: Sequence[int]) -> str:
+    def preview(self, values: Sequence[int], *, display: bool = False) -> str:
         emitted = list(self.emitted)
+        display_emitted = list(self._display_emitted)
         self._advance(
             values,
             tokens=self.tokens,
             blank=self.blank,
             previous=self.previous,
             emitted=emitted,
+            display_emitted=display_emitted,
+            blank_run=self._blank_run,
+            pause_space_frames=self.pause_space_frames,
         )
-        return normalize_text_v1("".join(emitted))
+        return normalize_text_v1("".join(display_emitted if display else emitted))
 
     @property
     def text(self) -> str:
         return normalize_text_v1("".join(self.emitted))
 
+    @property
+    def display_text(self) -> str:
+        return normalize_text_v1("".join(self._display_emitted))
+
+
 
 class OnlineFixed512LogitStitcher:
     """Streaming form of the accepted center-owned fixed512 stitcher."""
 
-    def __init__(self, vocab: dict):
+    def __init__(self, vocab: dict, *, pause_space_frames: int = 0):
         self.classes = len(vocab["tokens"])
-        self.decoder = IncrementalCtcDecoder(vocab)
+        self.decoder = IncrementalCtcDecoder(
+            vocab, pause_space_frames=pause_space_frames
+        )
         self.next_commit_frame = 0
         self._pending: dict[int, tuple[float, int, np.ndarray]] = {}
 
@@ -147,12 +187,12 @@ class OnlineFixed512LogitStitcher:
 
     @property
     def committed_text(self) -> str:
-        return self.decoder.text
+        return self.decoder.display_text
 
     @property
     def partial_text(self) -> str:
         pending = self._contiguous_argmax(self.next_commit_frame)
-        return self.decoder.preview(pending)
+        return self.decoder.preview(pending, display=True)
 
 
 @dataclass(frozen=True)
@@ -180,6 +220,7 @@ class Fixed512StreamingRecognizer:
         vocab: dict,
         infer: InferenceFunction,
         hop_output_frames: int = DEFAULT_HOP_OUTPUT_FRAMES,
+        pause_space_frames: int = 0,
     ) -> None:
         validate_fixed512_geometry(spec)
         if not 1 <= hop_output_frames <= FULL_OUTPUT_FRAMES:
@@ -196,7 +237,9 @@ class Fixed512StreamingRecognizer:
         self.infer = infer
         self.hop_output_frames = hop_output_frames
         self.hop_samples = hop_output_frames * OUTPUT_STRIDE_SAMPLES
-        self.stitcher = OnlineFixed512LogitStitcher(vocab)
+        self.stitcher = OnlineFixed512LogitStitcher(
+            vocab, pause_space_frames=pause_space_frames
+        )
 
         self.total_samples = 0
         self._buffer_start = 0
