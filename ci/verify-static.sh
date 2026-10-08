@@ -1649,6 +1649,7 @@ for name in [
     "tests/python/test_torch_accelerator_affinity.py",
     "tests/python/test_speech_asr_quartznet_fixed512_live.py",
     "tests/python/test_speech_asr_quartznet_live_io.py",
+    "tests/python/test_speech_asr_myriad_tensor_signal.py",
     "examples/speech-asr/tools/probe_torch_accelerator.py",
     "examples/speech-asr/python/speech_asr/contracts.py",
     "examples/speech-asr/python/speech_asr/cnn_ctc.py",
