@@ -1,0 +1,6 @@
+# ROCm QuartzNet evaluation environment.
+# torch is installed separately from the matching official ROCm wheel index.
+numpy==1.26.4
+onnx==1.16.2
+onnxruntime>=1.14,<2
+soundfile==0.12.1
