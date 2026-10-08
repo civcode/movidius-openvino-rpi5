@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import pathlib
 import sys
+import tempfile
 import types
 import unittest
 from unittest import mock
@@ -46,6 +47,65 @@ class FakeConsole:
 
 
 class QuartzNetLiveInputTests(unittest.TestCase):
+    @staticmethod
+    def make_ir(directory):
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "quartznet15x5_nvidia_ref.xml").write_text("<net/>")
+        (directory / "quartznet15x5_nvidia_ref.bin").write_bytes(b"weights")
+        (directory / "artifacts.json").write_text(
+            __import__("json").dumps({
+                "model_id": "quartznet15x5_nvidia_ref",
+                "carrier_time_frames": 512,
+                "input_shape": [1, 64, 512],
+                "output_shape": [1, 256, 29],
+            })
+        )
+
+    def test_live_ir_prefers_existing_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            default = root / "myriad/openvino/fp16"
+            self.make_ir(default)
+            with mock.patch.object(live, "DEFAULT_IR_DIR", default):
+                actual = live.locate_fixed512_ir(
+                    default, staged_root=root / "fixed512-eval"
+                )
+            self.assertEqual(actual, default)
+
+    def test_live_ir_finds_previously_staged_qualification_artifact(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            default = root / "myriad/openvino/fp16"
+            staged = root / "fixed512-eval"
+            artifact = staged / "prior-qualification/input/openvino/fp16"
+            self.make_ir(artifact)
+            with mock.patch.object(live, "DEFAULT_IR_DIR", default):
+                actual = live.locate_fixed512_ir(default, staged_root=staged)
+            self.assertEqual(actual, artifact)
+
+    def test_live_ir_explicit_override_is_not_replaced(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            default = root / "default"
+            explicit = root / "chosen"
+            staged = root / "fixed512-eval"
+            self.make_ir(staged / "run/input/openvino/fp16")
+            with mock.patch.object(live, "DEFAULT_IR_DIR", default):
+                self.assertEqual(
+                    live.locate_fixed512_ir(explicit, staged_root=staged),
+                    explicit,
+                )
+
+    def test_live_ir_missing_artifacts_gives_recovery_instructions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            default = root / "myriad/openvino/fp16"
+            with mock.patch.object(live, "DEFAULT_IR_DIR", default):
+                with self.assertRaisesRegex(ValueError, "Copy.*--ir-dir"):
+                    live.locate_fixed512_ir(
+                        default, staged_root=root / "fixed512-eval"
+                    )
+
     def test_pcm16_decoder_preserves_odd_byte_across_reads(self):
         decoder = live.Pcm16ChunkDecoder()
         self.assertEqual(decoder.decode(b"\x01").size, 0)
