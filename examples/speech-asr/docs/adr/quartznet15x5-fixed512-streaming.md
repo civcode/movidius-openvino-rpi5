@@ -210,6 +210,19 @@ Hardware-free I/O tests:
 The accepted fixed512 inference and stitching implementation remains
 unchanged.
 
+For microphone listening, the live terminal can *display* a space after
+a long CTC blank interval (600 ms by default). The original CTC transcript,
+logit stitching, MYRIAD model, and qualified WAV-mode behavior are unchanged.
+This is a heuristic for speech pauses, not an ASR language model; it cannot
+correct all word boundaries. Tune or disable it on the Pi:
+
+```bash
+./scripts/quartznet-fixed512-live.sh --microphone \
+  --alsa-device "plughw:CARD=MICROPHONE,DEV=0" --pause-space-ms 400
+./scripts/quartznet-fixed512-live.sh --microphone \
+  --alsa-device "plughw:CARD=MICROPHONE,DEV=0" --pause-space-ms 0
+```
+
 With the accepted 128-output-frame hop, the first partial text requires the
 initial 5.11-second inference window; subsequent updates occur every 2.56
 seconds of incoming audio. The qualified MA2450 inference time is about 394 ms
