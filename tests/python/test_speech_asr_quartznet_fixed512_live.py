@@ -111,6 +111,88 @@ class QuartzNetFixed512LiveTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "pause_space_frames"):
             IncrementalCtcDecoder(self.vocab, pause_space_frames=-1)
 
+    def test_pause_delimiter_preserves_custom_characters_and_strings(self):
+        a = self.vocab["tokens"].index("a")
+        b = self.vocab["tokens"].index("b")
+        blank = self.vocab["blank_index"]
+        for delimiter in ("$", "#", "[ref_delimiter]"):
+            with self.subTest(delimiter=delimiter):
+                decoder = IncrementalCtcDecoder(
+                    self.vocab,
+                    pause_space_frames=30,
+                    pause_delimiter=delimiter,
+                )
+                self.assertEqual(decoder.push([a] + [blank] * 30), "a")
+                self.assertEqual(decoder.display_text, "a")
+                self.assertEqual(
+                    decoder.preview([b], display=True),
+                    "a" + delimiter + "b",
+                )
+                # Preview is tentative; no marker should be committed yet.
+                self.assertEqual(decoder.display_text, "a")
+                self.assertEqual(decoder.push([b]), "ab")
+                self.assertEqual(decoder.display_text, "a" + delimiter + "b")
+                self.assertEqual(decoder.text, "ab")
+
+    def test_pause_delimiter_replaces_predicted_space_at_long_pause(self):
+        a = self.vocab["tokens"].index("a")
+        b = self.vocab["tokens"].index("b")
+        space = self.vocab["tokens"].index(" ")
+        blank = self.vocab["blank_index"]
+        decoder = IncrementalCtcDecoder(
+            self.vocab,
+            pause_space_frames=30,
+            pause_delimiter="[ref_delimiter]",
+        )
+        decoder.push([a] + [blank] * 30 + [space, b])
+        self.assertEqual(decoder.text, "a b")
+        self.assertEqual(decoder.display_text, "a[ref_delimiter]b")
+
+    def test_pause_delimiter_after_native_space_and_blank_run(self):
+        a = self.vocab["tokens"].index("a")
+        b = self.vocab["tokens"].index("b")
+        space = self.vocab["tokens"].index(" ")
+        blank = self.vocab["blank_index"]
+        decoder = IncrementalCtcDecoder(
+            self.vocab,
+            pause_space_frames=30,
+            pause_delimiter="$",
+        )
+        decoder.push([a, space] + [blank] * 30 + [b])
+        self.assertEqual(decoder.display_text, "a$b")
+        self.assertEqual(decoder.text, "a b")
+
+    def test_pause_delimiter_does_not_change_short_utterances(self):
+        a = self.vocab["tokens"].index("a")
+        b = self.vocab["tokens"].index("b")
+        blank = self.vocab["blank_index"]
+        decoder = IncrementalCtcDecoder(
+            self.vocab, pause_space_frames=30,
+            pause_delimiter="[ref_delimiter]",
+        )
+        decoder.push([a] + [blank] * 29 + [b])
+        self.assertEqual(decoder.text, "ab")
+        self.assertEqual(decoder.display_text, "ab")
+
+    def test_pause_delimiter_is_ignored_if_pause_spacing_disabled(self):
+        a = self.vocab["tokens"].index("a")
+        b = self.vocab["tokens"].index("b")
+        blank = self.vocab["blank_index"]
+        decoder = IncrementalCtcDecoder(
+            self.vocab, pause_space_frames=0, pause_delimiter="[ref_delimiter]"
+        )
+        decoder.push([a] + [blank] * 40 + [b])
+        self.assertEqual(decoder.display_text, "ab")
+
+    def test_pause_delimiter_rejects_empty_or_nonprintable_string(self):
+        for invalid in ("", "hello\\nworld"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(ValueError, "printable string"):
+                    IncrementalCtcDecoder(
+                        self.vocab, pause_space_frames=30,
+                        pause_delimiter=invalid,
+                    )
+
     def test_online_final_text_matches_offline_center_owned_stitch(self):
         sample_count = 150000
         windows = plan_fixed512_windows(sample_count, self.spec)
